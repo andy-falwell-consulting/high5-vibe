@@ -228,10 +228,17 @@ export default function ProductsAndServicesV2() {
   const isResizing = useRef(false);
 
   const startResize = useCallback((e) => {
+    e.preventDefault();
     isResizing.current = true;
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
-    const onMove = (e) => { if (isResizing.current) setNavWidth(Math.min(600, Math.max(180, e.clientX))); };
+    const startX = e.clientX;
+    const startW = navWidth;
+    const onMove = (e) => {
+      if (!isResizing.current) return;
+      const next = Math.min(600, Math.max(180, startW + (e.clientX - startX)));
+      setNavWidth(next);
+    };
     const onUp = () => {
       isResizing.current = false;
       document.body.style.cursor = '';
@@ -241,7 +248,7 @@ export default function ProductsAndServicesV2() {
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
-  }, []);
+  }, [navWidth]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
