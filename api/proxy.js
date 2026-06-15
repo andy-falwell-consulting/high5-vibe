@@ -1,8 +1,9 @@
 export const config = { api: { bodyParser: false } };
 
+const FMP_HOST = 'https://ILELLCO.pcifmhosting.com';
+
 export default async function handler(req, res) {
-  const downstream = req.url.replace(/^\/api/, '');
-  const url = `https://ILELLCO.pcifmhosting.com${downstream}`;
+  const url = `${FMP_HOST}${req.url}`;
 
   const headers = {};
   for (const [k, v] of Object.entries(req.headers)) {
@@ -10,9 +11,8 @@ export default async function handler(req, res) {
     headers[k] = v;
   }
 
-  const hasBody = !['GET', 'HEAD'].includes(req.method);
   let body;
-  if (hasBody) {
+  if (!['GET', 'HEAD'].includes(req.method)) {
     body = await new Promise((resolve) => {
       const chunks = [];
       req.on('data', (c) => chunks.push(c));

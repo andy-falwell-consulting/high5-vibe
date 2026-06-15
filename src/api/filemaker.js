@@ -14,10 +14,9 @@ async function pLimit(concurrency, tasks) {
   return results;
 }
 
-// In dev the Vite proxy intercepts /fmi/* so host is empty (relative).
-// In production requests go through the Vercel serverless proxy at /api/fmi/*.
+// /fmi/* is proxied in both dev (Vite) and prod (Vercel rewrite → /api/proxy).
 function getBasePath() {
-  return import.meta.env.DEV ? '' : '/api';
+  return '';
 }
 
 let sessionToken = null;
@@ -84,7 +83,7 @@ export function proxyImageUrl(url) {
   if (!url) return null;
   try {
     const u = new URL(url);
-    return import.meta.env.DEV ? u.pathname + u.search : url;
+    return u.pathname + u.search;
   } catch { return url; }
 }
 
