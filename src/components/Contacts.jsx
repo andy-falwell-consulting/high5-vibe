@@ -25,7 +25,7 @@ export default function Contacts() {
   useEffect(() => {
     getAllRecords(LAYOUT, {
       onProgress: ({ records, total }) => { setRecords(records); setTotal(total); },
-      batchSize: 500,
+      batchSize: 100,
     });
   }, []);
 
