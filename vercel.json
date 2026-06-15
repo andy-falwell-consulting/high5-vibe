@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/fmi/:path*",
+      "destination": "https://ILELLCO.pcifmhosting.com/fmi/:path*"
+    },
+    {
+      "source": "/Streaming_SSL/:path*",
+      "destination": "https://ILELLCO.pcifmhosting.com/Streaming_SSL/:path*"
+    }
+  ]
+}
