@@ -7,6 +7,17 @@ export default async function handler(req, res) {
 
   if (!store || !token) return res.status(500).json({ error: 'Shopify not configured' });
 
+  // TEMP DEBUG — remove after confirming env vars
+  if (action === 'debug') {
+    return res.status(200).json({
+      storeSet: !!store,
+      storeValue: store,
+      tokenSet: !!token,
+      tokenFirst8: token?.slice(0, 8),
+      tokenLength: token?.length,
+    });
+  }
+
   const base = `https://${store}/admin/api/2024-01`;
   const headers = {
     'X-Shopify-Access-Token': token,
