@@ -141,11 +141,9 @@ export async function getAllRecords(layout, { onProgress, batchSize = 100 } = {}
   }
 
   if (cached) {
-    // Stale localStorage hit — serve immediately so UI is instant, refresh in background
+    // Stale localStorage hit — serve immediately so UI is instant, refresh cache silently
     if (onProgress) onProgress({ records: cached.records, total: cached.total, done: true });
-    fetchAllFromServer(layout, { batchSize, onProgress: ({ records, total }) => {
-      if (onProgress) onProgress({ records, total, done: records.length >= total });
-    }}).catch(() => {});
+    fetchAllFromServer(layout, { batchSize }).catch(() => {});
     return cached;
   }
 
