@@ -180,3 +180,15 @@
 /* Footer */
 [data-theme="light"] .v2-record-footer { color: #e2e8f0; }
 [data-theme="light"] .v2-empty-section { color: #cbd5e1; }
+
+/* Formatted text */
+[data-theme="light"] .v2-para { color: #334155; }
+[data-theme="light"] .v2-bullet-dot { color: #94a3b8; }
+[data-theme="light"] .v2-source-block {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+}
+[data-theme="light"] .v2-source-label { color: #94a3b8; }
+[data-theme="light"] .v2-source-name { color: #334155; }
+[data-theme="light"] .v2-source-url,
+[data-theme="light"] .v2-link { color: #2563eb; }
