@@ -25,6 +25,18 @@ export default function Contacts() {
     getAllRecords(LAYOUT, {
       onProgress: ({ records, total }) => { setRecords(records); setTotal(total); },
       batchSize: 100,
+      slimForStorage: r => ({
+        recordId: r.recordId,
+        fieldData: {
+          zz__Display__ct: r.fieldData.zz__Display__ct,
+          'cntct_ADDR::zz__Display_Single_Line_No_Zip__ct': r.fieldData['cntct_ADDR::zz__Display_Single_Line_No_Zip__ct'],
+          'cntct_ADDR::zz__Display_Single_Line__ct': r.fieldData['cntct_ADDR::zz__Display_Single_Line__ct'],
+          Type: r.fieldData.Type,
+          Status: r.fieldData.Status,
+          Name_Organization: r.fieldData.Name_Organization,
+          'cntct_ADDR::Type': r.fieldData['cntct_ADDR::Type'],
+        },
+      }),
     });
   }, []);
 

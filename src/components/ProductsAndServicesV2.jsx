@@ -275,7 +275,17 @@ function FieldValue({ fieldKey, value, onChange, dataEditing }) {
 
 // ── Main ────────────────────────────────────────────────────────────
 export default function ProductsAndServicesV2() {
-  const { records, total, loading, error } = useAllRecords(LAYOUT);
+  const { records, total, loading, error } = useAllRecords(LAYOUT, {
+    slimForStorage: r => ({
+      recordId: r.recordId,
+      fieldData: {
+        Name: r.fieldData.Name,
+        SKU: r.fieldData.SKU,
+        Category: r.fieldData.Category,
+        Vendor: r.fieldData.Vendor,
+      },
+    }),
+  });
   const [selected, setSelected] = useState(null);
   const [search, setSearch] = useState('');
   const [editMode, setEditMode] = useState(false);
