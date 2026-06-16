@@ -9,7 +9,6 @@ export function useAllRecords(layout) {
     setState({ records: [], total: 0, loading: true });
 
     getAllRecords(layout, {
-      batchSize: 100,
       onProgress: ({ records, total }) => {
         if (cancelled) return;
         setState({ records: [...records], total, loading: false, error: null });

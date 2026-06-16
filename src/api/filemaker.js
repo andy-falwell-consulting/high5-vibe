@@ -93,7 +93,7 @@ export function containerImageUrl(streamingUrl, { db, layout, recordId, field = 
   return `/api/image?db=${encodeURIComponent(db)}&layout=${encodeURIComponent(layout)}&recordId=${encodeURIComponent(recordId)}&field=${encodeURIComponent(field)}`;
 }
 
-export async function getAllRecords(layout, { onProgress, batchSize = 100 } = {}) {
+export async function getAllRecords(layout, { onProgress, batchSize = 1000, concurrency = 5 } = {}) {
   const cached = readCache(layout);
   if (cached) {
     if (onProgress) onProgress({ records: cached.records, total: cached.total, done: true });
@@ -101,26 +101,36 @@ export async function getAllRecords(layout, { onProgress, batchSize = 100 } = {}
   }
 
   const controller = new AbortController();
-  let all = [];
-  let total = null;
-  let offset = 1;
 
   try {
-    while (true) {
-      const data = await getRecords(layout, batchSize, offset, controller.signal);
-      const batch = data.response?.data || [];
-      if (total === null) total = data.response?.dataInfo?.totalRecordCount || 0;
-      all = all.concat(batch);
-      if (onProgress) onProgress({ records: all, total, done: all.length >= total });
-      if (all.length >= total || batch.length === 0) break;
-      offset += batchSize;
+    // First batch reveals total count
+    const first = await getRecords(layout, batchSize, 1, controller.signal);
+    const firstBatch = first.response?.data || [];
+    const total = first.response?.dataInfo?.totalRecordCount || 0;
+
+    let all = firstBatch;
+    if (onProgress) onProgress({ records: all, total, done: all.length >= total });
+
+    if (all.length < total) {
+      // Build remaining page tasks and fetch in parallel
+      const offsets = [];
+      for (let offset = batchSize + 1; offset <= total; offset += batchSize) offsets.push(offset);
+
+      const tasks = offsets.map(offset => () => getRecords(layout, batchSize, offset, controller.signal));
+      const results = await pLimit(concurrency, tasks);
+
+      for (const data of results) {
+        all = all.concat(data.response?.data || []);
+        if (onProgress) onProgress({ records: all, total, done: all.length >= total });
+      }
     }
+
     writeCache(layout, all, total);
+    return { records: all, total };
   } catch (e) {
     if (e.name !== 'AbortError') throw e;
+    return { records: [], total: 0 };
   }
-
-  return { records: all, total };
 }
 
 const detailCache = new Map();
