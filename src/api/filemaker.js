@@ -61,22 +61,40 @@ export async function getRecords(layout, limit = 100, offset = 1, signal) {
   return res.json();
 }
 
-const CACHE_TTL_MS = 5 * 60 * 1000;
+const MEM_TTL_MS = 5 * 60 * 1000;
+const LS_TTL_MS = 24 * 60 * 60 * 1000;
 const memCache = {};
 
+function lsKey(layout) { return `fmp_cache__${layout}`; }
+
 function readCache(layout) {
-  const entry = memCache[layout];
-  if (!entry) return null;
-  if (Date.now() - entry.ts > CACHE_TTL_MS) { delete memCache[layout]; return null; }
-  return { records: entry.records, total: entry.total };
+  // 1. Check in-memory cache first
+  const mem = memCache[layout];
+  if (mem) {
+    if (Date.now() - mem.ts < MEM_TTL_MS) return { records: mem.records, total: mem.total, fresh: true };
+    delete memCache[layout];
+  }
+  // 2. Fall back to localStorage
+  try {
+    const raw = localStorage.getItem(lsKey(layout));
+    if (raw) {
+      const entry = JSON.parse(raw);
+      if (Date.now() - entry.ts < LS_TTL_MS) return { records: entry.records, total: entry.total, fresh: false };
+      localStorage.removeItem(lsKey(layout));
+    }
+  } catch { /* storage unavailable */ }
+  return null;
 }
 
 function writeCache(layout, records, total) {
-  memCache[layout] = { ts: Date.now(), records, total };
+  const entry = { ts: Date.now(), records, total };
+  memCache[layout] = entry;
+  try { localStorage.setItem(lsKey(layout), JSON.stringify(entry)); } catch { /* quota exceeded */ }
 }
 
 export function bustCache(layout) {
   delete memCache[layout];
+  try { localStorage.removeItem(lsKey(layout)); } catch { /* ignore */ }
 }
 
 // Build an image URL for a container field.
@@ -93,44 +111,46 @@ export function containerImageUrl(streamingUrl, { db, layout, recordId, field = 
   return `/api/image?db=${encodeURIComponent(db)}&layout=${encodeURIComponent(layout)}&recordId=${encodeURIComponent(recordId)}&field=${encodeURIComponent(field)}`;
 }
 
-export async function getAllRecords(layout, { onProgress, batchSize = 1000, concurrency = 5 } = {}) {
+async function fetchAllFromServer(layout, { onProgress, batchSize }) {
+  const controller = new AbortController();
+  let all = [];
+  let total = null;
+  let offset = 1;
+
+  while (true) {
+    const data = await getRecords(layout, batchSize, offset, controller.signal);
+    const batch = data.response?.data || [];
+    if (total === null) total = data.response?.dataInfo?.totalRecordCount || 0;
+    all = all.concat(batch);
+    if (onProgress) onProgress({ records: all, total, done: all.length >= total });
+    if (all.length >= total || batch.length === 0) break;
+    offset += batchSize;
+  }
+
+  writeCache(layout, all, total);
+  return { records: all, total };
+}
+
+export async function getAllRecords(layout, { onProgress, batchSize = 100 } = {}) {
   const cached = readCache(layout);
-  if (cached) {
+
+  if (cached?.fresh) {
+    // In-memory hit — serve immediately, no background fetch needed
     if (onProgress) onProgress({ records: cached.records, total: cached.total, done: true });
     return cached;
   }
 
-  const controller = new AbortController();
-
-  try {
-    // First batch reveals total count
-    const first = await getRecords(layout, batchSize, 1, controller.signal);
-    const firstBatch = first.response?.data || [];
-    const total = first.response?.dataInfo?.totalRecordCount || 0;
-
-    let all = firstBatch;
-    if (onProgress) onProgress({ records: all, total, done: all.length >= total });
-
-    if (all.length < total) {
-      // Build remaining page tasks and fetch in parallel
-      const offsets = [];
-      for (let offset = batchSize + 1; offset <= total; offset += batchSize) offsets.push(offset);
-
-      const tasks = offsets.map(offset => () => getRecords(layout, batchSize, offset, controller.signal));
-      const results = await pLimit(concurrency, tasks);
-
-      for (const data of results) {
-        all = all.concat(data.response?.data || []);
-        if (onProgress) onProgress({ records: all, total, done: all.length >= total });
-      }
-    }
-
-    writeCache(layout, all, total);
-    return { records: all, total };
-  } catch (e) {
-    if (e.name !== 'AbortError') throw e;
-    return { records: [], total: 0 };
+  if (cached) {
+    // Stale localStorage hit — serve immediately so UI is instant, refresh in background
+    if (onProgress) onProgress({ records: cached.records, total: cached.total, done: true });
+    fetchAllFromServer(layout, { batchSize, onProgress: ({ records, total }) => {
+      if (onProgress) onProgress({ records, total, done: records.length >= total });
+    }}).catch(() => {});
+    return cached;
   }
+
+  // No cache — fetch normally with progressive updates
+  return fetchAllFromServer(layout, { onProgress, batchSize });
 }
 
 const detailCache = new Map();

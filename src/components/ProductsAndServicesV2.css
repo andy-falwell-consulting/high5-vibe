@@ -453,8 +453,40 @@
   color: #94a3b8;
   line-height: 1.6;
   margin: 0;
-  white-space: pre-wrap;
 }
+.v2-text-block p, .v2-para { margin: 0 0 6px; }
+.v2-text-block p:last-child, .v2-para:last-child { margin-bottom: 0; }
+.v2-bullet {
+  display: flex;
+  gap: 8px;
+  margin: 3px 0;
+}
+.v2-bullet-dot { color: #475569; flex-shrink: 0; }
+.v2-source-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  background: #0f1117;
+  border-radius: 6px;
+  border: 1px solid #1e2130;
+  margin-top: 4px;
+}
+.v2-source-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #475569;
+}
+.v2-source-name { font-size: 13px; color: #cbd5e1; }
+.v2-source-url, .v2-link {
+  font-size: 11px;
+  color: #60a5fa;
+  word-break: break-all;
+  text-decoration: none;
+}
+.v2-source-url:hover, .v2-link:hover { text-decoration: underline; }
 
 /* Dirty indicator */
 .v2-dirty-dot {

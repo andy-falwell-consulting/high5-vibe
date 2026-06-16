@@ -177,6 +177,68 @@ function SortableField({ fieldKey, fieldData, editMode, edits, onChange, dataEdi
   );
 }
 
+const URL_RE = /https?:\/\/[^\s\r\n]+/g;
+
+function FormattedText({ text }) {
+  const paragraphs = text.split(/\r\r|\n\n/);
+
+  return (
+    <div className="v2-text-block">
+      {paragraphs.map((para, pi) => {
+        const lines = para.split(/\r|\n/);
+        const bullets = lines.filter(l => /^[\t\s]*[•\-]\t?/.test(l));
+        const isBulletBlock = bullets.length > 0 && bullets.length >= lines.filter(l => l.trim()).length / 2;
+
+        if (isBulletBlock) {
+          const items = [];
+          let prose = [];
+          for (const line of lines) {
+            if (/^[\t\s]*[•\-]\t?/.test(line)) {
+              if (prose.length) { items.push({ type: 'prose', text: prose.join(' ').trim() }); prose = []; }
+              items.push({ type: 'bullet', text: line.replace(/^[\t\s]*[•\-]\t?/, '').trim() });
+            } else if (line.trim()) {
+              prose.push(line.trim());
+            }
+          }
+          if (prose.length) items.push({ type: 'prose', text: prose.join(' ').trim() });
+
+          return (
+            <div key={pi} className="v2-para">
+              {items.map((item, ii) =>
+                item.type === 'bullet'
+                  ? <div key={ii} className="v2-bullet"><span className="v2-bullet-dot">•</span><span><InlineText text={item.text} /></span></div>
+                  : <p key={ii}><InlineText text={item.text} /></p>
+              )}
+            </div>
+          );
+        }
+
+        // Check for "Label : Value\nURL" supplier/manufacturer pattern
+        const labelMatch = para.match(/^(Supplier|Manufacturer)\s*:\s*(.+?)(\r|\n)(https?:\/\/.+)/s);
+        if (labelMatch) {
+          return (
+            <div key={pi} className="v2-source-block">
+              <span className="v2-source-label">{labelMatch[1]}</span>
+              <span className="v2-source-name">{labelMatch[2].trim()}</span>
+              <a href={labelMatch[4].trim()} target="_blank" rel="noopener noreferrer" className="v2-source-url">{labelMatch[4].trim()}</a>
+            </div>
+          );
+        }
+
+        return <p key={pi} className="v2-para"><InlineText text={para.trim()} /></p>;
+      })}
+    </div>
+  );
+}
+
+function InlineText({ text }) {
+  const parts = text.split(URL_RE);
+  const urls = text.match(URL_RE) || [];
+  return parts.map((part, i) => (
+    <span key={i}>{part}{urls[i] && <a href={urls[i]} target="_blank" rel="noopener noreferrer" className="v2-link">{urls[i]}</a>}</span>
+  ));
+}
+
 function FieldValue({ fieldKey, value, onChange, dataEditing }) {
   const ch = (v) => onChange(fieldKey, v);
   const ro = !dataEditing;
@@ -190,7 +252,7 @@ function FieldValue({ fieldKey, value, onChange, dataEditing }) {
   }
 
   if (fieldKey === 'Description' || fieldKey === 'Notes' || fieldKey === 'shopify_description') {
-    if (ro) return <p className="v2-text-block">{value || '—'}</p>;
+    if (ro) return value ? <FormattedText text={value} /> : <p className="v2-text-block">—</p>;
     return <textarea value={value || ''} onChange={e => ch(e.target.value)} className="v2-textarea" rows={5} />;
   }
 
@@ -215,7 +277,6 @@ function FieldValue({ fieldKey, value, onChange, dataEditing }) {
 export default function ProductsAndServicesV2() {
   const { records, total, loading, error } = useAllRecords(LAYOUT);
   const [selected, setSelected] = useState(null);
-  const [detailLoading, setDetailLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [editMode, setEditMode] = useState(false);
   const [sections, setSections] = useState(loadLayout);
@@ -263,11 +324,11 @@ export default function ProductsAndServicesV2() {
 
   async function handleSelect(r) {
     setEdits({}); setDataEditing(false); setSaveStatus(null);
-    setSelected(r); // show immediately from list data
-    setDetailLoading(true);
-    const detail = await getRecord(LAYOUT, r.recordId);
-    setSelected(detail.response.data[0]); // update with full record (more portal rows etc.)
-    setDetailLoading(false);
+    setSelected(r); // show immediately — all field data is already in the list record
+    // Fetch full record in background to get portal data (BOM), no spinner
+    getRecord(LAYOUT, r.recordId).then(detail => {
+      setSelected(prev => prev?.recordId === r.recordId ? detail.response.data[0] : prev);
+    }).catch(() => {});
   }
 
   const handleFieldChange = useCallback((fk, v) => setEdits(p => ({ ...p, [fk]: v })), []);
@@ -383,20 +444,14 @@ export default function ProductsAndServicesV2() {
 
       {/* Main */}
       <main className="v2-main">
-        {!selected && !detailLoading && (
+        {!selected && (
           <div className="v2-empty-state">
             <div className="v2-empty-icon">◈</div>
             <p>Select a product or service</p>
           </div>
         )}
 
-        {detailLoading && (
-          <div className="v2-empty-state">
-            <div className="v2-spinner-ring" />
-          </div>
-        )}
-
-        {selected && !detailLoading && (
+        {selected && (
           <>
             {/* Top bar */}
             <div className="v2-topbar">
