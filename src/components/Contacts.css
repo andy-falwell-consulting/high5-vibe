@@ -482,3 +482,6 @@
 [data-theme="light"] .ct-layout-hint { background: #fff1f0; border-bottom-color: #fca5a5; color: #94a3b8; }
 [data-theme="light"] .ct-section.drag-ghost { border-color: #e8322a55; }
 [data-theme="light"] .ct-ht-label { color: #94a3b8; }
+
+/* Table scroll wrapper */
+.ct-table-wrap { overflow-x: auto; }

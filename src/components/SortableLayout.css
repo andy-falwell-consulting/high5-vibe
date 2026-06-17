@@ -7,6 +7,7 @@
   overflow: hidden;
   transition: border-color 0.15s;
   margin-bottom: 12px;
+  flex-shrink: 0;
 }
 .sl-section:hover { border-color: #2a2f45; }
 

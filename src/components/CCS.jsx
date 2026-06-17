@@ -200,12 +200,12 @@ function SectionContent({ section, f, editMode, onFieldReorder, edits, onChange,
 
     return (
       <div className="ccs-fin-table">
-        <div className="ccs-fin-row"><span className="ccs-fin-label">Estimate #</span>{finField('_kat__QuickBooks_Estimate_ID')}</div>
-        <div className="ccs-fin-row"><span className="ccs-fin-label">Contract</span>{finField('Contract_Date_Sent','Sent','date')}<span className="ccs-fin-recv">Received</span>{finField('cd_Received Contract','','checkbox')}</div>
-        <div className="ccs-fin-row"><span className="ccs-fin-label">Deposit Inv.</span><span /><span className="ccs-fin-recv">Received</span>{finField('cd_Received Deposit','','checkbox')}</div>
-        <div className="ccs-fin-row"><span className="ccs-fin-label">PO #</span>{finField('po_number')}<span className="ccs-fin-recv">Received</span>{finField('cd_Received PO','','checkbox')}</div>
-        <div className="ccs-fin-row"><span className="ccs-fin-label">Final Inv.</span>{finField('Final Sent','Sent','date')}<span className="ccs-fin-recv">Received</span>{finField('Final_Invoice_Received','','checkbox')}</div>
-        <div className="ccs-fin-row"><span className="ccs-fin-label">Invoice #</span>{finField('_kat__QuickBooks_Invoice_ID')}</div>
+        <div className="ccs-fin-row"><span className="ccs-fin-label">Estimate #</span><span className="ccs-fin-val">{finField('_kat__QuickBooks_Estimate_ID')}</span></div>
+        <div className="ccs-fin-row"><span className="ccs-fin-label">Contract</span><span className="ccs-fin-val">{finField('Contract_Date_Sent','Sent','date')}</span><span className="ccs-fin-recv">Received</span>{finField('cd_Received Contract','','checkbox')}</div>
+        <div className="ccs-fin-row"><span className="ccs-fin-label">Deposit Inv.</span><span className="ccs-fin-val" /><span className="ccs-fin-recv">Received</span>{finField('cd_Received Deposit','','checkbox')}</div>
+        <div className="ccs-fin-row"><span className="ccs-fin-label">PO #</span><span className="ccs-fin-val">{finField('po_number')}</span><span className="ccs-fin-recv">Received</span>{finField('cd_Received PO','','checkbox')}</div>
+        <div className="ccs-fin-row"><span className="ccs-fin-label">Final Inv.</span><span className="ccs-fin-val">{finField('Final Sent','Sent','date')}</span><span className="ccs-fin-recv">Received</span>{finField('Final_Invoice_Received','','checkbox')}</div>
+        <div className="ccs-fin-row"><span className="ccs-fin-label">Invoice #</span><span className="ccs-fin-val">{finField('_kat__QuickBooks_Invoice_ID')}</span></div>
       </div>
     );
   }
@@ -527,9 +527,11 @@ export default function CCS() {
                         </button>
                       ))}
                     </div>
-                    {activePortal === 'estimates' && <PortalTable columns={[{key:'cntct_ESTMT::Title',label:'Title'},{key:'cntct_ESTMT::Date',label:'Date',fmt:fmtDate},{key:'cntct_ESTMT::Status',label:'Status'},{key:'cntct_ESTMT::zz__Total__xn',label:'Total',fmt:fmtMoney}]} rows={estimates} />}
-                    {activePortal === 'invoices' && <PortalTable columns={[{key:'cntct_INVO::QuickBooks_Reference_Number',label:'Ref #'},{key:'cntct_INVO::Date',label:'Date',fmt:fmtDate},{key:'cntct_INVO::zz__Total__xn',label:'Total',fmt:fmtMoney},{key:'cntct_INVO::zz__Balance_Due__cn',label:'Balance',fmt:fmtMoney}]} rows={invoices} />}
-                    {activePortal === 'payments' && <PortalTable columns={[{key:'cntct_PMT::Date',label:'Date',fmt:fmtDate},{key:'cntct_PMT::Method',label:'Method'},{key:'cntct_PMT::Amount',label:'Amount',fmt:fmtMoney},{key:'cntct_PMT::zz__Balance__cn',label:'Balance',fmt:fmtMoney}]} rows={payments} />}
+                    <div className="ccs-table-wrap">
+                      {activePortal === 'estimates' && <PortalTable columns={[{key:'cntct_ESTMT::Title',label:'Title'},{key:'cntct_ESTMT::Date',label:'Date',fmt:fmtDate},{key:'cntct_ESTMT::Status',label:'Status'},{key:'cntct_ESTMT::zz__Total__xn',label:'Total',fmt:fmtMoney}]} rows={estimates} />}
+                      {activePortal === 'invoices' && <PortalTable columns={[{key:'cntct_INVO::QuickBooks_Reference_Number',label:'Ref #'},{key:'cntct_INVO::Date',label:'Date',fmt:fmtDate},{key:'cntct_INVO::zz__Total__xn',label:'Total',fmt:fmtMoney},{key:'cntct_INVO::zz__Balance_Due__cn',label:'Balance',fmt:fmtMoney}]} rows={invoices} />}
+                      {activePortal === 'payments' && <PortalTable columns={[{key:'cntct_PMT::Date',label:'Date',fmt:fmtDate},{key:'cntct_PMT::Method',label:'Method'},{key:'cntct_PMT::Amount',label:'Amount',fmt:fmtMoney},{key:'cntct_PMT::zz__Balance__cn',label:'Balance',fmt:fmtMoney}]} rows={payments} />}
+                    </div>
                   </div>
                 </div>
               )}

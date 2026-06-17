@@ -83,34 +83,34 @@ function SectionContent({ section, fieldData, portalData, editMode, onFieldReord
     if (!portalHasData(section.id, p)) return <p className="sl-empty">No records</p>;
 
     if (section.id === 'phone') return (
-      <table className="ct-table"><thead><tr><th>Number</th><th>Type</th></tr></thead>
+      <div className="ct-table-wrap"><table className="ct-table"><thead><tr><th>Number</th><th>Type</th></tr></thead>
         <tbody>{p.cntct_PHONE.map((r, i) => <tr key={i}><td className="mono">{r['cntct_PHONE::Number']}</td><td>{r['cntct_PHONE::Type']}</td></tr>)}</tbody>
-      </table>
+      </table></div>
     );
     if (section.id === 'email') return (
-      <table className="ct-table"><thead><tr><th>Address</th><th>Type</th></tr></thead>
+      <div className="ct-table-wrap"><table className="ct-table"><thead><tr><th>Address</th><th>Type</th></tr></thead>
         <tbody>{p.cntct_INADR.map((r, i) => <tr key={i}><td>{r['cntct_INADR::Address']}</td><td>{r['cntct_INADR::Type']}</td></tr>)}</tbody>
-      </table>
+      </table></div>
     );
     if (section.id === 'address') return (
-      <table className="ct-table"><thead><tr><th>Street</th><th>City</th><th>State</th><th>Zip</th><th>Type</th></tr></thead>
+      <div className="ct-table-wrap"><table className="ct-table"><thead><tr><th>Street</th><th>City</th><th>State</th><th>Zip</th><th>Type</th></tr></thead>
         <tbody>{p.cntct_ADDR.map((r, i) => <tr key={i}><td>{r['cntct_ADDR::Street']}</td><td>{r['cntct_ADDR::City']}</td><td>{r['cntct_ADDR::State']}</td><td className="mono">{r['cntct_ADDR::Zip']}</td><td>{r['cntct_ADDR::Type']}</td></tr>)}</tbody>
-      </table>
+      </table></div>
     );
     if (section.id === 'related') return (
-      <table className="ct-table"><thead><tr><th>Name</th><th>Phone</th><th>Email</th></tr></thead>
+      <div className="ct-table-wrap"><table className="ct-table"><thead><tr><th>Name</th><th>Phone</th><th>Email</th></tr></thead>
         <tbody>{p.Portal__Contacts.map((r, i) => <tr key={i}><td>{r['cntct_RLTN::zz__Display__ct']}</td><td className="mono">{r['cntct_rltn_cntct_PHONE::Number']}</td><td>{r['cntct_rltn_cntct_INADR__email::Address']}</td></tr>)}</tbody>
-      </table>
+      </table></div>
     );
     if (section.id === 'estimates') return (
-      <table className="ct-table"><thead><tr><th>ID</th><th>Date</th><th>Title</th><th className="num">Total</th><th>Status</th></tr></thead>
+      <div className="ct-table-wrap"><table className="ct-table"><thead><tr><th>ID</th><th>Date</th><th>Title</th><th className="num">Total</th><th>Status</th></tr></thead>
         <tbody>{p['Portal__Estimates 2'].map((r, i) => <tr key={i}><td className="mono">{r['cntct_ESTMT::_kpt__Estimate_ID']}</td><td>{r['cntct_ESTMT::Date']}</td><td>{r['cntct_ESTMT::Title']}</td><td className="num">${Number(r['cntct_ESTMT::zz__Total__xn']||0).toLocaleString('en-US',{minimumFractionDigits:2})}</td><td>{r['cntct_ESTMT::Status']}</td></tr>)}</tbody>
-      </table>
+      </table></div>
     );
     if (section.id === 'invoices') return (
-      <table className="ct-table"><thead><tr><th>QB Ref</th><th>Date</th><th className="num">Total</th><th className="num">Balance</th><th>Memo</th></tr></thead>
+      <div className="ct-table-wrap"><table className="ct-table"><thead><tr><th>QB Ref</th><th>Date</th><th className="num">Total</th><th className="num">Balance</th><th>Memo</th></tr></thead>
         <tbody>{p.Portal__Invoices.map((r, i) => <tr key={i}><td className="mono">{r['cntct_INVO::QuickBooks_Reference_Number']}</td><td>{r['cntct_INVO::Date']}</td><td className="num">${Number(r['cntct_INVO::zz__Total__xn']||0).toLocaleString('en-US',{minimumFractionDigits:2})}</td><td className="num" style={{color:Number(r['cntct_INVO::zz__Balance_Due__xs'])>0?'#e8322a':'inherit'}}>${Number(r['cntct_INVO::zz__Balance_Due__xs']||0).toLocaleString('en-US',{minimumFractionDigits:2})}</td><td>{r['cntct_INVO::Memo']}</td></tr>)}</tbody>
-      </table>
+      </table></div>
     );
     return null;
   }
