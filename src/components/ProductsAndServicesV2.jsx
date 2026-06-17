@@ -357,7 +357,8 @@ export default function ProductsAndServicesV2() {
   const handleDiscard = () => { setEdits({}); setDataEditing(false); setSaveStatus(null); };
 
   const handleSave = async () => {
-    if (!selected || !Object.keys(edits).length) return;
+    if (!selected) return;
+    if (!Object.keys(edits).length) { setDataEditing(false); setSaveStatus('saved'); setTimeout(() => setSaveStatus(null), 3000); return; }
     setSaving(true); setSaveStatus(null);
     try {
       const res = await updateRecord(LAYOUT, selected.recordId, edits);
@@ -629,7 +630,7 @@ export default function ProductsAndServicesV2() {
                   </>
                 ) : (
                   <>
-                    <button className="v2-btn save" onClick={handleSave} disabled={saving || !dirtyCount}>
+                    <button className="v2-btn save" onClick={handleSave} disabled={saving || (!dirtyCount && !imgBust)}>
                       {saving ? '…' : dirtyCount ? `Save ${dirtyCount} change${dirtyCount > 1 ? 's' : ''}` : 'Save'}
                     </button>
                     <button className="v2-btn ghost" onClick={handleDiscard}>Discard</button>
