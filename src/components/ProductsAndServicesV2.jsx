@@ -305,6 +305,8 @@ export default function ProductsAndServicesV2() {
   const [showNewItem, setShowNewItem] = useState(false);
   const [syncStatus, setSyncStatus] = useState({});
   const [showLightbox, setShowLightbox] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const imgInputRef = useRef(null);
   const isResizing = useRef(false);
 
   const startResize = useCallback((e) => {
@@ -438,6 +440,34 @@ export default function ProductsAndServicesV2() {
     if (newRecord) setSelected(newRecord);
   };
 
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !selected) return;
+    e.target.value = '';
+    setUploadingImage(true);
+    try {
+      const env = getCurrentEnv();
+      const res = await fetch(
+        `/api/upload-image?recordId=${selected.recordId}&layout=${encodeURIComponent(LAYOUT)}&db=${encodeURIComponent(env.db)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': file.type, 'X-Filename': file.name },
+          body: file,
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Upload failed');
+      // Re-fetch record so the new image appears
+      const fresh = await getRecord(LAYOUT, selected.recordId);
+      const updated = fresh.response?.data?.[0];
+      if (updated) setSelected(updated);
+    } catch (err) {
+      alert(`Image upload failed: ${err.message}`);
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   const handleAddBomItem = useCallback(async ({ item, quantity }) => {
     const result = await addPortalRow(LAYOUT, selected.recordId, 'Portal__Bill_of_Materials 4', {
       'item_itmli_ITEM__billOfMaterials::Name': item.fieldData.Name,
@@ -547,7 +577,15 @@ export default function ProductsAndServicesV2() {
             {/* Top bar */}
             <div className="v2-topbar">
               <div className="v2-topbar-left">
-                {imgSrc && <img className="v2-hero-img" src={imgSrc} alt={f.Name} onClick={() => setShowLightbox(true)} style={{ cursor: 'zoom-in' }} />}
+                <div className="v2-hero-wrap">
+                  {imgSrc && <img className="v2-hero-img" src={imgSrc} alt={f.Name} onClick={() => !dataEditing && setShowLightbox(true)} style={{ cursor: dataEditing ? 'default' : 'zoom-in' }} />}
+                  {dataEditing && (
+                    <button className="v2-img-replace-btn" onClick={() => imgInputRef.current?.click()} disabled={uploadingImage}>
+                      {uploadingImage ? '…' : imgSrc ? '⟳ Replace' : '+ Add Image'}
+                    </button>
+                  )}
+                  <input ref={imgInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
+                </div>
                 <div>
                   <h1 className="v2-title">{f.Name}</h1>
                   <div className="v2-meta-row">
