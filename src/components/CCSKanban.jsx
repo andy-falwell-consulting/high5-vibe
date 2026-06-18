@@ -77,17 +77,22 @@ function DraggableCard({ record, saving, onOpen, dimmed }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: record.recordId,
   })
-  const draggedRef = useRef(false)
+  const didDrag = useRef(false)
+
+  useEffect(() => {
+    if (isDragging) didDrag.current = true
+  }, [isDragging])
 
   return (
     <div
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      style={{ opacity: isDragging ? 0.25 : 1, cursor: 'grab' }}
-      onPointerDown={() => { draggedRef.current = false }}
-      onPointerMove={() => { draggedRef.current = true }}
-      onClick={() => { if (!draggedRef.current) onOpen(record) }}
+      style={{ opacity: isDragging ? 0.25 : 1, cursor: 'grab', touchAction: 'none', userSelect: 'none' }}
+      onClick={() => {
+        if (didDrag.current) { didDrag.current = false; return }
+        onOpen(record)
+      }}
     >
       <KanbanCardView record={record} saving={saving} dimmed={dimmed} />
     </div>
