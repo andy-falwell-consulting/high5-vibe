@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getAllRecords } from '../api/filemaker';
 
-export function useAllRecords(layout, { slimForStorage, cacheVersion } = {}) {
+export function useAllRecords(layout, { slimForStorage, cacheVersion, findQuery, refreshKey } = {}) {
   const [state, setState] = useState({ records: [], total: 0, loading: true, error: null });
 
   useEffect(() => {
@@ -15,13 +15,14 @@ export function useAllRecords(layout, { slimForStorage, cacheVersion } = {}) {
       },
       slimForStorage,
       cacheVersion,
+      findQuery,
     }).catch((err) => {
       if (cancelled || err.name === 'AbortError') return;
       setState((s) => ({ ...s, loading: false, error: err.message ?? String(err) }));
     });
 
     return () => { cancelled = true; };
-  }, [layout]);
+  }, [layout, refreshKey]);
 
   return state;
 }

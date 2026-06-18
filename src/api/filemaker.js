@@ -120,9 +120,28 @@ export function containerImageUrl(streamingUrl, { db, layout, recordId, field = 
   return `/api/image?db=${encodeURIComponent(db)}&layout=${encodeURIComponent(layout)}&recordId=${encodeURIComponent(recordId)}&field=${encodeURIComponent(field)}`;
 }
 
+async function findRecords(layout, query, limit, offset, signal) {
+  const token = await getToken();
+  const env = getCurrentEnv();
+  const res = await fetch(
+    `${getBasePath()}/fmi/data/v2/databases/${env.db}/layouts/${encodeURIComponent(layout)}/_find`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, limit, offset }),
+      signal,
+    }
+  );
+  if (res.status === 401) {
+    sessionToken = null;
+    return findRecords(layout, query, limit, offset, signal);
+  }
+  return res.json();
+}
+
 const CHECKPOINT_EVERY = 10; // batches between localStorage checkpoints during initial fetch
 
-async function fetchAllFromServer(layout, { onProgress, batchSize, slimForStorage, cacheVersion }) {
+async function fetchAllFromServer(layout, { onProgress, batchSize, slimForStorage, cacheVersion, findQuery }) {
   const controller = new AbortController();
   let all = [];
   let total = null;
@@ -130,9 +149,11 @@ async function fetchAllFromServer(layout, { onProgress, batchSize, slimForStorag
   let batchCount = 0;
 
   while (true) {
-    const data = await getRecords(layout, batchSize, offset, controller.signal);
+    const data = findQuery
+      ? await findRecords(layout, findQuery, batchSize, offset, controller.signal)
+      : await getRecords(layout, batchSize, offset, controller.signal);
     const batch = data.response?.data || [];
-    if (total === null) total = data.response?.dataInfo?.totalRecordCount || 0;
+    if (total === null) total = data.response?.dataInfo?.foundCount ?? data.response?.dataInfo?.totalRecordCount ?? 0;
     all = all.concat(batch);
     batchCount++;
     const done = all.length >= total || batch.length === 0;
@@ -151,7 +172,7 @@ async function fetchAllFromServer(layout, { onProgress, batchSize, slimForStorag
   return { records: all, total };
 }
 
-export async function getAllRecords(layout, { onProgress, batchSize = 100, slimForStorage, cacheVersion } = {}) {
+export async function getAllRecords(layout, { onProgress, batchSize = 100, slimForStorage, cacheVersion, findQuery } = {}) {
   const cached = readCache(layout, cacheVersion);
 
   if (cached?.fresh && cached?.complete) {
@@ -161,11 +182,11 @@ export async function getAllRecords(layout, { onProgress, batchSize = 100, slimF
 
   if (cached) {
     if (onProgress) onProgress({ records: cached.records, total: cached.total, done: true });
-    fetchAllFromServer(layout, { batchSize, slimForStorage, cacheVersion }).catch(() => {});
+    fetchAllFromServer(layout, { batchSize, slimForStorage, cacheVersion, findQuery }).catch(() => {});
     return cached;
   }
 
-  return fetchAllFromServer(layout, { onProgress, batchSize, slimForStorage, cacheVersion });
+  return fetchAllFromServer(layout, { onProgress, batchSize, slimForStorage, cacheVersion, findQuery });
 }
 
 const detailCache = new Map();
