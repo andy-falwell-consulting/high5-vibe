@@ -154,10 +154,31 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px 8px;
+  padding: 8px 10px 8px 8px;
   flex-shrink: 0;
-  cursor: pointer;
   user-select: none;
+  gap: 6px;
+}
+
+.kb-col-drag-handle {
+  display: flex;
+  align-items: center;
+  color: #2a2f45;
+  cursor: grab;
+  padding: 2px 4px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  transition: color 0.15s;
+  touch-action: none;
+}
+
+.kb-col-drag-handle:hover {
+  color: #475569;
+}
+
+.kb-col--dragging {
+  opacity: 0.5;
+  z-index: 10;
 }
 
 .kb-col-label {
@@ -166,6 +187,8 @@
   color: var(--col-color);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  cursor: pointer;
+  flex: 1;
 }
 
 .kb-col-header-right {

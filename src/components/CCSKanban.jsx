@@ -8,6 +8,8 @@ import {
   useSensors,
 } from '@dnd-kit/core'
 import { useDraggable, useDroppable } from '@dnd-kit/core'
+import { SortableContext, horizontalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { useAllRecords } from '../hooks/useAllRecords'
 import { updateRecord, bustCache } from '../api/filemaker'
 import './CCSKanban.css'
@@ -185,24 +187,45 @@ function KanbanDetail({ record, onClose, currentStatus }) {
 }
 
 function KanbanColumn({ column, records, saving, onOpen, collapsed, onToggleCollapse, search }) {
-  const { setNodeRef, isOver } = useDroppable({ id: column.id })
+  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: column.id })
+  const { attributes, listeners, setNodeRef: setSortRef, transform, transition, isDragging: isColDragging } = useSortable({
+    id: `col::${column.id}`,
+  })
   const matchCount = search ? records.filter(r => matchesSearch(r, search)).length : records.length
 
   return (
     <div
-      ref={setNodeRef}
-      className={`kb-col${isOver ? ' kb-col--over' : ''}${collapsed ? ' kb-col--collapsed' : ''}`}
-      style={{ '--col-color': column.color }}
+      ref={setSortRef}
+      className={`kb-col${isOver ? ' kb-col--over' : ''}${collapsed ? ' kb-col--collapsed' : ''}${isColDragging ? ' kb-col--dragging' : ''}`}
+      style={{
+        '--col-color': column.color,
+        transform: CSS.Transform.toString(transform),
+        transition,
+      }}
     >
-      <div className="kb-col-header" onClick={onToggleCollapse} title={collapsed ? 'Expand' : 'Collapse'}>
-        <span className="kb-col-label">{column.label}</span>
-        <div className="kb-col-header-right">
+      <div className="kb-col-header">
+        <div
+          className="kb-col-drag-handle"
+          {...listeners}
+          {...attributes}
+          title="Drag to reorder"
+        >
+          <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
+            <circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/>
+            <circle cx="2" cy="7" r="1.5"/><circle cx="8" cy="7" r="1.5"/>
+            <circle cx="2" cy="12" r="1.5"/><circle cx="8" cy="12" r="1.5"/>
+          </svg>
+        </div>
+        <span className="kb-col-label" onClick={onToggleCollapse} title={collapsed ? 'Expand' : 'Collapse'}>
+          {column.label}
+        </span>
+        <div className="kb-col-header-right" onClick={onToggleCollapse} title={collapsed ? 'Expand' : 'Collapse'}>
           <span className="kb-col-count">{search ? `${matchCount}/` : ''}{records.length}</span>
           <span className="kb-col-chevron">{collapsed ? '›' : '‹'}</span>
         </div>
       </div>
       {!collapsed && (
-        <div className="kb-col-body">
+        <div className="kb-col-body" ref={setDropRef}>
           {records.map(r => {
             const matches = matchesSearch(r, search)
             return (
@@ -231,6 +254,14 @@ export default function CCSKanban() {
   const [collapsed, setCollapsed] = useState(() => {
     try { return JSON.parse(localStorage.getItem('kb_collapsed') || '{}') } catch { return {} }
   })
+  const [columnOrder, setColumnOrder] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('kb_col_order') || 'null')
+      if (Array.isArray(saved) && saved.length === COLUMNS.length) return saved
+    } catch {}
+    return COLUMNS.map(c => c.id)
+  })
+  const orderedColumns = columnOrder.map(id => COLUMNS.find(c => c.id === id)).filter(Boolean)
 
   const { records, loading } = useAllRecords(LAYOUT, {
     cacheVersion: CACHE_VERSION,
@@ -291,7 +322,24 @@ export default function CCSKanban() {
   const handleDragEnd = useCallback(async ({ active, over }) => {
     setActiveId(null)
     if (!over) return
-    const newStatus = over.id
+
+    // Column reorder
+    if (String(active.id).startsWith('col::')) {
+      const fromId = String(active.id).slice(5)
+      const toId = String(over.id).startsWith('col::') ? String(over.id).slice(5) : null
+      if (!toId || fromId === toId) return
+      setColumnOrder(prev => {
+        const oldIdx = prev.indexOf(fromId)
+        const newIdx = prev.indexOf(toId)
+        const next = arrayMove(prev, oldIdx, newIdx)
+        localStorage.setItem('kb_col_order', JSON.stringify(next))
+        return next
+      })
+      return
+    }
+
+    // Card move
+    const newStatus = String(over.id).startsWith('col::') ? String(over.id).slice(5) : over.id
     if (!ACTIVE_STATUSES.has(newStatus)) return
     const record = kanbanRecords.find(r => r.recordId === active.id)
     if (!record) return
@@ -359,20 +407,22 @@ export default function CCSKanban() {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="kb-board">
-          {COLUMNS.map(col => (
-            <KanbanColumn
-              key={col.id}
-              column={col}
-              records={byColumn[col.id] || []}
-              saving={saving}
-              onOpen={setDetailRecord}
-              collapsed={!!collapsed[col.id]}
-              onToggleCollapse={() => toggleCollapse(col.id)}
-              search={search}
-            />
-          ))}
-        </div>
+        <SortableContext items={orderedColumns.map(c => `col::${c.id}`)} strategy={horizontalListSortingStrategy}>
+          <div className="kb-board">
+            {orderedColumns.map(col => (
+              <KanbanColumn
+                key={col.id}
+                column={col}
+                records={byColumn[col.id] || []}
+                saving={saving}
+                onOpen={setDetailRecord}
+                collapsed={!!collapsed[col.id]}
+                onToggleCollapse={() => toggleCollapse(col.id)}
+                search={search}
+              />
+            ))}
+          </div>
+        </SortableContext>
         <DragOverlay dropAnimation={null}>
           {activeRecord && <KanbanCardView record={activeRecord} />}
         </DragOverlay>

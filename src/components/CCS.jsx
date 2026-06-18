@@ -31,7 +31,7 @@ const fmt = v => v || '—';
 const DEFAULT_PRIMARY_SECTIONS = [
   { id: 'contact',    title: 'Contact',        icon: '◉', type: 'contact' },
   { id: 'financial',  title: 'Financial',      icon: '$', type: 'financial' },
-  { id: 'project',    title: 'Project',        icon: '◈', fields: ['Type of Project','Status','rcd start date','rcd end date','Report Date Sent','Confirmed'] },
+  { id: 'project',    title: 'Project',        icon: '◈', fields: ['Type of Project','Status','rcd start date','rcd end date','Report Date Sent','Confirmed','add_to_kanban'] },
   { id: 'team',       title: 'Team',           icon: '⊞', fields: ['Lead Builder','Builder1','Builder2','Builder3'] },
   { id: 'work_notes', title: 'Work & Notes',   icon: '✎', fields: ['Work Order','Notes'] },
 ];
@@ -49,6 +49,7 @@ const FIELD_LABELS = {
   'Report Date Sent': 'Inspection Report Sent', Confirmed: 'Confirmed',
   'Lead Builder': 'Lead Builder', Builder1: 'Builder 1', Builder2: 'Builder 2', Builder3: 'Builder 3',
   'Work Order': 'Work Order', Notes: 'Notes',
+  add_to_kanban: 'Add to Kanban',
 };
 
 const FIELD_CONFIG = {
@@ -64,6 +65,7 @@ const FIELD_CONFIG = {
   Builder3:               { options: BUILDER_OPTIONS },
   'Work Order':           { textarea: true, wide: true },
   Notes:                  { textarea: true, wide: true },
+  add_to_kanban:          { type: 'checkbox' },
 };
 
 const CHECKLIST_ITEMS = {
@@ -109,6 +111,19 @@ function FieldValue({ fieldKey, value, onChange, dataEditing, f }) {
       <option value="">—</option>
       {STATUS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
     </select>;
+  }
+
+  if (cfg.type === 'checkbox') {
+    const on = Number(value) === 1;
+    return (
+      <span
+        className={`ccs-chk-box${on ? ' on' : ''}${!ro ? ' clickable' : ''}`}
+        onClick={() => !ro && onChange(fieldKey, on ? 0 : 1)}
+        title={on ? 'On Kanban' : 'Not on Kanban'}
+      >
+        {on ? '✓' : ''}
+      </span>
+    );
   }
 
   if (cfg.type === 'date') {
@@ -302,7 +317,7 @@ export default function CCS() {
   const [saveStatus, setSaveStatus]     = useState(null);
   const isResizing = useRef(false);
 
-  const primary = useSortableLayout('ccs_layout_primary_v2', DEFAULT_PRIMARY_SECTIONS);
+  const primary = useSortableLayout('ccs_layout_primary_v3', DEFAULT_PRIMARY_SECTIONS);
   const checklists = useSortableLayout('ccs_layout_checklists_v2', DEFAULT_CHECKLIST_SECTIONS);
 
   // Use the active tab's layout
