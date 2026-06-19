@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import EnvSwitcher from './components/EnvSwitcher'
 import NavRail from './components/NavRail'
 import ProductsAndServicesV2 from './components/ProductsAndServicesV2'
 import Contacts from './components/Contacts'
@@ -12,12 +11,12 @@ import { RCD_LAYOUT, RCD_CACHE_VERSION, RCD_FIND_QUERY, RCD_SORT } from './confi
 import './light-theme.css'
 
 const MODULES = [
-  { id: 'contacts', label: 'Contacts', icon: '◉' },
-  { id: 'inspections', label: 'Inspections', icon: '⚑' },
-  { id: 'products', label: 'Products & Services', icon: '📦' },
-  { id: 'ccs', label: 'CCS', icon: '◈' },
-  { id: 'ccs-v2', label: 'CCS v2', icon: '✦' },
-  { id: 'ccs-kanban', label: 'CCS Kanban', icon: '⊞' },
+  { id: 'contacts', label: 'Contacts', icon: '◉', group: 'Records' },
+  { id: 'inspections', label: 'Inspections', icon: '⚑', group: 'Records' },
+  { id: 'products', label: 'Products & Services', icon: '◫', group: 'Records' },
+  { id: 'ccs', label: 'CCS', icon: '◈', group: 'Projects' },
+  { id: 'ccs-v2', label: 'CCS v2', icon: '✦', group: 'Projects' },
+  { id: 'ccs-kanban', label: 'CCS Kanban', icon: '⊞', group: 'Projects' },
 ]
 
 function getInitialTheme() {
@@ -59,17 +58,14 @@ export default function App() {
   }
 
   return (
-    <div data-theme={theme} style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      <EnvSwitcher theme={theme} onToggleTheme={toggleTheme} />
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        <NavRail modules={MODULES} activeId={activeModule} onSelect={handleSelect} theme={theme} />
+    <div data-theme={theme} style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+        <NavRail modules={MODULES} activeId={activeModule} onSelect={handleSelect} theme={theme} onToggleTheme={toggleTheme} />
         {visited.has('contacts') && <div style={{ display: activeModule === 'contacts' ? 'contents' : 'none' }}><Contacts /></div>}
         {visited.has('inspections') && <div style={{ display: activeModule === 'inspections' ? 'contents' : 'none' }}><Inspections /></div>}
         {visited.has('products') && <div style={{ display: activeModule === 'products' ? 'contents' : 'none' }}><ProductsAndServicesV2 /></div>}
         {visited.has('ccs') && <div style={{ display: activeModule === 'ccs' ? 'contents' : 'none' }}><CCS navTarget={navTarget} onNavigateTo={navigateTo} onClearNav={clearNavTarget} /></div>}
         {visited.has('ccs-v2') && <div style={{ display: activeModule === 'ccs-v2' ? 'contents' : 'none' }}><CCSv2 navTarget={navTarget} onNavigateTo={navigateTo} onClearNav={clearNavTarget} /></div>}
         {visited.has('ccs-kanban') && <div style={{ display: activeModule === 'ccs-kanban' ? 'contents' : 'none' }}><CCSKanban navTarget={navTarget} onNavigateTo={navigateTo} onClearNav={clearNavTarget} /></div>}
-      </div>
     </div>
   )
 }
