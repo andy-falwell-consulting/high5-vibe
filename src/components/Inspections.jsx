@@ -244,7 +244,6 @@ export default function Inspections({ navTarget, onClearNav } = {}) {
       <aside className="insp-sidebar" style={{ width: navWidth }}>
         <div className="insp-sidebar-header">
           <div className="insp-sidebar-title">
-            <div className="insp-sidebar-logo">H5</div>
             <div>
               <div className="insp-sidebar-module">Inspections</div>
               <div className="insp-sidebar-count">{total ? `${total.toLocaleString()} inspections` : 'Loading…'}</div>

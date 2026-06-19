@@ -301,7 +301,6 @@ export default function Contacts({ navTarget, onClearNav } = {}) {
       <aside className="ct-sidebar" style={{ width: navWidth }}>
         <div className="ct-sidebar-header">
           <div className="ct-sidebar-title">
-            <div className="ct-sidebar-logo">H5</div>
             <div>
               <div className="ct-sidebar-module">Contacts</div>
               <div className="ct-sidebar-count">{total ? `${total.toLocaleString()} contacts` : 'Loading…'}</div>

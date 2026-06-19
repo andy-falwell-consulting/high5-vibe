@@ -113,7 +113,7 @@ function Ring({ pct, color, size = 38, stroke = 4 }) {
   const off = C * (1 - Math.min(1, pct));
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flexShrink: 0 }}>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--v2-ring-track)" strokeWidth={stroke} />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--cv2-ring-track)" strokeWidth={stroke} />
       <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
         strokeLinecap="round" strokeDasharray={C.toFixed(2)} strokeDashoffset={off.toFixed(2)}
         transform={`rotate(-90 ${size / 2} ${size / 2})`} />
@@ -123,24 +123,24 @@ function Ring({ pct, color, size = 38, stroke = 4 }) {
 
 function Avatar({ name, lead }) {
   return (
-    <span className={`v2-avatar${lead ? ' lead' : ''}`} title={name}>{initials(name)}</span>
+    <span className={`cv2-avatar${lead ? ' lead' : ''}`} title={name}>{initials(name)}</span>
   );
 }
 
 function InlineText({ value, onChange, placeholder, area }) {
-  if (area) return <textarea className="v2-inline v2-inline-area" rows={3} value={value || ''} placeholder={placeholder} onChange={e => onChange(e.target.value)} />;
-  return <input className="v2-inline" value={value || ''} placeholder={placeholder} onChange={e => onChange(e.target.value)} />;
+  if (area) return <textarea className="cv2-inline cv2-inline-area" rows={3} value={value || ''} placeholder={placeholder} onChange={e => onChange(e.target.value)} />;
+  return <input className="cv2-inline" value={value || ''} placeholder={placeholder} onChange={e => onChange(e.target.value)} />;
 }
 function InlineSelect({ value, options, onChange }) {
   return (
-    <select className="v2-inline v2-inline-select" value={value || ''} onChange={e => onChange(e.target.value)}>
+    <select className="cv2-inline cv2-inline-select" value={value || ''} onChange={e => onChange(e.target.value)}>
       <option value="">—</option>
       {options.filter(Boolean).map(o => <option key={o} value={o}>{o}</option>)}
     </select>
   );
 }
 function InlineDate({ value, onChange }) {
-  return <input type="date" className="v2-inline v2-inline-date" value={toIso(value)} onChange={e => onChange(fromIso(e.target.value))} />;
+  return <input type="date" className="cv2-inline cv2-inline-date" value={toIso(value)} onChange={e => onChange(fromIso(e.target.value))} />;
 }
 
 // ── Main ─────────────────────────────────────────────────────────
@@ -286,12 +286,12 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav }) {
   const org = f.zz__Display_Organization__ct || '—';
 
   return (
-    <div className="v2-root">
-      <nav className="v2-nav" style={{ width: navWidth }}>
-        <div className="v2-nav-head">
-          <div className="v2-nav-title"><span className="v2-logo">H5</span><div><div className="v2-nav-name">CCS</div><div className="v2-nav-count">{total ? `${records.length} / ${total}` : records.length}</div></div></div>
-          <input className="v2-search" placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} />
-          <div className="v2-sortbar">
+    <div className="cv2-root">
+      <nav className="cv2-nav" style={{ width: navWidth }}>
+        <div className="cv2-nav-head">
+          <div className="cv2-nav-title"><div><div className="cv2-nav-name">CCS</div><div className="cv2-nav-count">{total ? `${records.length} / ${total}` : records.length}</div></div></div>
+          <input className="cv2-search" placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} />
+          <div className="cv2-sortbar">
             <select value={sortField} onChange={e => setSortField(e.target.value)}>
               <option value="created">Created</option><option value="modified">Modified</option>
               <option value="event">Event date</option><option value="alpha">A–Z</option>
@@ -299,19 +299,19 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav }) {
             <button onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}>{sortOrder === 'asc' ? '↑' : '↓'}</button>
           </div>
         </div>
-        <div className="v2-list">
+        <div className="cv2-list">
           {sorted.map(r => {
             const rf = r.fieldData; const c = statusColor(rf.Status);
             const d = daysUntil(rf['rcd start date']);
             return (
-              <div key={r.recordId} className={`v2-list-item${selected?.recordId === r.recordId ? ' active' : ''}`}
+              <div key={r.recordId} className={`cv2-list-item${selected?.recordId === r.recordId ? ' active' : ''}`}
                 onClick={() => handleSelect(r)} onMouseEnter={() => prefetchRecord(LAYOUT, r.recordId)}>
-                <span className="v2-list-dot" style={{ background: c }} />
-                <div className="v2-list-body">
-                  <div className="v2-list-org">{rf.zz__Display_Organization__ct || '—'}</div>
-                  <div className="v2-list-sub">
+                <span className="cv2-list-dot" style={{ background: c }} />
+                <div className="cv2-list-body">
+                  <div className="cv2-list-org">{rf.zz__Display_Organization__ct || '—'}</div>
+                  <div className="cv2-list-sub">
                     <span>{rf.zz__Display_Contact__ct || rf.kanban_status || ''}</span>
-                    {d != null && d >= 0 && d <= 30 && <span className="v2-list-due">{d}d</span>}
+                    {d != null && d >= 0 && d <= 30 && <span className="cv2-list-due">{d}d</span>}
                   </div>
                 </div>
               </div>
@@ -320,33 +320,33 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav }) {
         </div>
       </nav>
 
-      <div className="v2-resize" onMouseDown={startResize} />
+      <div className="cv2-resize" onMouseDown={startResize} />
 
-      <main className="v2-main">
+      <main className="cv2-main">
         {!selected ? (
-          <div className="v2-empty"><div className="v2-empty-icon">◈</div><p>Select a project</p></div>
+          <div className="cv2-empty"><div className="cv2-empty-icon">◈</div><p>Select a project</p></div>
         ) : (
           <>
-            <div className="v2-canvas">
+            <div className="cv2-canvas">
               {/* breadcrumb */}
-              <div className="v2-crumb">
-                <span className="v2-crumb-dim">CCS v2</span><span className="v2-crumb-sep">/</span><span>{org}</span>
-                <span className="v2-crumb-spacer" />
-                {val('kanban_status') && <button className="v2-ghost-btn" onClick={() => onNavigateTo?.('ccs-kanban', selected.recordId)}>⊞ Board</button>}
-                <span className="v2-crumb-id">#{f._kpt__RCD_ID || selected.recordId}</span>
+              <div className="cv2-crumb">
+                <span className="cv2-crumb-dim">CCS v2</span><span className="cv2-crumb-sep">/</span><span>{org}</span>
+                <span className="cv2-crumb-spacer" />
+                {val('kanban_status') && <button className="cv2-ghost-btn" onClick={() => onNavigateTo?.('ccs-kanban', selected.recordId)}>⊞ Board</button>}
+                <span className="cv2-crumb-id">#{f._kpt__RCD_ID || selected.recordId}</span>
               </div>
 
               {/* HERO */}
-              <div className="v2-hero">
-                <div className="v2-hero-top">
-                  <div className="v2-hero-id">
-                    <div className="v2-hero-type">{val('Type of Project') || 'Project'}</div>
-                    <h1 className="v2-hero-org">{org}</h1>
-                    <div className="v2-hero-contact">
-                      {f.zz__Display_Contact__ct && <><span className="v2-ic">◉</span>{f.zz__Display_Contact__ct}</>}
+              <div className="cv2-hero">
+                <div className="cv2-hero-top">
+                  <div className="cv2-hero-id">
+                    <div className="cv2-hero-type">{val('Type of Project') || 'Project'}</div>
+                    <h1 className="cv2-hero-org">{org}</h1>
+                    <div className="cv2-hero-contact">
+                      {f.zz__Display_Contact__ct && <><span className="cv2-ic">◉</span>{f.zz__Display_Contact__ct}</>}
                     </div>
                   </div>
-                  <select className="v2-status" style={{ color: sc, borderColor: sc + '55', background: sc + '14' }}
+                  <select className="cv2-status" style={{ color: sc, borderColor: sc + '55', background: sc + '14' }}
                     value={status || ''} onChange={e => stage('Status', e.target.value)}>
                     {!STATUS_OPTIONS.includes(status) && status && <option value={status}>{status}</option>}
                     <option value="">— status —</option>
@@ -355,20 +355,20 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav }) {
                 </div>
 
                 {/* pipeline */}
-                <div className="v2-pipe-wrap">
-                  <div className="v2-pipe-head">
-                    <span className="v2-pipe-label">Pipeline</span>
-                    <span className="v2-pipe-stage">
+                <div className="cv2-pipe-wrap">
+                  <div className="cv2-pipe-head">
+                    <span className="cv2-pipe-label">Pipeline</span>
+                    <span className="cv2-pipe-stage">
                       {pipelineIdx >= 0
                         ? <><b style={{ color: '#993c1d' }}>Stage {pipelineIdx + 1} of {PIPELINE.length}</b> · {PIPELINE_SHORT[pipelineIdx]}</>
-                        : <button className="v2-link-btn" onClick={() => { stage('kanban_status', PIPELINE[0]); stage('add_to_kanban', 1); }}>+ Add to pipeline</button>}
+                        : <button className="cv2-link-btn" onClick={() => { stage('kanban_status', PIPELINE[0]); stage('add_to_kanban', 1); }}>+ Add to pipeline</button>}
                     </span>
                   </div>
-                  <div className="v2-pipe">
+                  <div className="cv2-pipe">
                     {PIPELINE.map((s, i) => (
-                      <div key={s} className="v2-pipe-seg">
-                        {i > 0 && <span className="v2-pipe-line" style={{ background: i <= pipelineIdx ? '#d85a30' : 'var(--v2-line)' }} />}
-                        <button className={`v2-pipe-dot${i < pipelineIdx ? ' done' : i === pipelineIdx ? ' cur' : ''}`}
+                      <div key={s} className="cv2-pipe-seg">
+                        {i > 0 && <span className="cv2-pipe-line" style={{ background: i <= pipelineIdx ? '#d85a30' : 'var(--cv2-line)' }} />}
+                        <button className={`cv2-pipe-dot${i < pipelineIdx ? ' done' : i === pipelineIdx ? ' cur' : ''}`}
                           title={PIPELINE_SHORT[i]} aria-label={PIPELINE_SHORT[i]}
                           onClick={() => stage('kanban_status', s)} />
                       </div>
@@ -377,12 +377,12 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav }) {
                 </div>
 
                 {/* quick actions */}
-                <div className="v2-quick">
+                <div className="cv2-quick">
                   {QUICK_ACTIONS.map(qa => {
                     const on = isOn(val(qa.key));
                     return (
-                      <button key={qa.key} className={`v2-quick-btn${on ? ' on' : ''}`} onClick={() => toggle(qa.key)}>
-                        <span className="v2-quick-ic">{on ? '✓' : qa.icon}</span>{qa.label}
+                      <button key={qa.key} className={`cv2-quick-btn${on ? ' on' : ''}`} onClick={() => toggle(qa.key)}>
+                        <span className="cv2-quick-ic">{on ? '✓' : qa.icon}</span>{qa.label}
                       </button>
                     );
                   })}
@@ -391,72 +391,72 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav }) {
 
               {/* urgency / next actions */}
               {(eventUrgent || nextActions.length > 0) && (
-                <div className={`v2-next${eventCritical ? ' crit' : eventUrgent ? ' warn' : ''}`}>
-                  <div className="v2-next-head">
+                <div className={`cv2-next${eventCritical ? ' crit' : eventUrgent ? ' warn' : ''}`}>
+                  <div className="cv2-next-head">
                     {eventUrgent
-                      ? <span className="v2-next-title">{eventCritical ? '⚠ ' : '⏳ '}Event in {startDays} day{startDays === 1 ? '' : 's'} · {eventStat.all - eventStat.done} prep item{eventStat.all - eventStat.done === 1 ? '' : 's'} left</span>
-                      : <span className="v2-next-title">Next actions</span>}
+                      ? <span className="cv2-next-title">{eventCritical ? '⚠ ' : '⏳ '}Event in {startDays} day{startDays === 1 ? '' : 's'} · {eventStat.all - eventStat.done} prep item{eventStat.all - eventStat.done === 1 ? '' : 's'} left</span>
+                      : <span className="cv2-next-title">Next actions</span>}
                   </div>
                   {nextActions.length === 0
-                    ? <div className="v2-next-clear">✓ All checklist items complete</div>
-                    : <div className="v2-next-chips">
+                    ? <div className="cv2-next-clear">✓ All checklist items complete</div>
+                    : <div className="cv2-next-chips">
                         {nextActions.slice(0, 5).map(a => (
-                          <button key={a.key} className="v2-next-chip" onClick={() => { toggle(a.key); setExpanded(p => ({ ...p, [a.phaseId]: true })); }}>
-                            <span className="v2-next-box" /><span>{a.label}</span><span className="v2-next-phase">{a.phase}</span>
+                          <button key={a.key} className="cv2-next-chip" onClick={() => { toggle(a.key); setExpanded(p => ({ ...p, [a.phaseId]: true })); }}>
+                            <span className="cv2-next-box" /><span>{a.label}</span><span className="cv2-next-phase">{a.phase}</span>
                           </button>
                         ))}
-                        {nextActions.length > 5 && <span className="v2-next-more">+{nextActions.length - 5} more</span>}
+                        {nextActions.length > 5 && <span className="cv2-next-more">+{nextActions.length - 5} more</span>}
                       </div>}
                 </div>
               )}
 
               {/* KPIs */}
-              <div className="v2-kpis">
-                <div className="v2-kpi"><div className="v2-kpi-label">Estimated value</div><div className="v2-kpi-num">{fmtMoney(estValue)}</div></div>
-                <div className="v2-kpi"><div className="v2-kpi-label">Received</div><div className="v2-kpi-num" style={{ color: received ? '#0f6e56' : 'inherit' }}>{fmtMoney(received)}</div></div>
-                <div className="v2-kpi"><div className="v2-kpi-label">Balance due</div><div className="v2-kpi-num" style={{ color: balanceDue ? '#854f0b' : 'inherit' }}>{fmtMoney(balanceDue)}</div></div>
-                <div className="v2-kpi">
-                  <div className="v2-kpi-label">Event date</div>
-                  <div className="v2-kpi-num">{fmtDateShort(val('rcd start date'))}</div>
-                  {startDays != null && <div className={`v2-kpi-sub${eventUrgent ? ' urg' : ''}`}>{startDays < 0 ? `${-startDays}d ago` : startDays === 0 ? 'today' : `in ${startDays}d`}</div>}
+              <div className="cv2-kpis">
+                <div className="cv2-kpi"><div className="cv2-kpi-label">Estimated value</div><div className="cv2-kpi-num">{fmtMoney(estValue)}</div></div>
+                <div className="cv2-kpi"><div className="cv2-kpi-label">Received</div><div className="cv2-kpi-num" style={{ color: received ? '#0f6e56' : 'inherit' }}>{fmtMoney(received)}</div></div>
+                <div className="cv2-kpi"><div className="cv2-kpi-label">Balance due</div><div className="cv2-kpi-num" style={{ color: balanceDue ? '#854f0b' : 'inherit' }}>{fmtMoney(balanceDue)}</div></div>
+                <div className="cv2-kpi">
+                  <div className="cv2-kpi-label">Event date</div>
+                  <div className="cv2-kpi-num">{fmtDateShort(val('rcd start date'))}</div>
+                  {startDays != null && <div className={`cv2-kpi-sub${eventUrgent ? ' urg' : ''}`}>{startDays < 0 ? `${-startDays}d ago` : startDays === 0 ? 'today' : `in ${startDays}d`}</div>}
                 </div>
               </div>
 
               {/* BODY: phases + rail */}
-              <div className="v2-body">
-                <div className="v2-col-main">
-                  <div className="v2-card">
-                    <div className="v2-card-head"><span>Project phases</span><span className="v2-card-hint">click to expand · check to update</span></div>
-                    <div className="v2-phases">
+              <div className="cv2-body">
+                <div className="cv2-col-main">
+                  <div className="cv2-card">
+                    <div className="cv2-card-head"><span>Project phases</span><span className="cv2-card-hint">click to expand · check to update</span></div>
+                    <div className="cv2-phases">
                       {phaseStats.map(s => {
                         const phase = PHASES.find(p => p.id === s.id);
                         const col = phaseColor(s); const open = !!expanded[s.id]; const full = s.pct >= 1;
                         const nextStageName = pipelineIdx >= 0 && pipelineIdx < PIPELINE.length - 1 ? PIPELINE_SHORT[pipelineIdx + 1] : null;
                         return (
-                          <div key={s.id} className={`v2-phase${open ? ' open' : ''}`}>
-                            <button className="v2-phase-head" onClick={() => setExpanded(p => ({ ...p, [s.id]: !p[s.id] }))}>
+                          <div key={s.id} className={`cv2-phase${open ? ' open' : ''}`}>
+                            <button className="cv2-phase-head" onClick={() => setExpanded(p => ({ ...p, [s.id]: !p[s.id] }))}>
                               <Ring pct={s.pct} color={col} />
-                              <div className="v2-phase-info">
-                                <div className="v2-phase-row"><span className="v2-phase-name">{s.name}</span><span className="v2-phase-count" style={{ color: full ? '#0f6e56' : 'var(--v2-text-2)' }}>{s.done}/{s.all}{full ? ' · done' : ''}</span></div>
-                                <div className="v2-phase-bar"><div style={{ width: `${Math.round(s.pct * 100)}%`, background: col }} /></div>
+                              <div className="cv2-phase-info">
+                                <div className="cv2-phase-row"><span className="cv2-phase-name">{s.name}</span><span className="cv2-phase-count" style={{ color: full ? '#0f6e56' : 'var(--cv2-text-2)' }}>{s.done}/{s.all}{full ? ' · done' : ''}</span></div>
+                                <div className="cv2-phase-bar"><div style={{ width: `${Math.round(s.pct * 100)}%`, background: col }} /></div>
                               </div>
-                              <span className="v2-chev">{open ? '▴' : '▾'}</span>
+                              <span className="cv2-chev">{open ? '▴' : '▾'}</span>
                             </button>
                             {open && (
-                              <div className="v2-phase-body">
-                                <div className="v2-checks">
+                              <div className="cv2-phase-body">
+                                <div className="cv2-checks">
                                   {phase.items.map(([k, label]) => {
                                     const on = isOn(val(k));
                                     return (
-                                      <button key={k} className={`v2-check${on ? ' on' : ''}`} onClick={() => toggle(k)}>
-                                        <span className="v2-check-box" style={on ? { background: col, borderColor: col } : undefined}>{on ? '✓' : ''}</span>
-                                        <span className="v2-check-label">{label}</span>
+                                      <button key={k} className={`cv2-check${on ? ' on' : ''}`} onClick={() => toggle(k)}>
+                                        <span className="cv2-check-box" style={on ? { background: col, borderColor: col } : undefined}>{on ? '✓' : ''}</span>
+                                        <span className="cv2-check-label">{label}</span>
                                       </button>
                                     );
                                   })}
                                 </div>
                                 {full && nextStageName && pipelineIdx < PIPELINE.length - 1 && (
-                                  <div className="v2-advance">
+                                  <div className="cv2-advance">
                                     <span>✓ Phase complete</span>
                                     <button onClick={() => stage('kanban_status', PIPELINE[pipelineIdx + 1])}>Advance to {nextStageName} →</button>
                                   </div>
@@ -470,100 +470,100 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav }) {
                   </div>
 
                   {/* details */}
-                  <div className="v2-card">
-                    <div className="v2-card-head"><span>Details</span></div>
-                    <div className="v2-detail-grid">
+                  <div className="cv2-card">
+                    <div className="cv2-card-head"><span>Details</span></div>
+                    <div className="cv2-detail-grid">
                       <label>Project type</label><InlineSelect value={val('Type of Project')} options={PROJECT_TYPES} onChange={v => stage('Type of Project', v)} />
                       <label>Start date</label><InlineDate value={val('rcd start date')} onChange={v => stage('rcd start date', v)} />
                       <label>End date</label><InlineDate value={val('rcd end date')} onChange={v => stage('rcd end date', v)} />
                       <label>Stage</label><InlineSelect value={val('kanban_status')} options={PIPELINE} onChange={v => stage('kanban_status', v)} />
                     </div>
-                    <div className="v2-field-block">
+                    <div className="cv2-field-block">
                       <label>Work order</label>
                       <InlineText value={val('Work Order')} onChange={v => stage('Work Order', v)} placeholder="Add a work order…" area />
                     </div>
-                    <div className="v2-field-block">
+                    <div className="cv2-field-block">
                       <label>Notes</label>
                       <InlineText value={val('Notes')} onChange={v => stage('Notes', v)} placeholder="Add notes…" area />
                     </div>
                   </div>
                 </div>
 
-                <div className="v2-col-rail">
+                <div className="cv2-col-rail">
                   {/* team */}
-                  <div className="v2-card">
-                    <div className="v2-card-head"><span>Team</span></div>
-                    <div className="v2-team">
-                      <div className="v2-team-row">
+                  <div className="cv2-card">
+                    <div className="cv2-card-head"><span>Team</span></div>
+                    <div className="cv2-team">
+                      <div className="cv2-team-row">
                         <Avatar name={val('Lead Builder')} lead />
-                        <div className="v2-team-pick"><label>Lead builder</label><InlineSelect value={val('Lead Builder')} options={BUILDER_OPTIONS} onChange={v => stage('Lead Builder', v)} /></div>
+                        <div className="cv2-team-pick"><label>Lead builder</label><InlineSelect value={val('Lead Builder')} options={BUILDER_OPTIONS} onChange={v => stage('Lead Builder', v)} /></div>
                       </div>
                       {['Builder1', 'Builder2', 'Builder3'].map((bk, i) => (
-                        <div className="v2-team-row" key={bk}>
+                        <div className="cv2-team-row" key={bk}>
                           <Avatar name={val(bk)} />
-                          <div className="v2-team-pick"><label>Builder {i + 1}</label><InlineSelect value={val(bk)} options={BUILDER_OPTIONS} onChange={v => stage(bk, v)} /></div>
+                          <div className="cv2-team-pick"><label>Builder {i + 1}</label><InlineSelect value={val(bk)} options={BUILDER_OPTIONS} onChange={v => stage(bk, v)} /></div>
                         </div>
                       ))}
                     </div>
                   </div>
 
                   {/* contact */}
-                  <div className="v2-card">
-                    <div className="v2-card-head"><span>Contact</span></div>
-                    <div className="v2-contact">
-                      {f.Address_Block_Billing && <div className="v2-contact-row"><span className="v2-ic">⌖</span><span style={{ whiteSpace: 'pre-wrap' }}>{f.Address_Block_Billing.replace(/\r/g, '\n')}</span></div>}
-                      {f['rcd_cntct_INADR__email::zz__Address__ct'] && <div className="v2-contact-row"><span className="v2-ic">✉</span><a href={`mailto:${f['rcd_cntct_INADR__email::zz__Address__ct']}`}>{f['rcd_cntct_INADR__email::zz__Address__ct']}</a></div>}
-                      {f['rcd_cntct_PHONE__work::Number'] && <div className="v2-contact-row"><span className="v2-ic">✆</span><span>{f['rcd_cntct_PHONE__work::Number']}</span></div>}
-                      {f['rcd_cntct_PHONE__mobile::Number'] && <div className="v2-contact-row"><span className="v2-ic">▢</span><span>{f['rcd_cntct_PHONE__mobile::Number']}</span></div>}
-                      {(f['Distance to High5'] || f['Drive Time']) && <div className="v2-contact-meta">{[f['Distance to High5'] && `${f['Distance to High5']} mi`, f['Drive Time'] && `${f['Drive Time']} drive`].filter(Boolean).join(' · ')}</div>}
+                  <div className="cv2-card">
+                    <div className="cv2-card-head"><span>Contact</span></div>
+                    <div className="cv2-contact">
+                      {f.Address_Block_Billing && <div className="cv2-contact-row"><span className="cv2-ic">⌖</span><span style={{ whiteSpace: 'pre-wrap' }}>{f.Address_Block_Billing.replace(/\r/g, '\n')}</span></div>}
+                      {f['rcd_cntct_INADR__email::zz__Address__ct'] && <div className="cv2-contact-row"><span className="cv2-ic">✉</span><a href={`mailto:${f['rcd_cntct_INADR__email::zz__Address__ct']}`}>{f['rcd_cntct_INADR__email::zz__Address__ct']}</a></div>}
+                      {f['rcd_cntct_PHONE__work::Number'] && <div className="cv2-contact-row"><span className="cv2-ic">✆</span><span>{f['rcd_cntct_PHONE__work::Number']}</span></div>}
+                      {f['rcd_cntct_PHONE__mobile::Number'] && <div className="cv2-contact-row"><span className="cv2-ic">▢</span><span>{f['rcd_cntct_PHONE__mobile::Number']}</span></div>}
+                      {(f['Distance to High5'] || f['Drive Time']) && <div className="cv2-contact-meta">{[f['Distance to High5'] && `${f['Distance to High5']} mi`, f['Drive Time'] && `${f['Drive Time']} drive`].filter(Boolean).join(' · ')}</div>}
                     </div>
                   </div>
 
                   {/* financials */}
-                  <div className="v2-card">
-                    <div className="v2-card-head"><span>Financials</span></div>
-                    <div className="v2-fin-tabs">
+                  <div className="cv2-card">
+                    <div className="cv2-card-head"><span>Financials</span></div>
+                    <div className="cv2-fin-tabs">
                       {[['estimates', 'Estimates', estimates.length], ['invoices', 'Invoices', invoices.length], ['payments', 'Payments', payments.length]].map(([id, lbl, n]) => (
-                        <button key={id} className={`v2-fin-tab${finTab === id ? ' active' : ''}`} onClick={() => setFinTab(id)}>{lbl}<span>{n}</span></button>
+                        <button key={id} className={`cv2-fin-tab${finTab === id ? ' active' : ''}`} onClick={() => setFinTab(id)}>{lbl}<span>{n}</span></button>
                       ))}
                     </div>
-                    <div className="v2-fin-list">
+                    <div className="cv2-fin-list">
                       {finTab === 'estimates' && (estimates.length ? estimates.map((r, i) => (
-                        <div className="v2-fin-row" key={i}><span className="v2-fin-main">{r['cntct_ESTMT::Title'] || fmtDate(r['cntct_ESTMT::Date'])}</span><span className="v2-fin-amt">{fmtMoneyFull(r['cntct_ESTMT::zz__Total__xn'])}</span></div>
-                      )) : <div className="v2-fin-empty">No estimates</div>)}
+                        <div className="cv2-fin-row" key={i}><span className="cv2-fin-main">{r['cntct_ESTMT::Title'] || fmtDate(r['cntct_ESTMT::Date'])}</span><span className="cv2-fin-amt">{fmtMoneyFull(r['cntct_ESTMT::zz__Total__xn'])}</span></div>
+                      )) : <div className="cv2-fin-empty">No estimates</div>)}
                       {finTab === 'invoices' && (invoices.length ? invoices.map((r, i) => (
-                        <div className="v2-fin-row" key={i}><span className="v2-fin-main">#{r['cntct_INVO::QuickBooks_Reference_Number'] || '—'} · {fmtDateShort(r['cntct_INVO::Date'])}</span><span className="v2-fin-amt">{fmtMoneyFull(r['cntct_INVO::zz__Total__xn'])}</span></div>
-                      )) : <div className="v2-fin-empty">No invoices</div>)}
+                        <div className="cv2-fin-row" key={i}><span className="cv2-fin-main">#{r['cntct_INVO::QuickBooks_Reference_Number'] || '—'} · {fmtDateShort(r['cntct_INVO::Date'])}</span><span className="cv2-fin-amt">{fmtMoneyFull(r['cntct_INVO::zz__Total__xn'])}</span></div>
+                      )) : <div className="cv2-fin-empty">No invoices</div>)}
                       {finTab === 'payments' && (payments.length ? payments.map((r, i) => (
-                        <div className="v2-fin-row" key={i}><span className="v2-fin-main">{fmtDateShort(r['cntct_PMT::Date'])} · {r['cntct_PMT::Method'] || '—'}</span><span className="v2-fin-amt">{fmtMoneyFull(r['cntct_PMT::Amount'])}</span></div>
-                      )) : <div className="v2-fin-empty">No payments</div>)}
+                        <div className="cv2-fin-row" key={i}><span className="cv2-fin-main">{fmtDateShort(r['cntct_PMT::Date'])} · {r['cntct_PMT::Method'] || '—'}</span><span className="cv2-fin-amt">{fmtMoneyFull(r['cntct_PMT::Amount'])}</span></div>
+                      )) : <div className="cv2-fin-empty">No payments</div>)}
                     </div>
                   </div>
                 </div>
               </div>
 
               {allPhasesDone && !(status || '').toLowerCase().includes('complet') && (
-                <div className="v2-suggest">
+                <div className="cv2-suggest">
                   <span>All phases complete.</span>
                   <button onClick={() => stage('Status', 'Completed')}>Mark project Completed →</button>
                 </div>
               )}
 
-              <div className="v2-meta">
+              <div className="cv2-meta">
                 Modified {f.zz__Modified_On} by {f.zz__Modified_By} · Created {f.zz__Created_On} by {f.zz__Created_By} · RCD #{f._kpt__RCD_ID}
               </div>
             </div>
 
             {dirtyCount > 0 && (
-              <div className="v2-savebar">
-                <span className="v2-savebar-count">{dirtyCount} unsaved change{dirtyCount > 1 ? 's' : ''}</span>
-                {saveStatus === 'error' && <span className="v2-savebar-err">✗ Save failed</span>}
-                <span className="v2-savebar-spacer" />
-                <button className="v2-savebar-discard" onClick={handleDiscard} disabled={saving}>Discard</button>
-                <button className="v2-savebar-save" onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+              <div className="cv2-savebar">
+                <span className="cv2-savebar-count">{dirtyCount} unsaved change{dirtyCount > 1 ? 's' : ''}</span>
+                {saveStatus === 'error' && <span className="cv2-savebar-err">✗ Save failed</span>}
+                <span className="cv2-savebar-spacer" />
+                <button className="cv2-savebar-discard" onClick={handleDiscard} disabled={saving}>Discard</button>
+                <button className="cv2-savebar-save" onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
               </div>
             )}
-            {saveStatus === 'saved' && dirtyCount === 0 && <div className="v2-toast">✓ Saved</div>}
+            {saveStatus === 'saved' && dirtyCount === 0 && <div className="cv2-toast">✓ Saved</div>}
           </>
         )}
       </main>

@@ -455,7 +455,6 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav } = {}) {
       <aside className="v2-sidebar" style={{ width: navWidth, minWidth: navWidth }}>
         <div className="v2-sidebar-header">
           <div className="v2-sidebar-title">
-            <span className="v2-sidebar-logo">H5</span>
             <div>
               <div className="v2-sidebar-module">Products &amp; Services</div>
               <div className="v2-sidebar-count">
