@@ -23,11 +23,16 @@ export default function ProjectsWorkspace({ navTarget, onClearNav }) {
     setVisited(s => { const n = new Set(s); n.add(v); return n })
   }
 
-  // App routes project deep-links (command palette / Home) here
+  // App routes project deep-links (command palette / Home) here.
+  // recordId → open that project in the workspace; view → force a specific view.
   useEffect(() => {
-    if (navTarget?.moduleId !== 'projects' || !navTarget.recordId) return
-    go('workspace')
-    setChildNav({ moduleId: 'ccs-v2', recordId: navTarget.recordId })
+    if (navTarget?.moduleId !== 'projects') return
+    if (navTarget.recordId) {
+      go('workspace')
+      setChildNav({ moduleId: 'ccs-v2', recordId: navTarget.recordId })
+    } else if (navTarget.view) {
+      go(navTarget.view)
+    } else { return }
     onClearNav?.()
   }, [navTarget]) // eslint-disable-line react-hooks/exhaustive-deps
 

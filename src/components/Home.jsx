@@ -33,7 +33,7 @@ const daysUntil = v => {
 }
 const fmtDate = v => { const dt = parseFmDate(v); return dt ? dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—' }
 
-export default function Home({ onOpen, onGoto, onOpenPalette }) {
+export default function Home({ onOpen, onGoto, onOpenView, onOpenPalette }) {
   const [data, setData] = useState(null)
 
   useEffect(() => {
@@ -108,7 +108,7 @@ export default function Home({ onOpen, onGoto, onOpenPalette }) {
         </div>
 
         <div className="home-card">
-          <div className="home-card-head"><span>Pipeline</span><button className="home-link" onClick={() => onGoto('projects')}>Open board →</button></div>
+          <div className="home-card-head"><span>Pipeline</span><button className="home-link" onClick={() => onOpenView('projects', 'board')}>Open board →</button></div>
           <div className="home-pipe">
             {PIPELINE.map((st, i) => (
               <div key={st} className="home-pipe-stage" title={`${stageCounts[i]} · ${st}`}>

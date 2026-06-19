@@ -55,8 +55,8 @@ export default function App() {
     setVisited(v => { const n = new Set(v); n.add(id); return n })
   }
 
-  function navigateTo(moduleId, recordId) {
-    setNavTarget({ moduleId, recordId })
+  function navigateTo(moduleId, recordId, view) {
+    setNavTarget({ moduleId, recordId, view })
     handleSelect(moduleId)
   }
 
@@ -78,7 +78,7 @@ export default function App() {
   return (
     <div data-theme={theme} style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
         <NavRail modules={MODULES} activeId={activeModule} onSelect={handleSelect} theme={theme} onToggleTheme={toggleTheme} onOpenPalette={() => setPaletteOpen(true)} />
-        {visited.has('home') && <div style={{ display: activeModule === 'home' ? 'contents' : 'none' }}><Home onOpen={handlePalettePick} onGoto={handleSelect} onOpenPalette={() => setPaletteOpen(true)} /></div>}
+        {visited.has('home') && <div style={{ display: activeModule === 'home' ? 'contents' : 'none' }}><Home onOpen={handlePalettePick} onGoto={handleSelect} onOpenView={(m, v) => navigateTo(m, null, v)} onOpenPalette={() => setPaletteOpen(true)} /></div>}
         {visited.has('contacts') && <div style={{ display: activeModule === 'contacts' ? 'contents' : 'none' }}><Contacts navTarget={navTarget} onClearNav={clearNavTarget} /></div>}
         {visited.has('inspections') && <div style={{ display: activeModule === 'inspections' ? 'contents' : 'none' }}><Inspections navTarget={navTarget} onClearNav={clearNavTarget} /></div>}
         {visited.has('products') && <div style={{ display: activeModule === 'products' ? 'contents' : 'none' }}><ProductsAndServicesV2 navTarget={navTarget} onClearNav={clearNavTarget} /></div>}
