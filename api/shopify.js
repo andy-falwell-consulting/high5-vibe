@@ -6,6 +6,7 @@ export default async function handler(req, res) {
   const token = process.env.SHOPIFY_TOKEN;
 
   if (!store || !token) return res.status(500).json({ error: 'Shopify not configured' });
+  if (action === 'debug') return res.status(200).json({ store, tokenPrefix: token.slice(0, 8) + '...' });
 
 
   const base = `https://${store}/admin/api/2024-01`;
