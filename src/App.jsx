@@ -26,13 +26,11 @@ export default function App() {
   const [theme, setTheme] = useState(getInitialTheme)
   const [navTarget, setNavTarget] = useState(null)
 
-  // Pre-warm the RCD cache on startup so CCS and CCS Kanban load instantly
+  // Pre-warm all module caches on startup so every tab loads instantly
   useEffect(() => {
-    getAllRecords(RCD_LAYOUT, {
-      cacheVersion: RCD_CACHE_VERSION,
-      findQuery: RCD_FIND_QUERY,
-      sort: RCD_SORT,
-    }).catch(() => {})
+    getAllRecords(RCD_LAYOUT, { cacheVersion: RCD_CACHE_VERSION, findQuery: RCD_FIND_QUERY, sort: RCD_SORT }).catch(() => {})
+    getAllRecords('Contacts_New', { cacheVersion: 2, batchSize: 100 }).catch(() => {})
+    getAllRecords('Products & Services_New', { cacheVersion: 4, batchSize: 100 }).catch(() => {})
   }, [])
 
   function handleSelect(id) {

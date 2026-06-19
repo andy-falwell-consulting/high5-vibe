@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { DndContext, closestCenter, DragOverlay } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { getAllRecords, getRecord, prefetchRecord, updateRecord } from '../api/filemaker';
+import { getRecord, prefetchRecord, updateRecord } from '../api/filemaker';
+import { useAllRecords } from '../hooks/useAllRecords';
 import ColorLegend from './ColorLegend';
 import { useSortableLayout, SortableSection, SortableFieldGrid, SortableField, SectionDragGhost, LayoutHint } from './SortableLayout';
 import './Contacts.css';
@@ -139,8 +140,7 @@ function SectionContent({ section, fieldData, portalData, editMode, onFieldReord
 }
 
 export default function Contacts() {
-  const [records, setRecords] = useState([]);
-  const [total, setTotal] = useState(0);
+  const { records, total } = useAllRecords(LAYOUT, { cacheVersion: 2 });
   const [selected, setSelected] = useState(null);
   const [search, setSearch] = useState('');
   const [sortField, setSortFieldRaw] = useState(() => localStorage.getItem('ct_sort_field') || 'created');
@@ -156,27 +156,6 @@ export default function Contacts() {
   const { sections, editMode, setEditMode, activeId, setActiveId, sensors, handleSectionDragEnd, handleFieldReorder, resetLayout } =
     useSortableLayout('ct_layout_v1', DEFAULT_SECTIONS);
 
-  useEffect(() => {
-    getAllRecords(LAYOUT, {
-      onProgress: ({ records, total }) => { setRecords(records); setTotal(total); },
-      batchSize: 100,
-      cacheVersion: 2,
-      slimForStorage: r => ({
-        recordId: r.recordId,
-        fieldData: {
-          zz__Display__ct: r.fieldData.zz__Display__ct,
-          'cntct_ADDR::zz__Display_Single_Line_No_Zip__ct': r.fieldData['cntct_ADDR::zz__Display_Single_Line_No_Zip__ct'],
-          'cntct_ADDR::zz__Display_Single_Line__ct': r.fieldData['cntct_ADDR::zz__Display_Single_Line__ct'],
-          Type: r.fieldData.Type,
-          Status: r.fieldData.Status,
-          Name_Organization: r.fieldData.Name_Organization,
-          'cntct_ADDR::Type': r.fieldData['cntct_ADDR::Type'],
-          zz__Created_On: r.fieldData.zz__Created_On,
-          zz__Modified_On: r.fieldData.zz__Modified_On,
-        },
-      }),
-    });
-  }, []);
 
   const setSortField = v => { setSortFieldRaw(v); localStorage.setItem('ct_sort_field', v); };
   const setSortOrder = v => { setSortOrderRaw(v); localStorage.setItem('ct_sort_order', v); };
