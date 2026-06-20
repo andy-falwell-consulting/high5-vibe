@@ -1,6 +1,4 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { DndContext, closestCenter, DragOverlay } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { getRecord, updateRecord, addPortalRow, containerImageUrl, createRecord } from '../api/filemaker';
 import { getCurrentEnv } from '../config/fmpEnvironments';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
@@ -9,7 +7,6 @@ import NewItemModal from './NewItemModal';
 import ImageLightbox from './ImageLightbox';
 import { pushToShopify, pushToQBO } from '../api/integrations';
 import { useAllRecords } from '../hooks/useAllRecords';
-import { useSortableLayout, SortableSection, SortableFieldGrid, SortableField, SectionDragGhost, LayoutHint } from './SortableLayout';
 import './ProductsAndServicesV2.css';
 
 const LAYOUT = 'Products & Services_New';
@@ -42,15 +39,6 @@ const QBO_CAT = [
   { label: 'OE',  value: '1300000000000836522' },
   { label: 'OV',  value: '1300000000000836516' },
   { label: 'T&TD',value: '1300000000000836520' },
-];
-
-const DEFAULT_SECTIONS = [
-  { id: 'details',      title: 'Details',            icon: '◈', fields: ['SKU','vendor_sku','Vendor','Type','Category','Cost','Unit_Price','assembly_product','price_override'] },
-  { id: 'description',  title: 'Description',        icon: '≡', fields: ['Description'] },
-  { id: 'notes',        title: 'Notes',              icon: '✎', fields: ['Notes'] },
-  { id: 'shopify_desc', title: 'Shopify Description',icon: '◉', fields: ['shopify_description'] },
-  { id: 'integrations', title: 'Integrations',       icon: '⇄', fields: ['_kat__Item_ID_QuickBooks','_kat__Item_ID_Shopify','_kat__Item_Variant_Id','QuickBooks_Account_Income','qbo_class'] },
-  { id: 'bom',          title: 'Bill of Materials',  icon: '⊞', fields: ['__portal__'] },
 ];
 
 const FIELD_LABELS = {
@@ -158,59 +146,6 @@ function FieldValue({ fieldKey, value, onChange, dataEditing }) {
   return <input type="text" value={value || ''} onChange={e => ch(e.target.value)} className="sl-input" />;
 }
 
-function SectionContent({ section, fieldData, portalData, editMode, onFieldReorder, edits, onChange, dataEditing, onOpenBomPicker }) {
-  if (section.id === 'bom') {
-    const bom = portalData?.['Portal__Bill_of_Materials 4'] || [];
-    return (
-      <div>
-        <div className="v2-table-wrap">
-          {bom.length === 0
-            ? <p className="sl-empty">No components yet</p>
-            : <table className="v2-table">
-                <thead><tr><th>Name</th><th>Description</th><th>Qty</th><th>Cost</th><th>Price</th><th>Total</th></tr></thead>
-                <tbody>
-                  {bom.map((row, i) => (
-                    <tr key={i}>
-                      <td>{row['item_itmli_ITEM__billOfMaterials::Name']}</td>
-                      <td>{row['item_itmli_ITEM__billOfMaterials::Description']}</td>
-                      <td className="num">{row['item_ITMLI__billOfMaterials::Quantity']}</td>
-                      <td className="num">${Number(row['item_itmli_ITEM__billOfMaterials::Cost']||0).toFixed(2)}</td>
-                      <td className="num">${Number(row['item_itmli_ITEM__billOfMaterials::Unit_Price']||0).toFixed(2)}</td>
-                      <td className="num">${Number(row['item_ITMLI__billOfMaterials::Total']||0).toFixed(2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-          }
-        </div>
-        <div className="v2-bom-footer">
-          <button className="v2-bom-add-btn" onClick={onOpenBomPicker}>+ Add Component</button>
-        </div>
-      </div>
-    );
-  }
-
-  const isSingle = section.fields.length === 1 && ['Description','Notes','shopify_description'].includes(section.fields[0]);
-
-  return (
-    <SortableFieldGrid sectionId={section.id} fields={section.fields} editMode={editMode}
-      onReorder={onFieldReorder} single={isSingle}>
-      {section.fields.map(fk => {
-        const saved = fieldData?.[fk];
-        const value = fk in edits ? edits[fk] : saved;
-        const dirty = fk in edits && edits[fk] !== saved;
-        return (
-          <SortableField key={fk} id={fk} editMode={editMode} dirty={dirty}
-            wide={['Description','Notes','shopify_description'].includes(fk)}>
-            <label>{FIELD_LABELS[fk] || fk}</label>
-            <FieldValue fieldKey={fk} value={value} onChange={onChange} dataEditing={dataEditing} />
-          </SortableField>
-        );
-      })}
-    </SortableFieldGrid>
-  );
-}
-
 const AUTO_SYNC_FIELDS = new Set(['Name', 'Unit_Price', 'Description', 'SKU', 'QuickBooks_Account_Income']);
 
 export default function ProductsAndServicesV2({ navTarget, onClearNav } = {}) {
@@ -249,9 +184,6 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav } = {}) {
   const [imgBust, setImgBust] = useState(null);
   const imgInputRef = useRef(null);
   const isResizing = useRef(false);
-
-  const { sections, editMode, setEditMode, activeId, setActiveId, sensors, handleSectionDragEnd, handleFieldReorder, resetLayout } =
-    useSortableLayout('ps_layout_v2', DEFAULT_SECTIONS);
 
   const startResize = useCallback((e) => {
     e.preventDefault();
@@ -431,6 +363,28 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav } = {}) {
   const imgSrcBase = f.Picture ? containerImageUrl(f.Picture, { db: getCurrentEnv().db, layout: LAYOUT, recordId: selected?.recordId }) : null;
   const imgSrc = imgSrcBase ? (imgBust ? `${imgSrcBase}&t=${imgBust}` : imgSrcBase) : null;
 
+  // Live (edit-aware) field accessors + an inline-editable field helper
+  const fval = fk => (fk in edits ? edits[fk] : f[fk]);
+  const fld = (fk, label) => (
+    <div className={`v2-f${fk in edits && edits[fk] !== f[fk] ? ' dirty' : ''}`} key={fk}>
+      <span className="v2-f-label">{label || FIELD_LABELS[fk] || fk}</span>
+      <FieldValue fieldKey={fk} value={fval(fk)} onChange={handleFieldChange} dataEditing={dataEditing} />
+    </div>
+  );
+
+  // Pricing roll-up (reflects pending edits)
+  const cost = Number(fval('Cost')) || 0;
+  const price = Number(fval('Unit_Price')) || 0;
+  const profit = price - cost;
+  const marginPct = price > 0 && cost > 0 ? (profit / price) * 100 : null;
+  const marginColor = marginPct == null ? '#64748b' : marginPct < 0 ? '#ef4444' : marginPct < 15 ? '#f59e0b' : '#22c55e';
+  const bom = portalData?.['Portal__Bill_of_Materials 4'] || [];
+  const bomTotal = bom.reduce((a, r) => a + Number(r['item_ITMLI__billOfMaterials::Total'] || 0), 0);
+  const channels = [
+    { key: 'shopify', label: 'Shopify', id: f._kat__Item_ID_Shopify },
+    { key: 'qbo', label: 'QuickBooks', id: f._kat__Item_ID_QuickBooks },
+  ];
+
   return (
     <div className="v2-container">
       <aside className="v2-sidebar" style={{ width: navWidth, minWidth: navWidth }}>
@@ -519,48 +473,15 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav } = {}) {
 
         {selected && (
           <>
-            <div className="v2-topbar">
-              <div className="v2-topbar-left">
-                <div className="v2-hero-wrap">
-                  {imgSrc && <img className="v2-hero-img" src={imgSrc} alt={f.Name} onClick={() => !dataEditing && setShowLightbox(true)} style={{ cursor: dataEditing ? 'default' : 'zoom-in' }} />}
-                  {dataEditing && (
-                    <button className="v2-img-replace-btn" onClick={() => imgInputRef.current?.click()} disabled={uploadingImage}>
-                      {uploadingImage ? '…' : imgSrc ? '⟳ Replace' : '+ Add Image'}
-                    </button>
-                  )}
-                  <input ref={imgInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
-                </div>
-                <div>
-                  <h1 className="v2-title">{f.Name}</h1>
-                  <div className="v2-meta-row">
-                    <span className="v2-cat-chip" style={{ background: catColor+'22', color: catColor, borderColor: catColor+'44' }}>{f.Category}</span>
-                    <span className="v2-type-chip">{f.Type}</span>
-                    {f.SKU && <span className="v2-sku">SKU: {f.SKU}</span>}
-                    <span className="v2-price-badge">${Number(f.Unit_Price || 0).toFixed(2)}</span>
-                  </div>
-                </div>
+            <div className="v2-topbar2">
+              <div className="v2-crumb">
+                <span className="dim">Products</span><span className="sep">›</span><span className="cur">{f.Name || '—'}</span>
               </div>
               <div className="v2-topbar-actions">
-                <button className={`v2-btn ghost sm ${syncStatus.shopify === 'ok' ? 'active' : ''}`}
-                  onClick={() => handleSyncPush('shopify')} disabled={syncStatus.shopify === 'pushing'}
-                  title={f._kat__Item_ID_Shopify ? `Shopify ID: ${f._kat__Item_ID_Shopify}` : 'Push to Shopify'}
-                  style={{ color: syncStatus.shopify === 'error' ? '#f87171' : syncStatus.shopify === 'ok' ? '#4ade80' : undefined }}>
-                  {syncStatus.shopify === 'pushing' ? '…' : syncStatus.shopify === 'ok' ? '✓ Shopify' : syncStatus.shopify === 'error' ? '✗ Shopify' : '⇪ Shopify'}
-                </button>
-                <button className={`v2-btn ghost sm ${syncStatus.qbo === 'ok' ? 'active' : ''}`}
-                  onClick={() => handleSyncPush('qbo')} disabled={syncStatus.qbo === 'pushing'}
-                  title={f._kat__Item_ID_QuickBooks ? `QBO ID: ${f._kat__Item_ID_QuickBooks}` : 'Push to QuickBooks'}
-                  style={{ color: syncStatus.qbo === 'error' ? '#f87171' : syncStatus.qbo === 'ok' ? '#4ade80' : undefined }}>
-                  {syncStatus.qbo === 'pushing' ? '…' : syncStatus.qbo === 'ok' ? '✓ QBO' : syncStatus.qbo === 'error' ? '✗ QBO' : '⇪ QBO'}
-                </button>
                 {saveStatus === 'saved' && <span className="v2-status saved">✓ Saved</span>}
                 {saveStatus === 'error' && <span className="v2-status error">✗ Failed</span>}
                 {!dataEditing ? (
-                  <>
-                    <button className="v2-btn ghost" onClick={() => { setDataEditing(true); setEditMode(false); }}>✎ Edit</button>
-                    <button className={`v2-btn ghost ${editMode ? 'active' : ''}`} onClick={() => setEditMode(m => !m)}>⠿ Layout</button>
-                    {editMode && <button className="v2-btn ghost sm" onClick={resetLayout}>Reset</button>}
-                  </>
+                  <button className="v2-btn ghost" onClick={() => setDataEditing(true)}>✎ Edit</button>
                 ) : (
                   <>
                     <button className="v2-btn save" onClick={handleSave} disabled={saving || (!dirtyCount && !imgBust)}>
@@ -572,31 +493,138 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav } = {}) {
               </div>
             </div>
 
-            <LayoutHint editMode={editMode} />
-
             <div className="v2-content">
-              <DndContext sensors={sensors} collisionDetection={closestCenter}
-                onDragStart={({ active }) => setActiveId(active.id)}
-                onDragEnd={handleSectionDragEnd}
-                onDragCancel={() => setActiveId(null)}
-              >
-                <SortableContext items={sections.map(s => s.id)} strategy={verticalListSortingStrategy}>
-                  {sections.map(section => (
-                    <SortableSection key={section.id} id={section.id} title={section.title} icon={section.icon} editMode={editMode}>
-                      <SectionContent section={section} fieldData={f} portalData={portalData}
-                        editMode={editMode} onFieldReorder={handleFieldReorder}
-                        edits={edits} onChange={handleFieldChange} dataEditing={dataEditing}
-                        onOpenBomPicker={() => setShowBomPicker(true)} />
-                    </SortableSection>
-                  ))}
-                </SortableContext>
-                <DragOverlay>
-                  {activeId && <SectionDragGhost title={sections.find(s => s.id === activeId)?.title} icon={sections.find(s => s.id === activeId)?.icon} />}
-                </DragOverlay>
-              </DndContext>
-            </div>
+              {/* ── Hero: media + pricing ── */}
+              <div className="v2-spec-hero">
+                <div className="v2-hero-media">
+                  {imgSrc ? (
+                    <img className="v2-hero-img2" src={imgSrc} alt={f.Name} onClick={() => !dataEditing && setShowLightbox(true)} style={{ cursor: dataEditing ? 'default' : 'zoom-in' }} />
+                  ) : (
+                    <div className="v2-hero-ph"><span style={{ color: catColor }}>◫</span></div>
+                  )}
+                  {dataEditing && (
+                    <button className="v2-img-replace-btn" onClick={() => imgInputRef.current?.click()} disabled={uploadingImage}>
+                      {uploadingImage ? '…' : imgSrc ? '⟳ Replace' : '+ Add image'}
+                    </button>
+                  )}
+                  <input ref={imgInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
+                </div>
+                <div className="v2-hero-info">
+                  <h1 className="v2-title">{f.Name || '—'}</h1>
+                  <div className="v2-meta-row">
+                    {f.Category && <span className="v2-cat-chip" style={{ background: catColor+'22', color: catColor, borderColor: catColor+'44' }}>{f.Category}</span>}
+                    {f.Type && <span className="v2-type-chip">{f.Type}</span>}
+                    {f.SKU && <span className="v2-sku"><span className="dim">SKU</span> {f.SKU}</span>}
+                    {f.Vendor && <span className="v2-sku"><span className="dim">Vendor</span> {f.Vendor}</span>}
+                  </div>
+                  <div className="v2-kpis">
+                    <div className="v2-kpi"><div className="v2-kpi-label">Price</div><div className="v2-kpi-num">${price.toFixed(2)}</div></div>
+                    <div className="v2-kpi"><div className="v2-kpi-label">Cost</div><div className="v2-kpi-num">{cost ? `$${cost.toFixed(2)}` : '—'}</div></div>
+                    <div className="v2-kpi"><div className="v2-kpi-label">Margin</div><div className="v2-kpi-num" style={{ color: marginColor }}>{marginPct == null ? '—' : `${marginPct.toFixed(1)}%`}</div></div>
+                    <div className="v2-kpi"><div className="v2-kpi-label">Profit / unit</div><div className="v2-kpi-num" style={{ color: marginPct != null && profit < 0 ? '#ef4444' : undefined }}>{cost ? `$${profit.toFixed(2)}` : '—'}</div></div>
+                  </div>
+                </div>
+              </div>
 
-            <div className="v2-record-footer">ID {f._kpt__Item_ID} · Record {selected.recordId}</div>
+              {/* ── Channels ── */}
+              <div className="v2-channels">
+                {channels.map(({ key, label, id }) => {
+                  const st = syncStatus[key];
+                  return (
+                    <button key={key} className={`v2-channel${st === 'error' ? ' err' : id || st === 'ok' ? ' linked' : ''}`}
+                      onClick={() => handleSyncPush(key)} disabled={st === 'pushing'}>
+                      <span className="v2-channel-name">{label}</span>
+                      <span className="v2-channel-id">{id ? `#${String(id).slice(-8)}` : 'Not linked'}</span>
+                      <span className="v2-channel-badge">
+                        {st === 'pushing' ? 'Syncing…' : st === 'error' ? '✗ Failed' : st === 'ok' ? '✓ Synced' : id ? '↻ Re-sync' : 'Sync now →'}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* ── Two-column body ── */}
+              <div className="v2-spec-cols">
+                <div className="v2-spec-main">
+                  <div className="v2-spec-card">
+                    <div className="v2-spec-head">Description</div>
+                    <FieldValue fieldKey="Description" value={fval('Description')} onChange={handleFieldChange} dataEditing={dataEditing} />
+                  </div>
+                  {(fval('Notes') || dataEditing) && (
+                    <div className="v2-spec-card">
+                      <div className="v2-spec-head">Notes</div>
+                      <FieldValue fieldKey="Notes" value={fval('Notes')} onChange={handleFieldChange} dataEditing={dataEditing} />
+                    </div>
+                  )}
+                  {(fval('shopify_description') || dataEditing) && (
+                    <div className="v2-spec-card">
+                      <div className="v2-spec-head">Shopify description</div>
+                      <FieldValue fieldKey="shopify_description" value={fval('shopify_description')} onChange={handleFieldChange} dataEditing={dataEditing} />
+                    </div>
+                  )}
+                  <div className="v2-spec-card">
+                    <div className="v2-spec-head v2-spec-head-row">
+                      <span>Bill of materials{bom.length > 0 && ` · ${bom.length}`}</span>
+                      {bomTotal > 0 && <span className="v2-bom-total">Components ${bomTotal.toFixed(2)}</span>}
+                      <button className="v2-bom-add-btn" onClick={() => setShowBomPicker(true)}>+ Add</button>
+                    </div>
+                    {bom.length === 0 ? (
+                      <p className="v2-spec-empty">{f.assembly_product ? 'No components yet — add parts to roll up cost.' : 'Not an assembly.'}</p>
+                    ) : (
+                      <div className="v2-table-wrap">
+                        <table className="v2-table">
+                          <thead><tr><th>Name</th><th className="num">Qty</th><th className="num">Cost</th><th className="num">Total</th></tr></thead>
+                          <tbody>
+                            {bom.map((row, i) => (
+                              <tr key={i}>
+                                <td>{row['item_itmli_ITEM__billOfMaterials::Name']}</td>
+                                <td className="num">{row['item_ITMLI__billOfMaterials::Quantity']}</td>
+                                <td className="num">${Number(row['item_itmli_ITEM__billOfMaterials::Cost']||0).toFixed(2)}</td>
+                                <td className="num">${Number(row['item_ITMLI__billOfMaterials::Total']||0).toFixed(2)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="v2-spec-rail">
+                  <div className="v2-spec-card">
+                    <div className="v2-spec-head">Pricing</div>
+                    <div className="v2-f-list">
+                      {fld('Cost', 'Cost')}
+                      {fld('Unit_Price', 'Unit price')}
+                      {fld('price_override', 'Price override')}
+                    </div>
+                  </div>
+                  <div className="v2-spec-card">
+                    <div className="v2-spec-head">Organization</div>
+                    <div className="v2-f-list">
+                      {fld('SKU')}
+                      {fld('vendor_sku')}
+                      {fld('Vendor')}
+                      {fld('Category')}
+                      {fld('Type')}
+                      {fld('assembly_product', 'Assembly product')}
+                    </div>
+                  </div>
+                  <div className="v2-spec-card">
+                    <div className="v2-spec-head">Accounting & sync</div>
+                    <div className="v2-f-list">
+                      {fld('QuickBooks_Account_Income', 'Income account')}
+                      {fld('qbo_class', 'QBO class')}
+                      {fld('_kat__Item_ID_QuickBooks', 'QuickBooks ID')}
+                      {fld('_kat__Item_ID_Shopify', 'Shopify ID')}
+                      {fld('_kat__Item_Variant_Id', 'Variant ID')}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="v2-record-footer">ID {f._kpt__Item_ID} · Record {selected.recordId}</div>
+            </div>
           </>
         )}
       </main>
