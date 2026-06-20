@@ -333,3 +333,56 @@ export async function updateRecord(layout, recordId, fieldData) {
   }
   return res.json();
 }
+
+export async function deleteRecord(layout, recordId) {
+  const token = await getToken();
+  const env = getCurrentEnv();
+  const res = await fetch(
+    `${getBasePath()}/fmi/data/v2/databases/${env.db}/layouts/${encodeURIComponent(layout)}/records/${recordId}`,
+    { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (res.status === 401) { sessionToken = null; return deleteRecord(layout, recordId); }
+  return res.json();
+}
+
+// Fetch a single record with explicit portal row limits (default getRecord caps portals).
+export async function getRecordWithPortals(layout, recordId, portalLimits = {}) {
+  const token = await getToken();
+  const env = getCurrentEnv();
+  const qs = Object.entries(portalLimits).map(([p, n]) => `_limit.${encodeURIComponent(p)}=${n}`).join('&');
+  const res = await fetch(
+    `${getBasePath()}/fmi/data/v2/databases/${env.db}/layouts/${encodeURIComponent(layout)}/records/${recordId}${qs ? '?' + qs : ''}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (res.status === 401) { sessionToken = null; return getRecordWithPortals(layout, recordId, portalLimits); }
+  return res.json();
+}
+
+// Find records on an arbitrary layout (returns the raw Data API response).
+export async function findInLayout(layout, query, { sort, limit = 500 } = {}) {
+  const token = await getToken();
+  const env = getCurrentEnv();
+  const body = { query, limit };
+  if (sort) body.sort = sort;
+  const res = await fetch(
+    `${getBasePath()}/fmi/data/v2/databases/${env.db}/layouts/${encodeURIComponent(layout)}/_find`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }
+  );
+  if (res.status === 401) { sessionToken = null; return findInLayout(layout, query, { sort, limit }); }
+  return res.json();
+}
+
+// Upload a file (Blob/File) into a container field on a record. Works through the
+// /fmi proxy in dev and prod (multipart body is forwarded).
+export async function uploadContainer(layout, recordId, field, file, filename) {
+  const token = await getToken();
+  const env = getCurrentEnv();
+  const fd = new FormData();
+  fd.append('upload', file, filename || file.name || 'file');
+  const res = await fetch(
+    `${getBasePath()}/fmi/data/v2/databases/${env.db}/layouts/${encodeURIComponent(layout)}/records/${recordId}/containers/${encodeURIComponent(field)}/1`,
+    { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd }
+  );
+  if (res.status === 401) { sessionToken = null; return uploadContainer(layout, recordId, field, file, filename); }
+  return res.json();
+}

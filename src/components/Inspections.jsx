@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { getRecord, prefetchRecord, updateRecord, invalidateRecord, patchCachedRecord } from '../api/filemaker';
 import { useAllRecords } from '../hooks/useAllRecords';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
+import { listAttachments, uploadAttachment, deleteAttachment, generateAndAttachReport, downloadReport } from '../api/inspectionAttachments';
 import './Inspections.css';
 
 const LAYOUT = 'Inspections_New';
@@ -127,7 +128,13 @@ export default function Inspections({ navTarget, onClearNav } = {}) {
   const [edits, setEdits] = useState({});
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
+  const [attachments, setAttachments] = useState([]);
+  const [attLoading, setAttLoading] = useState(false);
+  const [attBusy, setAttBusy] = useState(null); // 'upload' | 'report' | recordId being deleted
+  const [attError, setAttError] = useState(null);
+  const [dragOver, setDragOver] = useState(false);
   const isResizing = useRef(false);
+  const fileInputRef = useRef(null);
 
   const parseFmDate = v => {
     if (!v) return 0;
@@ -170,8 +177,51 @@ export default function Inspections({ navTarget, onClearNav } = {}) {
   useEffect(() => {
     if (navTarget?.moduleId !== 'inspections' || !navTarget.recordId) return;
     const rec = records.find(r => String(r.recordId) === String(navTarget.recordId));
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- deep-link selection
     if (rec) { handleSelect(rec); onClearNav?.(); }
   }, [navTarget, records]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Attachments ──
+  const inspId = selected?.fieldData?._kpt__Inspection_ID;
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset on inspection change
+    setAttachments([]); setAttError(null);
+    if (!inspId) return;
+    let alive = true;
+    setAttLoading(true);
+    listAttachments(inspId)
+      .then(a => { if (alive) setAttachments(a); })
+      .catch(() => { if (alive) setAttError('Could not load attachments'); })
+      .finally(() => { if (alive) setAttLoading(false); });
+    return () => { alive = false; };
+  }, [inspId]);
+
+  const refreshAttachments = () => { if (inspId) listAttachments(inspId).then(setAttachments).catch(() => {}); };
+
+  async function handleFiles(files) {
+    if (!inspId || !files?.length) return;
+    setAttBusy('upload'); setAttError(null);
+    try {
+      for (const file of files) await uploadAttachment(inspId, file);
+      refreshAttachments();
+    } catch (e) { setAttError(e.message || 'Upload failed'); }
+    finally { setAttBusy(null); }
+  }
+  async function handleDeleteAtt(recordId) {
+    setAttBusy(recordId); setAttError(null);
+    try { await deleteAttachment(recordId); setAttachments(a => a.filter(x => x.recordId !== recordId)); }
+    catch (e) { setAttError(e.message || 'Delete failed'); }
+    finally { setAttBusy(null); }
+  }
+  async function handleGenerateReport(attach) {
+    if (!selected) return;
+    setAttBusy('report'); setAttError(null);
+    try {
+      if (attach) { await generateAndAttachReport(selected); refreshAttachments(); }
+      else { await downloadReport(selected); }
+    } catch (e) { setAttError(e.message || 'Report failed'); }
+    finally { setAttBusy(null); }
+  }
 
   const handleFieldChange = useCallback((fk, v) => setEdits(p => ({ ...p, [fk]: v })), []);
   const handleDiscard = () => { setEdits({}); setDataEditing(false); setSaveStatus(null); };
@@ -361,6 +411,84 @@ export default function Inspections({ navTarget, onClearNav } = {}) {
                     </table>
                   </div>
                 )}
+              </Section>
+
+              <Section title="Attachments" icon="❏">
+                <div className="insp-att-actions">
+                  <button
+                    className="insp-att-btn primary"
+                    disabled={attBusy === 'report'}
+                    onClick={() => handleGenerateReport(true)}
+                  >
+                    {attBusy === 'report' ? 'Generating…' : '＋ Generate report & attach'}
+                  </button>
+                  <button
+                    className="insp-att-btn"
+                    disabled={attBusy === 'report'}
+                    onClick={() => handleGenerateReport(false)}
+                  >
+                    ⤓ Download report
+                  </button>
+                  <button
+                    className="insp-att-btn"
+                    disabled={attBusy === 'upload'}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    {attBusy === 'upload' ? 'Uploading…' : '⇪ Upload file'}
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    style={{ display: 'none' }}
+                    onChange={e => { handleFiles([...e.target.files]); e.target.value = ''; }}
+                  />
+                </div>
+
+                {attError && <p className="insp-att-error">{attError}</p>}
+
+                <div
+                  className={`insp-att-drop${dragOver ? ' over' : ''}`}
+                  onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={e => { e.preventDefault(); setDragOver(false); handleFiles([...e.dataTransfer.files]); }}
+                >
+                  {attLoading ? (
+                    <p className="insp-att-empty">Loading attachments…</p>
+                  ) : attachments.length === 0 ? (
+                    <p className="insp-att-empty">No attachments yet — drop files here, or use the buttons above.</p>
+                  ) : (
+                    <ul className="insp-att-grid">
+                      {attachments.map(a => (
+                        <li key={a.recordId} className="insp-att-card">
+                          <a
+                            className="insp-att-thumb"
+                            href={a.url || undefined}
+                            target="_blank"
+                            rel="noreferrer"
+                            title={a.hasFile ? 'Open' : 'No file'}
+                          >
+                            {a.isImage && a.url
+                              ? <img src={a.url} alt={a.name} />
+                              : <span className="insp-att-ext">{(a.name.split('.').pop() || '?').toUpperCase()}</span>}
+                          </a>
+                          <div className="insp-att-meta">
+                            <a className="insp-att-name" href={a.url || undefined} target="_blank" rel="noreferrer" title={a.name}>{a.name}</a>
+                            <span className="insp-att-sub">{a.created?.split(' ')[0]}{a.by ? ` · ${a.by}` : ''}</span>
+                          </div>
+                          <button
+                            className="insp-att-del"
+                            title="Delete attachment"
+                            disabled={attBusy === a.recordId}
+                            onClick={() => handleDeleteAtt(a.recordId)}
+                          >
+                            {attBusy === a.recordId ? '…' : '✕'}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </Section>
 
               <div className="insp-record-footer">

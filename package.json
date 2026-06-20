@@ -1,7 +1,7 @@
 {
   "name": "db",
   "private": true,
-  "version": "1.0.60",
+  "version": "1.0.61",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -14,6 +14,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@upstash/redis": "^1.38.0",
+    "pdfmake": "^0.2.20",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
   },
