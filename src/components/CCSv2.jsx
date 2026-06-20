@@ -131,8 +131,8 @@ function Avatar({ name, lead }) {
   );
 }
 
-function InlineText({ value, onChange, placeholder, area }) {
-  if (area) return <textarea className="cv2-inline cv2-inline-area" rows={3} value={value || ''} placeholder={placeholder} onChange={e => onChange(e.target.value)} />;
+function InlineText({ value, onChange, placeholder, area, big }) {
+  if (area) return <textarea className={`cv2-inline cv2-inline-area${big ? ' cv2-inline-area-lg' : ''}`} rows={3} value={value || ''} placeholder={placeholder} onChange={e => onChange(e.target.value)} />;
   return <input className="cv2-inline" value={value || ''} placeholder={placeholder} onChange={e => onChange(e.target.value)} />;
 }
 function InlineSelect({ value, options, onChange }) {
@@ -476,7 +476,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav }) {
                     </div>
                     <div className="cv2-field-block">
                       <label>Work order</label>
-                      <InlineText value={val('Work Order')} onChange={v => stage('Work Order', v)} placeholder="Add a work order…" area />
+                      <InlineText value={val('Work Order')} onChange={v => stage('Work Order', v)} placeholder="Add a work order…" area big />
                     </div>
                     <div className="cv2-field-block">
                       <label>Notes</label>

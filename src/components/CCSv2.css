@@ -164,6 +164,7 @@
 .cv2-inline:hover { background: var(--cv2-surface-2); }
 .cv2-inline:focus { background: var(--cv2-bg); border-color: var(--cv2-accent); }
 .cv2-inline-area { resize: vertical; min-height: 56px; line-height: 1.5; }
+.cv2-inline-area-lg { min-height: 250px; }
 .cv2-inline-select { cursor: pointer; appearance: none; }
 .cv2-inline-date { color-scheme: dark; }
 [data-theme="light"] .cv2-inline-date { color-scheme: light; }
