@@ -3,9 +3,12 @@ import { useAllRecords } from '../hooks/useAllRecords';
 import { RCD_LAYOUT, RCD_CACHE_VERSION, RCD_FIND_QUERY, RCD_SORT } from '../config/ccsCache';
 import { getRecord, prefetchRecord, updateRecord, patchCachedRecord, invalidateRecord } from '../api/filemaker';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
+import AttachmentsPanel from './AttachmentsPanel';
+import { listCcsAttachments, uploadCcsAttachment, deleteCcsAttachment, ccsAttachmentUrl } from '../api/ccsAttachments';
 import './CCSv2.css';
 
 const LAYOUT = RCD_LAYOUT;
+const CCS_ATT_API = { list: listCcsAttachments, upload: uploadCcsAttachment, remove: deleteCcsAttachment, freshUrl: ccsAttachmentUrl };
 
 // ── Vocabularies (grounded in live data) ─────────────────────────
 const PIPELINE = [
@@ -218,12 +221,14 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav }) {
   useEffect(() => {
     if (!selected) return;
     const updated = records.find(r => String(r.recordId) === String(selected.recordId));
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync selected with cache patches
     if (updated) setSelected(prev => prev ? { ...prev, fieldData: { ...prev.fieldData, ...updated.fieldData } } : prev);
   }, [records]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (navTarget?.moduleId !== 'ccs-v2' || !navTarget.recordId) return;
     const record = records.find(r => String(r.recordId) === String(navTarget.recordId));
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- deep-link selection
     if (record) { handleSelect(record); onClearNav?.(); }
   }, [navTarget, records]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -539,6 +544,8 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav }) {
                   <button onClick={() => stage('Status', 'Completed')}>Mark project Completed →</button>
                 </div>
               )}
+
+              <AttachmentsPanel parentId={f._kpt__RCD_ID} api={CCS_ATT_API} />
 
               <div className="cv2-meta">
                 Modified {f.zz__Modified_On} by {f.zz__Modified_By} · Created {f.zz__Created_On} by {f.zz__Created_By} · RCD #{f._kpt__RCD_ID}

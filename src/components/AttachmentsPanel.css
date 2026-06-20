@@ -1,0 +1,69 @@
+/* Reusable attachments panel. Inherits the host module's CSS variables
+   (falls back to CCS values) so it sits natively inside the detail view. */
+.att-panel {
+  --att-surface: var(--cv2-surface, #12151f);
+  --att-surface-2: var(--cv2-surface-2, #1a1e2b);
+  --att-border: var(--cv2-border, #1e2130);
+  --att-border-2: var(--cv2-border-2, #2a2f45);
+  --att-text: var(--cv2-text, #e6e8ec);
+  --att-text-2: var(--cv2-text-2, #9aa3b2);
+  --att-accent: var(--cv2-accent, #d85a30);
+  margin-top: 12px;
+  border: 1px solid var(--att-border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: var(--att-surface);
+}
+
+.att-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.att-head-icon { color: var(--att-accent); font-size: 15px; }
+.att-head h3 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--att-text-2); }
+
+.att-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.att-btn {
+  padding: 6px 14px; border-radius: 8px;
+  border: 1px solid var(--att-border-2); background: transparent;
+  color: var(--att-text-2); font-size: 14px; cursor: pointer; font-family: inherit;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.att-btn:hover:not(:disabled) { background: var(--att-surface-2); color: var(--att-text); }
+.att-btn:disabled { opacity: 0.5; cursor: default; }
+
+.att-error { color: #f87171; font-size: 14px; margin: 0 0 10px; }
+
+.att-drop {
+  border: 1.5px dashed var(--att-border-2); border-radius: 10px;
+  padding: 14px; transition: border-color 0.15s, background 0.15s;
+}
+.att-drop.over { border-color: var(--att-accent); background: color-mix(in srgb, var(--att-accent) 8%, transparent); }
+.att-empty { color: var(--att-text-2); font-size: 14px; text-align: center; margin: 18px 0; }
+
+.att-grid {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px;
+}
+.att-card {
+  position: relative; display: flex; flex-direction: column;
+  background: var(--att-surface-2); border: 1px solid var(--att-border); border-radius: 10px; overflow: hidden;
+}
+.att-thumb {
+  display: flex; align-items: center; justify-content: center;
+  height: 96px; background: var(--att-border); text-decoration: none; overflow: hidden; cursor: pointer;
+}
+.att-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.att-ext { font-size: 18px; font-weight: 700; letter-spacing: 0.5px; color: var(--att-accent); }
+.att-meta { padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.att-name {
+  font-size: 13px; color: var(--att-text); text-decoration: none; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.att-name:hover { color: var(--att-accent); }
+.att-sub { font-size: 12px; color: var(--att-text-2); }
+.att-del {
+  position: absolute; top: 6px; right: 6px;
+  width: 22px; height: 22px; border-radius: 50%;
+  border: none; background: color-mix(in srgb, var(--att-surface) 80%, transparent); color: var(--att-text-2);
+  font-size: 12px; line-height: 1; cursor: pointer; transition: background 0.15s, color 0.15s;
+}
+.att-del:hover:not(:disabled) { background: #e8322a; color: #fff; }
+.att-del:disabled { opacity: 0.5; cursor: default; }
