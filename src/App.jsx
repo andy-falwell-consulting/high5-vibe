@@ -5,6 +5,7 @@ import ProductsAndServicesV2 from './components/ProductsAndServicesV2'
 import Contacts from './components/Contacts'
 import Inspections from './components/Inspections'
 import Trainings from './components/Trainings'
+import OELookup from './components/OELookup'
 import ProjectsWorkspace from './components/ProjectsWorkspace'
 import Admin from './components/Admin'
 import CommandPalette from './components/CommandPalette'
@@ -19,6 +20,7 @@ const MODULES = [
   { id: 'contacts', label: 'Contacts', icon: '◉', group: 'Records' },
   { id: 'inspections', label: 'Inspections', icon: '⚑', group: 'Records' },
   { id: 'trainings', label: 'Trainings', icon: '◳', group: 'Records' },
+  { id: 'oe-lookup', label: 'OE Lookup', icon: '◎', group: 'Records' },
   { id: 'products', label: 'Products & Services', icon: '◫', group: 'Records' },
   { id: 'projects', label: 'Course projects', icon: '◈', group: 'Projects' },
   { id: 'admin', label: 'Admin', icon: '⚙', group: 'System' },
@@ -52,6 +54,7 @@ export default function App() {
     getAllRecords('Contacts_New', { cacheVersion: 2, batchSize: 100 }).catch(() => {})
     getAllRecords('Inspections_New', { cacheVersion: 1, batchSize: 100 }).catch(() => {})
     getAllRecords('trainings_New', { cacheVersion: 1, batchSize: 100 }).catch(() => {})
+    getAllRecords('OELookup_New', { cacheVersion: 1, batchSize: 100 }).catch(() => {})
     getAllRecords('Products & Services_New', { cacheVersion: 4, batchSize: 100 }).catch(() => {})
   }, [])
 
@@ -123,6 +126,7 @@ export default function App() {
         {visited.has('contacts') && <div style={{ display: activeModule === 'contacts' ? 'contents' : 'none' }}><Contacts navTarget={navTarget} onClearNav={clearNavTarget} onNavigateTo={navigateTo} onRecordSelect={makeRecordSelectHandler('contacts')} /></div>}
         {visited.has('inspections') && <div style={{ display: activeModule === 'inspections' ? 'contents' : 'none' }}><Inspections navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('inspections')} /></div>}
         {visited.has('trainings') && <div style={{ display: activeModule === 'trainings' ? 'contents' : 'none' }}><Trainings navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('trainings')} /></div>}
+        {visited.has('oe-lookup') && <div style={{ display: activeModule === 'oe-lookup' ? 'contents' : 'none' }}><OELookup navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('oe-lookup')} /></div>}
         {visited.has('products') && <div style={{ display: activeModule === 'products' ? 'contents' : 'none' }}><ProductsAndServicesV2 navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('products')} /></div>}
         {visited.has('projects') && <div style={{ display: activeModule === 'projects' ? 'contents' : 'none' }}><ProjectsWorkspace navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('projects')} /></div>}
         {visited.has('admin') && <div style={{ display: activeModule === 'admin' ? 'contents' : 'none' }}><Admin /></div>}
