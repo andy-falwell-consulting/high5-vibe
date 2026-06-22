@@ -146,7 +146,7 @@ function PortalTable({ id, rows, onOpenRow }) {
   return null;
 }
 
-export default function Contacts({ navTarget, onClearNav, onNavigateTo } = {}) {
+export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecordSelect } = {}) {
   const { records, total } = useAllRecords(LAYOUT, { cacheVersion: 2 });
   const [selected, setSelected] = useState(null);
   const [navWidth, setNavWidth] = useState(280);
@@ -276,7 +276,7 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo } = {}) {
               return (
                 <div key={r.recordId}
                   className={`ct-list-item ${selected?.recordId === r.recordId ? 'active' : ''}`}
-                  onClick={() => handleSelect(r)}
+                  onClick={() => { handleSelect(r); onRecordSelect?.(r.recordId); }}
                   onMouseEnter={e => {
                     const rect = e.currentTarget.getBoundingClientRect();
                     setTooltip({ r, x: rect.right + 8, y: rect.top });

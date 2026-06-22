@@ -148,7 +148,7 @@ function FieldValue({ fieldKey, value, onChange, dataEditing }) {
 
 const AUTO_SYNC_FIELDS = new Set(['Name', 'Unit_Price', 'Description', 'SKU', 'QuickBooks_Account_Income']);
 
-export default function ProductsAndServicesV2({ navTarget, onClearNav } = {}) {
+export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordSelect } = {}) {
   const { records, total, loading, error } = useAllRecords(LAYOUT, {
     cacheVersion: 4,
     slimForStorage: r => ({
@@ -447,7 +447,7 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav } = {}) {
               return (
                 <div key={r.recordId}
                   className={`v2-list-item ${selected?.recordId === r.recordId ? 'active' : ''}`}
-                  onClick={() => handleSelect(r)}
+                  onClick={() => { handleSelect(r); onRecordSelect?.(r.recordId); }}
                 >
                   <div className="v2-item-dot" style={{ background: color }} />
                   <div className="v2-item-text">

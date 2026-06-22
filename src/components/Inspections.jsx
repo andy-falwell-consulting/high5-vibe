@@ -120,7 +120,7 @@ function Section({ title, icon, children }) {
   );
 }
 
-export default function Inspections({ navTarget, onClearNav } = {}) {
+export default function Inspections({ navTarget, onClearNav, onRecordSelect } = {}) {
   const { records, total } = useAllRecords(LAYOUT, { cacheVersion: CACHE_VERSION });
   const [selected, setSelected] = useState(null);
   const [navWidth, setNavWidth] = useState(300);
@@ -325,7 +325,7 @@ export default function Inspections({ navTarget, onClearNav } = {}) {
               return (
                 <div key={r.recordId}
                   className={`insp-list-item ${selected?.recordId === r.recordId ? 'active' : ''}`}
-                  onClick={() => handleSelect(r)}
+                  onClick={() => { handleSelect(r); onRecordSelect?.(r.recordId); }}
                   // onMouseEnter={() => prefetchRecord(LAYOUT, r.recordId)}
                 >
                   <span className="insp-item-dot" style={{ background: color }} />

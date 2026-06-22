@@ -148,7 +148,7 @@ function InlineDate({ value, onChange }) {
 }
 
 // ── Main ─────────────────────────────────────────────────────────
-export default function CCSv2({ navTarget, onNavigateTo, onClearNav }) {
+export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSelect }) {
   const { records, total } = useAllRecords(LAYOUT, { cacheVersion: RCD_CACHE_VERSION, findQuery: RCD_FIND_QUERY, sort: RCD_SORT });
 
   const [selected, setSelected] = useState(null);
@@ -309,7 +309,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav }) {
             const d = daysUntil(rf['rcd start date']);
             return (
               <div key={r.recordId} className={`cv2-list-item${selected?.recordId === r.recordId ? ' active' : ''}`}
-                onClick={() => handleSelect(r)} /* onMouseEnter={() => prefetchRecord(LAYOUT, r.recordId)} */>
+                onClick={() => { handleSelect(r); onRecordSelect?.(r.recordId); }} /* onMouseEnter={() => prefetchRecord(LAYOUT, r.recordId)} */>
                 <span className="cv2-list-dot" style={{ background: c }} />
                 <div className="cv2-list-body">
                   <div className="cv2-list-org">{rf.zz__Display_Organization__ct || '—'}</div>

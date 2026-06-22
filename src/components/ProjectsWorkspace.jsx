@@ -11,7 +11,7 @@ const VIEWS = [
 ]
 const CHILD_TO_VIEW = { 'ccs-v2': 'workspace', 'ccs': 'list', 'ccs-kanban': 'board' }
 
-export default function ProjectsWorkspace({ navTarget, onClearNav }) {
+export default function ProjectsWorkspace({ navTarget, onClearNav, onRecordSelect }) {
   const initial = localStorage.getItem('projects_view') || 'workspace'
   const [view, setView] = useState(initial)
   const [visited, setVisited] = useState(() => new Set([initial]))
@@ -54,7 +54,7 @@ export default function ProjectsWorkspace({ navTarget, onClearNav }) {
         </div>
       </div>
       <div className="pw-body">
-        {visited.has('workspace') && <div style={{ display: view === 'workspace' ? 'contents' : 'none' }}><CCSv2 navTarget={childNav} onNavigateTo={handleChildNav} onClearNav={clearChildNav} /></div>}
+        {visited.has('workspace') && <div style={{ display: view === 'workspace' ? 'contents' : 'none' }}><CCSv2 navTarget={childNav} onNavigateTo={handleChildNav} onClearNav={clearChildNav} onRecordSelect={onRecordSelect} /></div>}
         {visited.has('list') && <div style={{ display: view === 'list' ? 'contents' : 'none' }}><CCS navTarget={childNav} onNavigateTo={handleChildNav} onClearNav={clearChildNav} /></div>}
         {visited.has('board') && <div style={{ display: view === 'board' ? 'contents' : 'none' }}><CCSKanban navTarget={childNav} onNavigateTo={handleChildNav} onClearNav={clearChildNav} /></div>}
       </div>
