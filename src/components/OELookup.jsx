@@ -275,7 +275,7 @@ export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {})
                 </div>
               )}
 
-              <div className="oe-record-footer">ID {selected.recordId}</div>
+              <div className="oe-record-footer">ID {val(f, 'Program Code')} · Record {selected.recordId} · Created {f.zz__Created_On?.split(' ')[0] || '—'} by {f.zz__Created_By || '—'} · Modified {f.zz__Modified_On?.split(' ')[0] || '—'} by {f.zz__Modified_By || '—'}</div>
             </div>
           </>
         )}

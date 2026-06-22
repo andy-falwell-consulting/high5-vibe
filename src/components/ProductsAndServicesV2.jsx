@@ -623,7 +623,7 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
                 </div>
               </div>
 
-              <div className="v2-record-footer">ID {f._kpt__Item_ID} · Record {selected.recordId}</div>
+              <div className="v2-record-footer">ID {f._kpt__Item_ID} · Record {selected.recordId} · Created {f.zz__Created_On?.split(' ')[0] || '—'} by {f.zz__Created_By || '—'} · Modified {f.zz__Modified_On?.split(' ')[0] || '—'} by {f.zz__Modified_By || '—'}</div>
             </div>
           </>
         )}

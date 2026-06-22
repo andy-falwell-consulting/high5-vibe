@@ -522,7 +522,7 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
               </Section>
 
               <div className="insp-record-footer">
-                ID {f._kpt__Inspection_ID} · Created {f.zz__Created_On?.split(' ')[0]} by {f.zz__Created_By} · Modified {f.zz__Modified_On?.split(' ')[0] || '—'} by {f.zz__Modified_By}
+                ID {f._kpt__Inspection_ID} · Record {selected.recordId} · Created {f.zz__Created_On?.split(' ')[0]} by {f.zz__Created_By} · Modified {f.zz__Modified_On?.split(' ')[0] || '—'} by {f.zz__Modified_By}
               </div>
             </div>
           </>
