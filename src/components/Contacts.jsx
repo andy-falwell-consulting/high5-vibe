@@ -42,6 +42,12 @@ const PORTAL_LABEL = {
   estimates: 'Estimates', invoices: 'Invoices', rmi: 'Risk items',
 };
 
+// Portals whose rows deep-link into another module. The portal row's `recordId`
+// is the related record's id in its own base table, which matches the target
+// module's layout. Only these two have a navigable destination module; other
+// portals (training, certs, estimates, invoices, risk, related) have none.
+const PORTAL_NAV = { inspections: 'inspections', ccs: 'projects', custom_training: 'trainings' };
+
 const TABS = [
   { id: 'overview',    label: 'Overview' },
   { id: 'engagements', label: 'Engagements', portals: ['inspections', 'custom_training', 'oe_training', 'ccs', 'certifications'] },
@@ -95,19 +101,23 @@ function FieldValue({ fieldKey, value, onChange, editing }) {
   return <input className="ct-input" value={value || ''} onChange={e => ch(e.target.value)} />;
 }
 
-// Read-only table for a portal occurrence.
-function PortalTable({ id, rows }) {
+// Read-only table for a portal occurrence. When `onOpenRow` is provided, rows
+// are clickable and deep-link into the related record's module.
+function PortalTable({ id, rows, onOpenRow }) {
+  const linkProps = r => (onOpenRow && r.recordId)
+    ? { className: 'ct-row-link', onClick: () => onOpenRow(r.recordId), title: 'Open record' }
+    : {};
   if (id === 'related') return (
     <table className="ct-table"><thead><tr><th>Name</th><th>Phone</th><th>Email</th></tr></thead>
       <tbody>{rows.map((r, i) => <tr key={i}><td>{r['cntct_RLTN::zz__Display__ct']}</td><td className="mono">{r['cntct_rltn_cntct_PHONE::Number']}</td><td>{r['cntct_rltn_cntct_INADR__email::Address']}</td></tr>)}</tbody></table>
   );
   if (id === 'inspections') return (
     <table className="ct-table"><thead><tr><th>Date</th><th>Organization</th><th>Contact</th><th>Inspector</th></tr></thead>
-      <tbody>{rows.map((r, i) => <tr key={i}><td>{r['cntct_INSPT::Date']}</td><td>{r['cntct_INSPT::zz__Display_Organization__ct']}</td><td>{r['cntct_INSPT::zz__Display_Contact__ct']}</td><td>{r['cntct_INSPT::Inspectors Name']}</td></tr>)}</tbody></table>
+      <tbody>{rows.map((r, i) => <tr key={i} {...linkProps(r)}><td>{r['cntct_INSPT::Date']}</td><td>{r['cntct_INSPT::zz__Display_Organization__ct']}</td><td>{r['cntct_INSPT::zz__Display_Contact__ct']}</td><td>{r['cntct_INSPT::Inspectors Name']}</td></tr>)}</tbody></table>
   );
   if (id === 'custom_training') return (
     <table className="ct-table"><thead><tr><th>Organization</th><th>Contact</th><th>Type</th><th>Start</th><th>Status</th></tr></thead>
-      <tbody>{rows.map((r, i) => <tr key={i}><td>{r['cntct_TRNPP::zz__Display_Organization__ct']}</td><td>{r['cntct_TRNPP::zz__Display_Contact__ct']}</td><td>{r['cntct_TRNPP::Type of Program']}</td><td>{r['cntct_TRNPP::Start Date']}</td><td>{r['cntct_TRNPP::Status']}</td></tr>)}</tbody></table>
+      <tbody>{rows.map((r, i) => <tr key={i} {...linkProps(r)}><td>{r['cntct_TRNPP::zz__Display_Organization__ct']}</td><td>{r['cntct_TRNPP::zz__Display_Contact__ct']}</td><td>{r['cntct_TRNPP::Type of Program']}</td><td>{r['cntct_TRNPP::Start Date']}</td><td>{r['cntct_TRNPP::Status']}</td></tr>)}</tbody></table>
   );
   if (id === 'oe_training') return (
     <table className="ct-table"><thead><tr><th>Course #</th><th>Course Name</th><th>Organization</th><th>Start</th><th>End</th></tr></thead>
@@ -115,7 +125,7 @@ function PortalTable({ id, rows }) {
   );
   if (id === 'ccs') return (
     <table className="ct-table"><thead><tr><th>ID</th><th>Status</th><th>Organization</th><th>Type</th><th>Start</th></tr></thead>
-      <tbody>{rows.map((r, i) => <tr key={i}><td className="mono">{r['cntct_RCD::_kpt__RCD_ID']}</td><td>{r['cntct_RCD::Status']}</td><td>{r['cntct_RCD::zz__Display_Organization__ct']}</td><td>{r['cntct_RCD::zz__TypeOfProjectList__ct']}</td><td>{r['cntct_RCD::rcd start date']}</td></tr>)}</tbody></table>
+      <tbody>{rows.map((r, i) => <tr key={i} {...linkProps(r)}><td className="mono">{r['cntct_RCD::_kpt__RCD_ID']}</td><td>{r['cntct_RCD::Status']}</td><td>{r['cntct_RCD::zz__Display_Organization__ct']}</td><td>{r['cntct_RCD::zz__TypeOfProjectList__ct']}</td><td>{r['cntct_RCD::rcd start date']}</td></tr>)}</tbody></table>
   );
   if (id === 'certifications') return (
     <table className="ct-table"><thead><tr><th>Certificate dates</th></tr></thead>
@@ -136,7 +146,7 @@ function PortalTable({ id, rows }) {
   return null;
 }
 
-export default function Contacts({ navTarget, onClearNav } = {}) {
+export default function Contacts({ navTarget, onClearNav, onNavigateTo } = {}) {
   const { records, total } = useAllRecords(LAYOUT, { cacheVersion: 2 });
   const [selected, setSelected] = useState(null);
   const [navWidth, setNavWidth] = useState(280);
@@ -427,12 +437,16 @@ export default function Contacts({ navTarget, onClearNav } = {}) {
                     if (tab !== t.id) return null;
                     const groups = t.portals.filter(id => rowsOf(p, id).length > 0);
                     if (groups.length === 0) return <p className="ct-empty-portal" key={t.id}>No records</p>;
-                    return groups.map(id => (
-                      <div className="ct-portal-group" key={id}>
-                        <div className="ct-portal-h">{PORTAL_LABEL[id]} <span className="ct-portal-n">{rowsOf(p, id).length}</span></div>
-                        <div className="ct-table-wrap"><PortalTable id={id} rows={rowsOf(p, id)} /></div>
-                      </div>
-                    ));
+                    return groups.map(id => {
+                      const targetModule = PORTAL_NAV[id];
+                      const onOpenRow = targetModule ? (recordId) => onNavigateTo?.(targetModule, recordId) : null;
+                      return (
+                        <div className="ct-portal-group" key={id}>
+                          <div className="ct-portal-h">{PORTAL_LABEL[id]} <span className="ct-portal-n">{rowsOf(p, id).length}</span></div>
+                          <div className="ct-table-wrap"><PortalTable id={id} rows={rowsOf(p, id)} onOpenRow={onOpenRow} /></div>
+                        </div>
+                      );
+                    });
                   })}
                 </div>
               </div>

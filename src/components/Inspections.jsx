@@ -174,12 +174,19 @@ export default function Inspections({ navTarget, onClearNav } = {}) {
     }).catch(() => {});
   }
 
-  // Deep-link from the command palette: select a record by id
+  // Deep-link from the command palette / Contacts portal: select a record by id
   useEffect(() => {
     if (navTarget?.moduleId !== 'inspections' || !navTarget.recordId) return;
     const rec = records.find(r => String(r.recordId) === String(navTarget.recordId));
     // eslint-disable-next-line react-hooks/set-state-in-effect -- deep-link selection
-    if (rec) { handleSelect(rec); onClearNav?.(); }
+    if (rec) { handleSelect(rec); onClearNav?.(); return; }
+    // Not in the loaded list yet (still loading): fetch directly so it still opens.
+    let alive = true;
+    getRecord(LAYOUT, navTarget.recordId).then(d => {
+      const r = d?.response?.data?.[0];
+      if (alive && r) { handleSelect(r); onClearNav?.(); }
+    }).catch(() => {});
+    return () => { alive = false; };
   }, [navTarget, records]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Attachments ──

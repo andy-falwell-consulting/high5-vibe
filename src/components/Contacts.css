@@ -235,6 +235,9 @@
 .ct-table th.num { text-align: right; }
 .ct-table tr:hover td { background: #161926; }
 .ct-table tr:last-child td { border-bottom: none; }
+.ct-table tr.ct-row-link { cursor: pointer; }
+.ct-table tr.ct-row-link:hover td { background: #1b2030; color: #e2e8f0; }
+.ct-table tr.ct-row-link:hover td:first-child { box-shadow: inset 2px 0 0 #e87722; }
 
 /* ── Footer ────────────────────────────────────────────────────── */
 .ct-record-footer {
@@ -272,6 +275,7 @@
 [data-theme="light"] .ct-table th { color: #5e6b7c; border-bottom-color: #e2e8f0; }
 [data-theme="light"] .ct-table td { color: #4f5a69; border-bottom-color: #f1f5f9; }
 [data-theme="light"] .ct-table tr:hover td { background: #f8fafc; }
+[data-theme="light"] .ct-table tr.ct-row-link:hover td { background: #fff7ed; color: #1e293b; }
 [data-theme="light"] .ct-skeleton { background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%); background-size: 200% 100%; }
 
 /* ── List item hover tooltip ─────────────────────────────────── */

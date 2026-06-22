@@ -28,3 +28,4 @@ dist-ssr
 .env*
 .claude/settings.local.json
 reference/
+HANDOFF.md
