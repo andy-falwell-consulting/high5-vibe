@@ -24,15 +24,25 @@ const MODULES = [
   { id: 'admin', label: 'Admin', icon: '⚙', group: 'System' },
 ]
 
+const MODULE_IDS = new Set(MODULES.map(m => m.id))
+
+function parseHash() {
+  const raw = window.location.hash.slice(1) // strip leading #
+  const [moduleId, recordId] = raw.split('/')
+  const mod = MODULE_IDS.has(moduleId) ? moduleId : 'home'
+  return { moduleId: mod, recordId: recordId || null }
+}
+
 function getInitialTheme() {
   return localStorage.getItem('theme') ?? 'dark'
 }
 
 export default function App() {
-  const [activeModule, setActiveModule] = useState('home')
-  const [visited, setVisited] = useState(() => new Set(['home']))
+  const initial = parseHash()
+  const [activeModule, setActiveModule] = useState(initial.moduleId)
+  const [visited, setVisited] = useState(() => new Set([initial.moduleId]))
   const [theme, setTheme] = useState(getInitialTheme)
-  const [navTarget, setNavTarget] = useState(null)
+  const [navTarget, setNavTarget] = useState(initial.recordId ? { moduleId: initial.moduleId, recordId: initial.recordId } : null)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [agentOpen, setAgentOpen] = useState(false)
 
@@ -57,14 +67,34 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  // Browser back/forward
+  useEffect(() => {
+    const onPop = () => {
+      const { moduleId, recordId } = parseHash()
+      setActiveModule(moduleId)
+      setVisited(v => { const n = new Set(v); n.add(moduleId); return n })
+      setNavTarget(recordId ? { moduleId, recordId } : null)
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
+
+  function pushHash(moduleId, recordId) {
+    const hash = recordId ? `#${moduleId}/${recordId}` : `#${moduleId}`
+    if (window.location.hash !== hash) history.pushState(null, '', hash)
+  }
+
   function handleSelect(id) {
+    pushHash(id, null)
     setActiveModule(id)
     setVisited(v => { const n = new Set(v); n.add(id); return n })
   }
 
   function navigateTo(moduleId, recordId, view) {
+    pushHash(moduleId, recordId)
     setNavTarget({ moduleId, recordId, view })
-    handleSelect(moduleId)
+    setActiveModule(moduleId)
+    setVisited(v => { const n = new Set(v); n.add(moduleId); return n })
   }
 
   function handlePalettePick(moduleId, recordId) {
