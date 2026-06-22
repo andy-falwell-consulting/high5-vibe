@@ -556,7 +556,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
               <AttachmentsPanel parentId={f._kpt__RCD_ID} api={CCS_ATT_API} />
 
               <div className="cv2-meta">
-                Modified {f.zz__Modified_On} by {f.zz__Modified_By} · Created {f.zz__Created_On} by {f.zz__Created_By} · RCD #{f._kpt__RCD_ID}
+                ID {f._kpt__RCD_ID} · Record {selected.recordId} · Created {f.zz__Created_On?.split(' ')[0] || '—'} by {f.zz__Created_By} · Modified {f.zz__Modified_On?.split(' ')[0] || '—'} by {f.zz__Modified_By}
               </div>
             </div>
 
