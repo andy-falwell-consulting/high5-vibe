@@ -295,22 +295,22 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
                         </tr>
                       </thead>
                       <tbody>
-                        {lineItems.map((li, i) => (
+                        {lineItems.map((li, i) => {
+                          const name = li['estmt_ESTLI::Item_Name']
+                          const desc = li['estmt_ESTLI::Description']
+                          const showDesc = desc && desc !== name
+                          return (
                           <tr key={li.recordId || i}>
                             <td className="desc">
-                              {li['estmt_ESTLI::Item_Name'] && (
-                                <div className="est-li-name">{li['estmt_ESTLI::Item_Name']}</div>
-                              )}
-                              {li['estmt_ESTLI::Description'] && (
-                                <div className="est-li-desc">{li['estmt_ESTLI::Description']}</div>
-                              )}
-                              {!li['estmt_ESTLI::Item_Name'] && !li['estmt_ESTLI::Description'] && '—'}
+                              {name && <div className="est-li-name">{name}</div>}
+                              {showDesc && <div className="est-li-desc">{desc}</div>}
+                              {!name && !desc && '—'}
                             </td>
                             <td className="num">{li['estmt_ESTLI::Quantity'] ?? '—'}</td>
                             <td className="num">{fmtCurrency(li['estmt_ESTLI::Unit_Price'])}</td>
                             <td className="num">{fmtCurrency(li['estmt_ESTLI::Amount'])}</td>
                           </tr>
-                        ))}
+                        )})}
                       </tbody>
                     </table>
 
