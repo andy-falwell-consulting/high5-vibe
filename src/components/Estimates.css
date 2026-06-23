@@ -6,6 +6,11 @@
 .est-sidebar-module { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #64748b; text-transform: uppercase; }
 .est-sidebar-count { font-size: 13px; color: #94a3b8; margin-top: 2px; }
 
+.est-list-body { flex: 1; overflow-y: auto; padding: 8px 0; }
+.est-list-body::-webkit-scrollbar { width: 4px; }
+.est-list-body::-webkit-scrollbar-track { background: transparent; }
+.est-list-body::-webkit-scrollbar-thumb { background: #2a2f45; border-radius: 2px; }
+
 .est-resize-handle { width: 4px; background: #1e2130; cursor: col-resize; flex-shrink: 0; transition: background 0.15s; }
 .est-resize-handle:hover { background: #e8322a; }
 
