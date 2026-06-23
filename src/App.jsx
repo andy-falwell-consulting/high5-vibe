@@ -9,6 +9,7 @@ import Trainings from './components/Trainings'
 import OELookup from './components/OELookup'
 import ProjectsWorkspace from './components/ProjectsWorkspace'
 import Estimates from './components/Estimates'
+import RMI from './components/RMI'
 import Admin from './components/Admin'
 import CommandPalette from './components/CommandPalette'
 import AgentPanel from './components/AgentPanel'
@@ -22,6 +23,7 @@ const MODULES = [
   { id: 'contacts', label: 'Contacts', icon: '◉', group: 'Records' },
   { id: 'estimates',   label: 'Estimates',   icon: '◧', group: 'Records' },
   { id: 'inspections', label: 'Inspections', icon: '⚑', group: 'Records' },
+  { id: 'rmi',         label: 'Risk Management', icon: '⚠', group: 'Records' },
   { id: 'trainings', label: 'Trainings', icon: '◳', group: 'Records' },
   { id: 'oe-lookup', label: 'OE Lookup', icon: '◎', group: 'Records' },
   { id: 'products', label: 'Products & Services', icon: '◫', group: 'Records' },
@@ -71,6 +73,7 @@ export default function App() {
     getAllRecords('Contacts_New', { cacheVersion: 2, batchSize: 100 }).catch(() => {})
     getAllRecords('Estimates_New',   { cacheVersion: 1, batchSize: 100 }).catch(() => {})
     getAllRecords('Inspections_New', { cacheVersion: 1, batchSize: 100 }).catch(() => {})
+    getAllRecords('RMI_New',         { cacheVersion: 1, batchSize: 100 }).catch(() => {})
     getAllRecords('trainings_New', { cacheVersion: 1, batchSize: 100 }).catch(() => {})
     getAllRecords('OELookup_New', { cacheVersion: 1, batchSize: 100 }).catch(() => {})
     getAllRecords('Products & Services_New', { cacheVersion: 4, batchSize: 100 }).catch(() => {})
@@ -155,6 +158,7 @@ export default function App() {
         {visited.has('contacts') && <div style={{ display: activeModule === 'contacts' ? 'contents' : 'none' }}><Contacts navTarget={navTarget} onClearNav={clearNavTarget} onNavigateTo={navigateTo} onRecordSelect={makeRecordSelectHandler('contacts')} /></div>}
         {visited.has('estimates') && <div style={{ display: activeModule === 'estimates' ? 'contents' : 'none' }}><Estimates navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('estimates')} /></div>}
         {visited.has('inspections') && <div style={{ display: activeModule === 'inspections' ? 'contents' : 'none' }}><Inspections navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('inspections')} /></div>}
+        {visited.has('rmi') && <div style={{ display: activeModule === 'rmi' ? 'contents' : 'none' }}><RMI navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('rmi')} /></div>}
         {visited.has('trainings') && <div style={{ display: activeModule === 'trainings' ? 'contents' : 'none' }}><Trainings navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('trainings')} /></div>}
         {visited.has('oe-lookup') && <div style={{ display: activeModule === 'oe-lookup' ? 'contents' : 'none' }}><OELookup navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('oe-lookup')} /></div>}
         {visited.has('products') && <div style={{ display: activeModule === 'products' ? 'contents' : 'none' }}><ProductsAndServicesV2 navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('products')} /></div>}
