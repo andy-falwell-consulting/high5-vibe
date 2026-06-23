@@ -1,7 +1,7 @@
 /* global __APP_VERSION__ */
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { FMP_ENVIRONMENTS, getCurrentEnv, setCurrentEnvId } from '../config/fmpEnvironments'
-import { connectFmpAsUser } from '../api/fmpOAuth'
+import { startFmpConnect, completeFmpConnect } from '../api/fmpOAuth'
 import { getFmpUserName, setFmpUserSession } from '../api/filemaker'
 
 const MIN_WIDTH = 48
@@ -17,6 +17,8 @@ export default function NavRail({ modules, activeId, onSelect, theme, onToggleTh
   const [fmpName, setFmpName] = useState(() => getFmpUserName())
   const [fmpBusy, setFmpBusy] = useState(false)
   const [fmpError, setFmpError] = useState(null)
+  const [fmpRequestId, setFmpRequestId] = useState(null) // set while awaiting the pasted identifier
+  const [fmpIdentifier, setFmpIdentifier] = useState('')
   const dragStart = useRef(null)
   const userMenuRef = useRef(null)
   const light = theme === 'light'
@@ -85,13 +87,30 @@ export default function NavRail({ modules, activeId, onSelect, theme, onToggleTh
   async function connectFmp() {
     setFmpBusy(true); setFmpError(null)
     try {
-      const { name } = await connectFmpAsUser(displayName)
-      setFmpName(name || displayName)
+      const { requestId } = await startFmpConnect()
+      setFmpRequestId(requestId)   // now show the identifier-paste input
     } catch (err) {
       setFmpError(err.message || 'Sign-in failed')
     } finally {
       setFmpBusy(false)
     }
+  }
+
+  async function finishFmp() {
+    setFmpBusy(true); setFmpError(null)
+    try {
+      const { name } = await completeFmpConnect(fmpRequestId, fmpIdentifier, displayName)
+      setFmpName(name || displayName)
+      setFmpRequestId(null); setFmpIdentifier('')
+    } catch (err) {
+      setFmpError(err.message || 'Sign-in failed')
+    } finally {
+      setFmpBusy(false)
+    }
+  }
+
+  function cancelFmp() {
+    setFmpRequestId(null); setFmpIdentifier(''); setFmpError(null)
   }
 
   function disconnectFmp() {
@@ -241,13 +260,29 @@ export default function NavRail({ modules, activeId, onSelect, theme, onToggleTh
                         <button onClick={disconnectFmp}
                           style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: c.sub }}>Disconnect</button>
                       </div>
+                    ) : fmpRequestId ? (
+                      <div>
+                        <div style={{ fontSize: 11, color: c.sub, marginBottom: 5, lineHeight: 1.4 }}>
+                          In the popup, copy the <b>identifier</b> value and paste it here:
+                        </div>
+                        <input value={fmpIdentifier} onChange={e => setFmpIdentifier(e.target.value)} placeholder="identifier"
+                          style={{ width: '100%', boxSizing: 'border-box', padding: '5px 7px', marginBottom: 5, fontSize: 12, fontFamily: 'monospace', background: light ? '#fff' : '#0f1117', color: c.textActive, border: `1px solid ${c.footerBorder}`, borderRadius: 5, outline: 'none' }} />
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button onClick={finishFmp} disabled={fmpBusy || !fmpIdentifier.trim()}
+                            style={{ flex: 1, padding: '5px 8px', background: '#e8322a', color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer', fontSize: 12, fontWeight: 600, opacity: (fmpBusy || !fmpIdentifier.trim()) ? 0.5 : 1 }}>
+                            {fmpBusy ? 'Connecting…' : 'Finish'}
+                          </button>
+                          <button onClick={cancelFmp}
+                            style={{ padding: '5px 8px', background: 'none', border: `1px solid ${c.footerBorder}`, borderRadius: 5, cursor: 'pointer', fontSize: 12, color: c.sub }}>Cancel</button>
+                        </div>
+                      </div>
                     ) : (
                       <button onClick={connectFmp} disabled={fmpBusy}
                         style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '6px 8px', background: c.footerBtn, border: `1px solid ${c.footerBorder}`, borderRadius: 6, cursor: fmpBusy ? 'default' : 'pointer', fontSize: 13, color: c.text, textAlign: 'left' }}>
-                        {fmpBusy ? 'Connecting…' : 'Attribute my edits to me'}
+                        {fmpBusy ? 'Opening sign-in…' : 'Attribute my edits to me'}
                       </button>
                     )}
-                    {fmpError && <div style={{ fontSize: 11, color: '#e8322a', marginTop: 5 }}>{fmpError}</div>}
+                    {fmpError && <div style={{ fontSize: 11, color: '#e8322a', marginTop: 5, wordBreak: 'break-word' }}>{fmpError}</div>}
                   </div>
 
                   <button onClick={onToggleTheme}
