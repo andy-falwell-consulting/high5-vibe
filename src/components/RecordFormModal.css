@@ -35,6 +35,15 @@
 }
 .rfm-field input:focus, .rfm-field select:focus, .rfm-field textarea:focus { border-color: #3b82f6; }
 .rfm-field textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
+.rfm-picker {
+  width: 100%; box-sizing: border-box; text-align: left;
+  background: #0f1117; border: 1px solid #2d3148; border-radius: 6px;
+  padding: 8px 10px; color: #64748b; font-size: 14px; font-family: inherit; cursor: pointer;
+}
+.rfm-picker:hover { border-color: #4a5568; }
+.rfm-picker.set { color: #e2e8f0; }
+[data-theme="light"] .rfm-picker { background: #f8fafc; border-color: #e2e8f0; color: #94a3b8; }
+[data-theme="light"] .rfm-picker.set { color: #0f172a; }
 
 .rfm-footer {
   display: flex; align-items: center; justify-content: flex-end; gap: 10px;

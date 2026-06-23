@@ -186,9 +186,8 @@ export default function RMI({ navTarget, onClearNav, onRecordSelect } = {}) {
   }
 
   // ── Create a new RMI ──
-  // Contact linkage (_kft__Contact_ID) comes with the shared ContactPicker step;
-  // for now new inquiries capture the risk-assessment fields and get linked after.
   const createFields = [
+    { key: '_kft__Contact_ID', label: 'Contact / Organization', type: 'contact', required: true },
     { key: 'Status',           label: 'Status',           type: 'select', options: ['Active', 'Resolved'], default: 'Active', required: true },
     { key: 'Level_of_Risk',    label: 'Level of Risk',    type: 'select', options: ['High', 'Medium', 'Low'] },
     { key: 'Level_of_Concern', label: 'Level of Concern', type: 'select', options: ['High', 'Medium', 'Low'] },

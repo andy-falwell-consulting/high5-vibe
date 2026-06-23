@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import ContactPicker from './ContactPicker'
 import './RecordFormModal.css'
 
 // Generic, config-driven "new record" modal. Each module passes a `fields`
@@ -20,6 +21,8 @@ export default function RecordFormModal({ title, fields, submitLabel = 'Create',
   })
   const [status, setStatus] = useState(null) // null | 'saving' | 'error'
   const [error, setError] = useState('')
+  const [pickerField, setPickerField] = useState(null) // contact field whose picker is open
+  const [labels, setLabels] = useState({})             // key -> human label for picked refs
 
   const set = (k, v) => setValues(s => ({ ...s, [k]: v }))
 
@@ -59,9 +62,15 @@ export default function RecordFormModal({ title, fields, submitLabel = 'Create',
         <div className="rfm-body">
           <div className="rfm-grid">
             {fields.map(f => (
-              <label key={f.key} className={`rfm-field${f.wide || f.type === 'textarea' ? ' wide' : ''}`}>
+              <label key={f.key} className={`rfm-field${f.wide || f.type === 'textarea' || f.type === 'contact' ? ' wide' : ''}`}>
                 <span className="rfm-label">{f.label}{f.required && <span className="rfm-req"> *</span>}</span>
-                <FieldInput field={f} value={values[f.key]} onChange={v => set(f.key, v)} />
+                {f.type === 'contact' ? (
+                  <button type="button" className={`rfm-picker${values[f.key] ? ' set' : ''}`} onClick={() => setPickerField(f)}>
+                    {labels[f.key] || (values[f.key] ? `#${values[f.key]}` : 'Select a contact…')}
+                  </button>
+                ) : (
+                  <FieldInput field={f} value={values[f.key]} onChange={v => set(f.key, v)} />
+                )}
               </label>
             ))}
           </div>
@@ -76,6 +85,20 @@ export default function RecordFormModal({ title, fields, submitLabel = 'Create',
           </button>
         </div>
       </div>
+
+      {pickerField && (
+        <ContactPicker
+          onSelect={contact => {
+            const f = pickerField
+            const pk = contact.fieldData?.[f.valueField || '_kpt__Contact_ID']
+            const label = contact.fieldData?.[f.labelField || 'zz__Display__ct'] || contact.fieldData?.Name_Organization
+            set(f.key, pk)
+            setLabels(l => ({ ...l, [f.key]: label }))
+            setPickerField(null)
+          }}
+          onClose={() => setPickerField(null)}
+        />
+      )}
     </div>
   )
 }
