@@ -8,11 +8,13 @@ const LAYOUT = 'Estimates_New'
 const CACHE_VERSION = 1
 
 const STATUS_COLOR = {
-  'Draft':    '#64748b',
-  'Sent':     '#3b82f6',
-  'Approved': '#22c55e',
-  'Declined': '#e8322a',
-  'Expired':  '#f59e0b',
+  'Draft':       '#64748b',
+  'Sent':        '#3b82f6',
+  'Approved':    '#22c55e',
+  'Declined':    '#e8322a',
+  'Expired':     '#f59e0b',
+  'Mandatory':   '#c084fc',
+  'Recommended': '#06b6d4',
 }
 
 const TYPE_COLOR = {
@@ -22,7 +24,7 @@ const TYPE_COLOR = {
 
 function fmtCurrency(val) {
   const n = parseFloat(String(val ?? '').replace(/[^0-9.-]/g, ''))
-  if (isNaN(n)) return '—'
+  if (isNaN(n) || val === '' || val == null) return '—'
   return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
@@ -76,19 +78,19 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
   const controls = useListControls({
     records,
     storageKey: 'estimates',
-    name: f => f['est_CNTCT::Name_Organization'] || f['est_CNTCT::NameFirstLast'] || '',
-    searchKeys: ['est_CNTCT::Name_Organization', 'est_CNTCT::NameFirstLast', '_kp__Estimate_ID', 'Type', 'Status'],
+    name: f => f.zz__Display_Contact__ct || '',
+    searchKeys: ['zz__Display_Contact__ct', 'Title', '_kpt__Estimate_ID', 'Status', 'Class'],
     chips: [
-      { id: 'draft',    label: 'Draft',    match: f => f.Status === 'Draft' },
-      { id: 'sent',     label: 'Sent',     match: f => f.Status === 'Sent' },
-      { id: 'approved', label: 'Approved', match: f => f.Status === 'Approved' },
-      { id: 'declined', label: 'Declined', match: f => f.Status === 'Declined' },
+      { id: 'draft',       label: 'Draft',       match: f => f.Status === 'Draft' },
+      { id: 'recommended', label: 'Recommended', match: f => f.Status === 'Recommended' },
+      { id: 'mandatory',   label: 'Mandatory',   match: f => f.Status === 'Mandatory' },
+      { id: 'approved',    label: 'Approved',    match: f => f.Status === 'Approved' },
     ],
     sorts: [
-      { id: 'date',   label: 'Date',         value: f => f.Date ?? '' },
-      { id: 'org',    label: 'Organization', value: f => f['est_CNTCT::Name_Organization'] ?? '' },
-      { id: 'total',  label: 'Total',        value: f => parseFloat(String(f.Total ?? '').replace(/[^0-9.-]/g, '')) || 0 },
-      { id: 'status', label: 'Status',       value: f => f.Status ?? '' },
+      { id: 'date',   label: 'Date',    value: f => f.Date ?? '' },
+      { id: 'client', label: 'Client',  value: f => f.zz__Display_Contact__ct ?? '' },
+      { id: 'total',  label: 'Total',   value: f => parseFloat(String(f.zz__Total__xn ?? '').replace(/[^0-9.-]/g, '')) || 0 },
+      { id: 'status', label: 'Status',  value: f => f.Status ?? '' },
     ],
     defaultSort: 'date', defaultOrder: 'desc',
   })
@@ -143,22 +145,12 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
 
   const f = selected?.fieldData ?? {}
   const p = selected?.portalData
-  const lineItems = p?.est_ESTLI || []
+  const lineItems = p?.estmt_ESTLI || []
   const dirtyCount = Object.keys(edits).length
 
-  const fmTotal = parseFloat(String(f.Total ?? '').replace(/[^0-9.-]/g, '')) || 0
-  const computedTotal = lineItems.reduce((sum, li) => (
-    sum + (parseFloat(String(li['est_ESTLI::Line_Total'] ?? '').replace(/[^0-9.-]/g, '')) || 0)
-  ), 0)
-  const displayTotal = fmTotal || computedTotal
-
-  // Group line items by category
-  const grouped = lineItems.reduce((acc, li) => {
-    const cat = li['est_ESTLI::Category'] || 'General'
-    if (!acc[cat]) acc[cat] = []
-    acc[cat].push(li)
-    return acc
-  }, {})
+  const displayTotal = parseFloat(String(f.zz__Total__xn ?? '').replace(/[^0-9.-]/g, '')) || 0
+  const status = f.Status || ''
+  const statusColor = STATUS_COLOR[status] ?? '#64748b'
 
   return (
     <div className="est-container">
@@ -178,24 +170,23 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
         ) : (
           <ListBody c={controls} renderItem={r => {
             const fd = r.fieldData
-            const status = fd.Status || 'Draft'
-            const color = STATUS_COLOR[status] ?? STATUS_COLOR.Draft
-            const org = fd['est_CNTCT::Name_Organization'] || fd['est_CNTCT::NameFirstLast'] || '—'
-            const tot = parseFloat(String(fd.Total ?? '').replace(/[^0-9.-]/g, '')) || null
+            const st = fd.Status || 'Draft'
+            const color = STATUS_COLOR[st] ?? '#64748b'
+            const tot = parseFloat(String(fd.zz__Total__xn ?? '').replace(/[^0-9.-]/g, '')) || null
             return (
               <div key={r.recordId}
                 className={`est-list-item ${selected?.recordId === r.recordId ? 'active' : ''}`}
                 onClick={() => { handleSelect(r); onRecordSelect?.(r.recordId) }}>
                 <div className="est-item-dot" style={{ background: color }} />
                 <div className="est-item-text">
-                  <div className="est-item-name">{org}</div>
+                  <div className="est-item-name">{fd.zz__Display_Contact__ct || fd.Title || '—'}</div>
                   <div className="est-item-sub">
-                    {fd._kp__Estimate_ID && <span>{fd._kp__Estimate_ID}</span>}
+                    {fd.Title && fd.zz__Display_Contact__ct && <span>{fd.Title}</span>}
                     {fd.Date && <span>{fmtDate(fd.Date)}</span>}
                     {tot !== null && <span>{fmtCurrency(tot)}</span>}
                   </div>
                 </div>
-                <span className="est-item-status" style={{ color }}>{status}</span>
+                <span className="est-item-status" style={{ color }}>{st}</span>
               </div>
             )
           }} />
@@ -214,23 +205,23 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
           <>
             <div className="est-topbar">
               <div className="est-topbar-left">
-                <h1 className="est-title">{f['est_CNTCT::Name_Organization'] || f['est_CNTCT::NameFirstLast'] || '—'}</h1>
+                <h1 className="est-title">{f.Title || f.zz__Display_Contact__ct || '—'}</h1>
                 <div className="est-meta-row">
-                  {f.Status && (
+                  {status && (
                     <span className="est-chip status" style={{
-                      background: (STATUS_COLOR[f.Status] ?? '#64748b') + '22',
-                      color: STATUS_COLOR[f.Status] ?? '#64748b',
-                      borderColor: (STATUS_COLOR[f.Status] ?? '#64748b') + '44',
-                    }}>{f.Status}</span>
+                      background: statusColor + '22',
+                      color: statusColor,
+                      borderColor: statusColor + '44',
+                    }}>{status}</span>
                   )}
-                  {f.Type && (
+                  {f.Class && (
                     <span className="est-chip type" style={{
-                      background: (TYPE_COLOR[f.Type] ?? '#4a5568') + '22',
-                      color: TYPE_COLOR[f.Type] ?? '#94a3b8',
-                      borderColor: (TYPE_COLOR[f.Type] ?? '#4a5568') + '44',
-                    }}>{f.Type}</span>
+                      background: (TYPE_COLOR[f.Class] ?? '#4a5568') + '22',
+                      color: TYPE_COLOR[f.Class] ?? '#94a3b8',
+                      borderColor: (TYPE_COLOR[f.Class] ?? '#4a5568') + '44',
+                    }}>{f.Class}</span>
                   )}
-                  {f._kp__Estimate_ID && <span className="est-chip id">#{f._kp__Estimate_ID}</span>}
+                  {f._kpt__Estimate_ID && <span className="est-chip id">#{f._kpt__Estimate_ID}</span>}
                   {f.Date && <span className="est-chip muted">{fmtDate(f.Date)}</span>}
                 </div>
               </div>
@@ -260,29 +251,30 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
 
             <div className="est-content">
 
-              <Section title="Contact" icon="◉">
+              <Section title="Client" icon="◉">
                 <div className="est-field-grid">
-                  <Field label="Organization"   fk="est_CNTCT::Name_Organization" f={f} edits={edits} onChange={handleChange} editing={editing} editable={false} />
-                  <Field label="Contact"         fk="est_CNTCT::NameFirstLast"     f={f} edits={edits} onChange={handleChange} editing={editing} editable={false} />
-                  <Field label="Email"           fk="est_CNTCT::zz__Email__ct"     f={f} edits={edits} onChange={handleChange} editing={editing} editable={false} />
-                  <Field label="Phone"           fk="est_CNTCT::Phone"             f={f} edits={edits} onChange={handleChange} editing={editing} editable={false} />
-                  {f['est_CNTCT::Address_Block'] && (
-                    <Field label="Address"       fk="est_CNTCT::Address_Block"     f={f} edits={edits} onChange={handleChange} editing={editing} editable={false} wide />
+                  <Field label="Contact / Organization" fk="zz__Display_Contact__ct" f={f} edits={edits} onChange={handleChange} editing={editing} editable={false} wide />
+                  {f.Address_Block_Billing && (
+                    <Field label="Billing Address" fk="Address_Block_Billing" f={f} edits={edits} onChange={handleChange} editing={editing} editable={false} wide />
+                  )}
+                  {f.Address_Block_Shipping && (
+                    <Field label="Shipping Address" fk="Address_Block_Shipping" f={f} edits={edits} onChange={handleChange} editing={editing} editable={false} wide />
                   )}
                 </div>
               </Section>
 
               <Section title="Estimate Details" icon="◧">
                 <div className="est-field-grid">
-                  <Field label="Estimate #"   fk="_kp__Estimate_ID"  f={f} edits={edits} onChange={handleChange} editing={editing} editable={false} mono />
-                  <Field label="Status"       fk="Status"            f={f} edits={edits} onChange={handleChange} editing={editing} />
-                  <Field label="Type"         fk="Type"              f={f} edits={edits} onChange={handleChange} editing={editing} />
-                  <Field label="Date"         fk="Date"              f={f} edits={edits} onChange={handleChange} editing={editing} />
-                  <Field label="Expiry Date"  fk="Expiry_Date"       f={f} edits={edits} onChange={handleChange} editing={editing} />
-                  {(f._kf__Inspection_ID || editing) && (
-                    <Field label="Source Inspection" fk="_kf__Inspection_ID" f={f} edits={edits} onChange={handleChange} editing={editing} editable={false} mono />
+                  <Field label="Estimate #" fk="_kpt__Estimate_ID" f={f} edits={edits} onChange={handleChange} editing={editing} editable={false} mono />
+                  <Field label="Title"       fk="Title"             f={f} edits={edits} onChange={handleChange} editing={editing} />
+                  <Field label="Status"      fk="Status"            f={f} edits={edits} onChange={handleChange} editing={editing} />
+                  <Field label="Class"       fk="Class"             f={f} edits={edits} onChange={handleChange} editing={editing} />
+                  <Field label="Date"        fk="Date"              f={f} edits={edits} onChange={handleChange} editing={editing} />
+                  <Field label="Tax Name"    fk="Tax_Name"          f={f} edits={edits} onChange={handleChange} editing={editing} />
+                  <Field label="Tax Rate"    fk="Tax_Rate"          f={f} edits={edits} onChange={handleChange} editing={editing} />
+                  {f.Memo && (
+                    <Field label="Memo"      fk="Memo"              f={f} edits={edits} onChange={handleChange} editing={editing} wide textarea />
                   )}
-                  <Field label="Description"  fk="Description"       f={f} edits={edits} onChange={handleChange} editing={editing} wide textarea />
                 </div>
               </Section>
 
@@ -291,46 +283,44 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
                   <p className="est-empty-portal">No line items on this estimate</p>
                 ) : (
                   <div className="est-table-wrap">
-                    {Object.entries(grouped).map(([cat, items]) => {
-                      const catTotal = items.reduce((s, li) => (
-                        s + (parseFloat(String(li['est_ESTLI::Line_Total'] ?? '').replace(/[^0-9.-]/g, '')) || 0)
-                      ), 0)
-                      return (
-                        <div key={cat} className="est-line-group">
-                          <div className="est-line-group-header">
-                            <span>{cat}</span>
-                            <span>{fmtCurrency(catTotal)}</span>
-                          </div>
-                          <table className="est-table">
-                            <thead>
-                              <tr>
-                                <th className="desc">Description</th>
-                                <th className="num">Qty</th>
-                                <th className="num">Unit Price</th>
-                                <th className="num">Total</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {items.map((li, i) => (
-                                <tr key={li.recordId || i}>
-                                  <td className="desc">{li['est_ESTLI::Description'] || '—'}</td>
-                                  <td className="num">{li['est_ESTLI::Quantity'] ?? '—'}</td>
-                                  <td className="num">{fmtCurrency(li['est_ESTLI::Unit_Price'])}</td>
-                                  <td className="num">{fmtCurrency(li['est_ESTLI::Line_Total'])}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )
-                    })}
+                    <table className="est-table">
+                      <thead>
+                        <tr>
+                          <th className="desc">Item / Description</th>
+                          <th className="num">Qty</th>
+                          <th className="num">Unit Price</th>
+                          <th className="num">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {lineItems.map((li, i) => (
+                          <tr key={li.recordId || i}>
+                            <td className="desc">
+                              {li['estmt_ESTLI::Item_Name'] && (
+                                <div className="est-li-name">{li['estmt_ESTLI::Item_Name']}</div>
+                              )}
+                              {li['estmt_ESTLI::Description'] && (
+                                <div className="est-li-desc">{li['estmt_ESTLI::Description']}</div>
+                              )}
+                              {!li['estmt_ESTLI::Item_Name'] && !li['estmt_ESTLI::Description'] && '—'}
+                            </td>
+                            <td className="num">{li['estmt_ESTLI::Quantity'] ?? '—'}</td>
+                            <td className="num">{fmtCurrency(li['estmt_ESTLI::Unit_Price'])}</td>
+                            <td className="num">{fmtCurrency(li['estmt_ESTLI::Amount'])}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
 
                     <div className="est-totals">
-                      {f.Subtotal && (
-                        <div className="est-total-row"><span>Subtotal</span><span>{fmtCurrency(f.Subtotal)}</span></div>
+                      {f.zz__Subtotal__xn != null && (
+                        <div className="est-total-row"><span>Subtotal</span><span>{fmtCurrency(f.zz__Subtotal__xn)}</span></div>
                       )}
-                      {f.Tax_Rate && (
-                        <div className="est-total-row"><span>Tax ({f.Tax_Rate}%)</span><span>{fmtCurrency(f.Tax_Amount)}</span></div>
+                      {f.zz__Tax__xn != null && (
+                        <div className="est-total-row">
+                          <span>Tax{f.Tax_Name ? ` (${f.Tax_Name})` : ''}{f.Tax_Rate ? ` ${f.Tax_Rate}%` : ''}</span>
+                          <span>{fmtCurrency(f.zz__Tax__xn)}</span>
+                        </div>
                       )}
                       <div className="est-total-row grand"><span>Total</span><span>{fmtCurrency(displayTotal)}</span></div>
                     </div>
@@ -338,24 +328,16 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
                 )}
               </Section>
 
-              {(f.Notes || editing) && (
-                <Section title="Notes" icon="✎">
+              {f.Memo && (
+                <Section title="Memo" icon="✎">
                   <div className="est-field-grid">
-                    <Field label="Notes" fk="Notes" f={f} edits={edits} onChange={handleChange} editing={editing} wide textarea />
-                  </div>
-                </Section>
-              )}
-
-              {(f.Terms || editing) && (
-                <Section title="Terms & Conditions" icon="§">
-                  <div className="est-field-grid">
-                    <Field label="Terms" fk="Terms" f={f} edits={edits} onChange={handleChange} editing={editing} wide textarea />
+                    <Field label="Memo" fk="Memo" f={f} edits={edits} onChange={handleChange} editing={editing} wide textarea />
                   </div>
                 </Section>
               )}
 
               <div className="est-record-footer">
-                ID {f._kp__Estimate_ID || '—'} · Record {selected.recordId} · Created {f.zz__Created_On?.split(' ')[0] || '—'} by {f.zz__Created_By || '—'} · Modified {f.zz__Modified_On?.split(' ')[0] || '—'} by {f.zz__Modified_By || '—'}
+                ID {f._kpt__Estimate_ID || '—'} · Record {selected.recordId} · Created {f.zz__Created_On?.split(' ')[0] || '—'} by {f.zz__Created_By || '—'} · Modified {f.zz__Modified_On?.split(' ')[0] || '—'} by {f.zz__Modified_By || '—'}
               </div>
             </div>
           </>
