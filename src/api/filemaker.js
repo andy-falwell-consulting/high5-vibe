@@ -326,6 +326,11 @@ export async function getRecord(layout, recordId) {
     `${getBasePath()}/fmi/data/v2/databases/${env.db}/layouts/${encodeURIComponent(layout)}/records/${recordId}`,
     { headers: { Authorization: `Bearer ${token}` } }
   ));
+  if (res.status === 401) {
+    sessionToken = null;
+    detailCache.delete(key);
+    return getRecord(layout, recordId);
+  }
   // Refresh the matching list row from this fresh fetch (hover/click), so the
   // displayed list reflects current data even though we don't bulk-refresh.
   const promise = res.json().then(data => {
