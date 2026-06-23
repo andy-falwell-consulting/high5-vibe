@@ -62,7 +62,7 @@
 .rmi-content { flex: 1; overflow-y: auto; padding: 24px 28px 48px; display: flex; flex-direction: column; gap: 20px; }
 
 /* Sections */
-.rmi-section { background: #13151c; border: 1px solid #1e2130; border-radius: 10px; overflow: hidden; }
+.rmi-section { background: #13151c; border: 1px solid #1e2130; border-radius: 10px; overflow: hidden; flex-shrink: 0; }
 .rmi-section-header { display: flex; align-items: center; gap: 10px; padding: 11px 18px; border-bottom: 1px solid #1e2130; background: #0f1117; }
 .rmi-section-icon { font-size: 14px; color: #64748b; }
 .rmi-section-header h3 { margin: 0; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; }
@@ -94,7 +94,7 @@
 .rmi-q-select { background: #0f1117; border: 1px solid #3b82f6; border-radius: 4px; padding: 4px 6px; color: #e2e8f0; font-size: 13px; outline: none; }
 
 /* Footer */
-.rmi-record-footer { font-size: 11px; color: #4a5568; padding-top: 8px; border-top: 1px solid #1e2130; }
+.rmi-record-footer { font-size: 11px; color: #4a5568; padding-top: 8px; border-top: 1px solid #1e2130; flex-shrink: 0; }
 
 /* Light theme */
 [data-theme="light"] .rmi-container { background: #f8fafc; color: #0f172a; }
