@@ -267,6 +267,22 @@ export function patchCachedRecord(layout, cacheVersion, recordId, fieldData) {
   }
 }
 
+// Prepend a newly created record to the cache + IDB and notify subscribers, so a
+// just-created record shows in the list without a full refetch. No-op if the
+// cache for this layout isn't populated yet (it'll appear on the next load).
+export function addCachedRecord(layout, cacheVersion, record) {
+  const mk = memKey(layout, cacheVersion);
+  if (!memCache[mk] || !record) return;
+  memCache[mk].records = [record, ...memCache[mk].records];
+  if (typeof memCache[mk].total === 'number') memCache[mk].total += 1;
+  idbSet(idbKey(layout, cacheVersion), { ...memCache[mk] }).catch(() => {});
+  const subs = cacheSubscribers.get(mk);
+  if (subs?.size) {
+    const { records, total } = memCache[mk];
+    subs.forEach(cb => cb(records, total));
+  }
+}
+
 // Patch a record into every cached version of a layout and notify subscribers.
 // Lets a fresh single-record fetch (hover/click) update the displayed list row
 // without the caller needing to know its cacheVersion.

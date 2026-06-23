@@ -3,7 +3,11 @@
 /* Sidebar */
 .rmi-sidebar { display: flex; flex-direction: column; background: #13151c; border-right: 1px solid #1e2130; overflow: hidden; flex-shrink: 0; }
 .rmi-sidebar-header { padding: 16px; border-bottom: 1px solid #1e2130; }
-.rmi-sidebar-title { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; }
+.rmi-sidebar-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.rmi-new-btn { flex-shrink: 0; padding: 5px 10px; border-radius: 6px; border: 1px solid #2d3148; background: #1e2130; color: #cbd5e1; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+.rmi-new-btn:hover { background: #e8322a; border-color: #e8322a; color: #fff; }
+[data-theme="light"] .rmi-new-btn { background: #f1f5f9; border-color: #e2e8f0; color: #334155; }
+[data-theme="light"] .rmi-new-btn:hover { background: #e8322a; border-color: #e8322a; color: #fff; }
 .rmi-sidebar-module { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #64748b; text-transform: uppercase; }
 .rmi-sidebar-count { font-size: 13px; color: #94a3b8; margin-top: 2px; }
 

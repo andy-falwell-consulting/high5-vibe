@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { getRecord, updateRecord, invalidateRecord, patchCachedRecord } from '../api/filemaker'
+import { getRecord, updateRecord, invalidateRecord, patchCachedRecord, createRecord, addCachedRecord } from '../api/filemaker'
 import { useAllRecords } from '../hooks/useAllRecords'
 import ListToolbar, { useListControls, ListBody } from './ListControls'
+import RecordFormModal from './RecordFormModal'
 import './RMI.css'
 
 const LAYOUT = 'RMI_New'
@@ -121,6 +122,7 @@ export default function RMI({ navTarget, onClearNav, onRecordSelect } = {}) {
   const [edits, setEdits] = useState({})
   const [saving, setSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState(null)
+  const [showNew, setShowNew] = useState(false)
   const isResizing = useRef(false)
 
   const orgName = f => f.zz__Display_Organization__ct || f.zz__Display_Contact__ct || ''
@@ -183,6 +185,35 @@ export default function RMI({ navTarget, onClearNav, onRecordSelect } = {}) {
     finally { setSaving(false) }
   }
 
+  // ── Create a new RMI ──
+  // Contact linkage (_kft__Contact_ID) comes with the shared ContactPicker step;
+  // for now new inquiries capture the risk-assessment fields and get linked after.
+  const createFields = [
+    { key: 'Status',           label: 'Status',           type: 'select', options: ['Active', 'Resolved'], default: 'Active', required: true },
+    { key: 'Level_of_Risk',    label: 'Level of Risk',    type: 'select', options: ['High', 'Medium', 'Low'] },
+    { key: 'Level_of_Concern', label: 'Level of Concern', type: 'select', options: ['High', 'Medium', 'Low'] },
+    { key: 'Assigned_To',      label: 'Assigned To',      type: 'text' },
+    { key: 'Staff',            label: 'Staff',            type: 'text' },
+    { key: 'Entry_Date',       label: 'Entry Date',       type: 'date', default: new Date().toLocaleDateString('en-US') },
+    { key: 'Note_Concern',     label: 'Note of Concern',  type: 'textarea', wide: true },
+  ]
+
+  async function handleCreate(fieldData) {
+    // Await only the write so the modal closes promptly; enrich + select the new
+    // record in the background (the detail fetch can be starved behind prewarm).
+    const res = await createRecord(LAYOUT, fieldData)
+    const newId = res?.response?.recordId
+    if (!newId) throw new Error(res?.messages?.[0]?.message || 'Could not create the record')
+    getRecord(LAYOUT, newId).then(d => {
+      const rec = d?.response?.data?.[0]
+      if (rec) {
+        addCachedRecord(LAYOUT, CACHE_VERSION, rec)
+        handleSelect(rec)
+        onRecordSelect?.(rec.recordId)
+      }
+    }).catch(() => {})
+  }
+
   const startResize = useCallback((e) => {
     e.preventDefault()
     isResizing.current = true
@@ -217,6 +248,7 @@ export default function RMI({ navTarget, onClearNav, onRecordSelect } = {}) {
               <div className="rmi-sidebar-module">Risk Management</div>
               <div className="rmi-sidebar-count">{total ? `${total.toLocaleString()} inquiries` : 'Loading…'}</div>
             </div>
+            <button className="rmi-new-btn" onClick={() => setShowNew(true)} title="New inquiry">＋ New</button>
           </div>
           <ListToolbar c={list} unit="inquiries" />
         </div>
@@ -356,6 +388,16 @@ export default function RMI({ navTarget, onClearNav, onRecordSelect } = {}) {
           </>
         )}
       </main>
+
+      {showNew && (
+        <RecordFormModal
+          title="New Risk Management Inquiry"
+          fields={createFields}
+          submitLabel="Create inquiry"
+          onCreate={handleCreate}
+          onClose={() => setShowNew(false)}
+        />
+      )}
     </div>
   )
 }
