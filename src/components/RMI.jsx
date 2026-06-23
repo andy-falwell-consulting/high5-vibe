@@ -19,18 +19,15 @@ const LEVEL_COLOR = {
   Low:    '#22c55e',
 }
 
-// Risk-screening questions (Q1–Q8). Field keys are Question, Question_2..8.
-// Labels are placeholders — supply the real prompts from the FM layout to
-// replace them.
+// Risk-screening questions. Field keys are Question, Question_2..7.
 const RISK_QUESTIONS = [
-  { key: 'Question',   label: 'Question 1' },
-  { key: 'Question_2', label: 'Question 2' },
-  { key: 'Question_3', label: 'Question 3' },
-  { key: 'Question_4', label: 'Question 4' },
-  { key: 'Question_5', label: 'Question 5' },
-  { key: 'Question_6', label: 'Question 6' },
-  { key: 'Question_7', label: 'Question 7' },
-  { key: 'Question_8', label: 'Question 8' },
+  { key: 'Question',   label: 'Is the client getting outside professional training?' },
+  { key: 'Question_2', label: 'Is the client following our recommended staff training plan?' },
+  { key: 'Question_3', label: 'Is the client getting their course inspected annually?' },
+  { key: 'Question_4', label: 'Is the client making repairs to their course based on the inspection report?' },
+  { key: 'Question_5', label: 'Did the client report an accident or incident?' },
+  { key: 'Question_6', label: 'Does the client pay on time?' },
+  { key: 'Question_7', label: 'Is the client vendor hopping?' },
 ]
 
 // FileMaker stores line breaks as carriage returns (\r); normalize to \n.
