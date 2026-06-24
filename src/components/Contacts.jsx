@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { getRecord, prefetchRecord, updateRecord, createRecord, addCachedRecord } from '../api/filemaker';
+import { getRecord, prefetchRecord, updateRecord, createRecord, addCachedRecord, addPortalRow, invalidateRecord } from '../api/filemaker';
 import { useAllRecords } from '../hooks/useAllRecords';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
 import RecordFormModal from './RecordFormModal';
@@ -17,6 +17,36 @@ const CONTACT_CREATE_FIELDS = [
   { key: 'Source', label: 'Source', type: 'text' },
   { key: 'Notes', label: 'Notes', type: 'textarea', wide: true },
 ];
+
+// Add-a-contact-method modals. Field keys are the portal's qualified field names,
+// so the form's output is exactly the row payload for addPortalRow.
+const METHOD_CONFIG = {
+  phone: {
+    title: 'Add Phone', portal: 'cntct_PHONE',
+    fields: [
+      { key: 'cntct_PHONE::Type', label: 'Type', type: 'select', options: ['Work', 'Main Office', 'Fax', 'Camp', 'Winter'], default: 'Work' },
+      { key: 'cntct_PHONE::Number', label: 'Number', type: 'text', required: true },
+    ],
+  },
+  email: {
+    title: 'Add Email / Website', portal: 'cntct_INADR',
+    fields: [
+      { key: 'cntct_INADR::Type', label: 'Type', type: 'select', options: ['Email', 'Web'], default: 'Email' },
+      { key: 'cntct_INADR::Address', label: 'Email or URL', type: 'text', required: true },
+    ],
+  },
+  address: {
+    title: 'Add Address', portal: 'cntct_ADDR',
+    fields: [
+      { key: 'cntct_ADDR::Type', label: 'Type', type: 'select', options: ['Main', 'Course', 'Mailing', 'Billing', 'Work', 'Winter'], default: 'Main' },
+      { key: 'cntct_ADDR::Street', label: 'Street', type: 'text', wide: true },
+      { key: 'cntct_ADDR::City', label: 'City', type: 'text' },
+      { key: 'cntct_ADDR::State', label: 'State', type: 'text' },
+      { key: 'cntct_ADDR::Zip', label: 'Zip', type: 'text' },
+      { key: 'cntct_ADDR::Country', label: 'Country', type: 'text' },
+    ],
+  },
+};
 
 const STATUS_COLOR = {
   Active: '#22c55e',
@@ -169,7 +199,22 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
   const [saveStatus, setSaveStatus] = useState(null);
   const [tab, setTab] = useState('overview');
   const [showNew, setShowNew] = useState(false);
+  const [addMethod, setAddMethod] = useState(null); // 'phone' | 'email' | 'address'
   const isResizing = useRef(false);
+
+  // Add a phone/email/address row to the selected contact, then refresh detail.
+  async function handleAddMethod(rowData) {
+    if (!selected?.fieldData?._kpt__Contact_ID) {
+      throw new Error('This contact has no ID — it may be an empty record. Open a valid contact first.');
+    }
+    const cfg = METHOD_CONFIG[addMethod];
+    const res = await addPortalRow(LAYOUT, selected.recordId, cfg.portal, rowData);
+    if (res?.messages?.[0]?.code !== '0') throw new Error(res?.messages?.[0]?.message || 'Could not add');
+    invalidateRecord(LAYOUT, selected.recordId);
+    const d = await getRecord(LAYOUT, selected.recordId);
+    const fresh = d?.response?.data?.[0];
+    if (fresh) setSelected(fresh);
+  }
 
   async function handleCreate(fieldData) {
     const res = await createRecord(LAYOUT, fieldData);
@@ -402,17 +447,25 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
                   )}
                 </div>
 
-                {(rowsOf(p, 'phone').length > 0 || rowsOf(p, 'email').length > 0 || rowsOf(p, 'address').length > 0) && (
-                  <div className="ct-card">
-                    <div className="ct-card-title">Contact</div>
-                    {rowsOf(p, 'phone').map((r, i) => <div className="ct-kv" key={'p' + i}><span className="ct-kv-k">{r['cntct_PHONE::Type'] || 'Phone'}</span><span className="ct-kv-v mono">{r['cntct_PHONE::Number']}</span></div>)}
-                    {rowsOf(p, 'email').map((r, i) => <div className="ct-kv" key={'e' + i}><span className="ct-kv-k">{r['cntct_INADR::Type'] || 'Email'}</span><a className="ct-kv-v link" href={`mailto:${r['cntct_INADR::Address']}`}>{r['cntct_INADR::Address']}</a></div>)}
-                    {rowsOf(p, 'address').map((r, i) => (
-                      <div className="ct-kv" key={'a' + i}><span className="ct-kv-k">{r['cntct_ADDR::Type'] || 'Address'}</span>
-                        <span className="ct-kv-v">{[r['cntct_ADDR::Street'], [r['cntct_ADDR::City'], r['cntct_ADDR::State']].filter(Boolean).join(', '), r['cntct_ADDR::Zip']].filter(Boolean).join(' · ')}</span></div>
-                    ))}
+                <div className="ct-card">
+                  <div className="ct-card-title">
+                    Contact
+                    <span className="ct-card-add">
+                      <button onClick={() => setAddMethod('phone')} title="Add phone">＋ Phone</button>
+                      <button onClick={() => setAddMethod('email')} title="Add email or website">＋ Email/Web</button>
+                      <button onClick={() => setAddMethod('address')} title="Add address">＋ Address</button>
+                    </span>
                   </div>
-                )}
+                  {rowsOf(p, 'phone').map((r, i) => <div className="ct-kv" key={'p' + i}><span className="ct-kv-k">{r['cntct_PHONE::Type'] || 'Phone'}</span><span className="ct-kv-v mono">{r['cntct_PHONE::Number']}</span></div>)}
+                  {rowsOf(p, 'email').map((r, i) => <div className="ct-kv" key={'e' + i}><span className="ct-kv-k">{r['cntct_INADR::Type'] || 'Email'}</span><a className="ct-kv-v link" href={`mailto:${r['cntct_INADR::Address']}`}>{r['cntct_INADR::Address']}</a></div>)}
+                  {rowsOf(p, 'address').map((r, i) => (
+                    <div className="ct-kv" key={'a' + i}><span className="ct-kv-k">{r['cntct_ADDR::Type'] || 'Address'}</span>
+                      <span className="ct-kv-v">{[r['cntct_ADDR::Street'], [r['cntct_ADDR::City'], r['cntct_ADDR::State']].filter(Boolean).join(', '), r['cntct_ADDR::Zip']].filter(Boolean).join(' · ')}</span></div>
+                  ))}
+                  {rowsOf(p, 'phone').length === 0 && rowsOf(p, 'email').length === 0 && rowsOf(p, 'address').length === 0 && (
+                    <div className="ct-kv"><span className="ct-kv-v" style={{ color: '#64748b' }}>No contact methods yet</span></div>
+                  )}
+                </div>
 
                 {val('Client_Alert') && (
                   <div className="ct-alert"><span className="ct-alert-i">⚠</span><span>{val('Client_Alert')}</span></div>
@@ -490,6 +543,16 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
           submitLabel="Create contact"
           onCreate={handleCreate}
           onClose={() => setShowNew(false)}
+        />
+      )}
+
+      {addMethod && (
+        <RecordFormModal
+          title={METHOD_CONFIG[addMethod].title}
+          fields={METHOD_CONFIG[addMethod].fields}
+          submitLabel="Add"
+          onCreate={handleAddMethod}
+          onClose={() => setAddMethod(null)}
         />
       )}
     </div>

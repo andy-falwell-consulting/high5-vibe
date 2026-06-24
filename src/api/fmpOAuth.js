@@ -21,6 +21,7 @@ import { setFmpUserSession } from './filemaker'
 
 const APP_TYPE = '7'        // WebDirect (Data API app-type 9 is blocked on this host)
 const APP_VERSION = '15'
+const PROVIDER = 'googlecustom'  // custom OIDC IdP name in FMS (replaced built-in "Google")
 
 function hostAddress() {
   try { return new URL(getCurrentEnv().host).host } catch { return '' }
@@ -32,7 +33,7 @@ export async function startFmpConnect() {
   const addr = hostAddress()
   const returnUrl = `${window.location.origin}/fmp-oauth-callback.html`
   const res = await fetch(
-    `/oauth/getoauthurl?trackingID=${Date.now()}&provider=Google&address=${encodeURIComponent(addr)}&X-FMS-OAuth-AuthType=2`,
+    `/oauth/getoauthurl?trackingID=${Date.now()}&provider=${encodeURIComponent(PROVIDER)}&address=${encodeURIComponent(addr)}&X-FMS-OAuth-AuthType=2`,
     { headers: {
       'X-FMS-Application-Type': APP_TYPE,
       'X-FMS-Application-Version': APP_VERSION,

@@ -530,7 +530,12 @@
 /* Rail cards */
 .ct-rail { display: flex; flex-direction: column; gap: 12px; }
 .ct-card { background: #13151c; border: 1px solid #1e2130; border-radius: 12px; padding: 13px 15px; }
-.ct-card-title { font-size: 12.5px; color: #79859a; letter-spacing: 0.03em; margin-bottom: 9px; }
+.ct-card-title { font-size: 12.5px; color: #79859a; letter-spacing: 0.03em; margin-bottom: 9px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ct-card-add { display: flex; gap: 4px; }
+.ct-card-add button { padding: 2px 7px; border-radius: 5px; border: 1px solid #2d3148; background: #1e2130; color: #8b97aa; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.ct-card-add button:hover { background: #e8322a; border-color: #e8322a; color: #fff; }
+[data-theme="light"] .ct-card-add button { background: #f1f5f9; border-color: #e2e8f0; color: #5e6b7c; }
+[data-theme="light"] .ct-card-add button:hover { background: #e8322a; border-color: #e8322a; color: #fff; }
 .ct-kv { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-top: 1px solid #1a1d2e; font-size: 13.5px; }
 .ct-kv:first-of-type { border-top: none; }
 .ct-kv-k { color: #8b97aa; flex-shrink: 0; }
