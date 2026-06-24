@@ -90,10 +90,10 @@ export async function ensureFmpUserSession() {
   const env = getCurrentEnv();
   _userMintPromise = (async () => {
     try {
-      const r = await fetch(`/api/fmp-user-token?db=${encodeURIComponent(env.db)}`);
+      const r = await fetch(`/api/me?fmpDb=${encodeURIComponent(env.db)}`);
       if (!r.ok) return null;
       const data = await r.json();
-      if (data?.token) { setFmpUserSession(data.token, data.email); return data.email; }
+      if (data?.fmpToken) { setFmpUserSession(data.fmpToken, data.email); return data.email; }
     } catch { /* offline / localhost — fall back to admin */ }
     return null;
   })();
