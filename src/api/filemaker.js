@@ -37,9 +37,10 @@ let _tokenEnvId = null;
 let _tokenPromise = null; // shared in-flight auth, so a burst of calls mints one token
 
 // ── Per-user OAuth session (for write attribution) ────────────────
-// When a user connects their FileMaker identity via Google OAuth (see
-// api/fmpOAuth.js), we hold a user-bound Data API token here and use it for
-// MUTATING calls only — so zz__Modified_By records the real person. Reads keep
+// The user's FileMaker identity (minted server-side via ensureFmpUserSession →
+// /api/fmp-user-token, Basic auth as their account). We hold this user-bound
+// Data API token here and use it for MUTATING calls only — so zz__Modified_By
+// records the real person. Reads keep
 // using the shared admin token, so nothing breaks if a user's privilege set is
 // narrower than admin. Admin is always the fallback.
 let _userToken = null;
@@ -77,6 +78,27 @@ function activeUserToken() {
 
 export function getFmpUserName() { return activeUserToken() ? _userName : null; }
 export function hasFmpUserSession() { return !!activeUserToken(); }
+
+// Mint a user-bound write token from the server (Option 1: server Basic-auths as
+// the logged-in user's FileMaker account). Silent; resolves to the email on
+// success or null (no account / not deployed / localhost) — callers fall back to
+// admin. No-op if a valid user token already exists for the current env.
+let _userMintPromise = null;
+export async function ensureFmpUserSession() {
+  if (activeUserToken()) return _userName;
+  if (_userMintPromise) return _userMintPromise;
+  const env = getCurrentEnv();
+  _userMintPromise = (async () => {
+    try {
+      const r = await fetch(`/api/me?fmpDb=${encodeURIComponent(env.db)}`);
+      if (!r.ok) return null;
+      const data = await r.json();
+      if (data?.fmpToken) { setFmpUserSession(data.fmpToken, data.email); return data.email; }
+    } catch { /* offline / localhost — fall back to admin */ }
+    return null;
+  })();
+  try { return await _userMintPromise; } finally { _userMintPromise = null; }
+}
 
 // Clear write auth after a 401 so the next attempt falls back to admin.
 function invalidateWriteAuth() {

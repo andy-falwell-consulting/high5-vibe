@@ -13,7 +13,7 @@ import RMI from './components/RMI'
 import Admin from './components/Admin'
 import CommandPalette from './components/CommandPalette'
 import AgentPanel from './components/AgentPanel'
-import { getAllRecords } from './api/filemaker'
+import { getAllRecords, ensureFmpUserSession } from './api/filemaker'
 import { RCD_LAYOUT, RCD_CACHE_VERSION, RCD_FIND_QUERY, RCD_SORT } from './config/ccsCache'
 import './light-theme.css'
 import './components/CommandPalette.css'
@@ -63,7 +63,14 @@ export default function App() {
         if (!r.ok) { setAuthChecked(true); return null } // 404 in local dev — allow through
         return r.json()
       })
-      .then(u => { if (u) { setUser(u); setAuthChecked(true) } })
+      .then(u => {
+        if (u) {
+          setUser(u); setAuthChecked(true)
+          // Mint a user-bound FileMaker write token so edits are attributed to
+          // this person (falls back to admin silently if no FM account).
+          ensureFmpUserSession().catch(() => {})
+        }
+      })
       .catch(() => setAuthChecked(true)) // network error — allow through
   }, [])
 
