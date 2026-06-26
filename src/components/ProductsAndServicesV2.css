@@ -613,6 +613,24 @@
 .v2-table tr:hover td { background: #161926; }
 .v2-table tr:last-child td { border-bottom: none; }
 
+/* ── BOM inline edit / remove ──────────────────────────────────── */
+.v2-bom-qty {
+  width: 56px; text-align: right;
+  background: #0f1117; border: 1px solid #2a2f42; border-radius: 5px;
+  padding: 4px 6px; color: #e2e8f0; font-family: 'SF Mono', monospace; font-size: 13px;
+  outline: none;
+}
+.v2-bom-qty:hover { border-color: #3a4256; }
+.v2-bom-qty:focus { border-color: #e8322a; }
+.v2-bom-qty:disabled { opacity: 0.5; }
+.v2-bom-remove {
+  background: none; border: none; color: #475569; font-size: 13px; cursor: pointer;
+  padding: 2px 6px; border-radius: 5px; line-height: 1;
+}
+.v2-bom-remove:hover { color: #fff; background: #ef4444; }
+.v2-bom-remove:disabled { opacity: 0.4; cursor: default; }
+.v2-bom-busy { opacity: 0.55; }
+
 /* ── Drag ghost ────────────────────────────────────────────────── */
 .v2-section.drag-ghost {
   box-shadow: 0 16px 40px #00000088;
@@ -832,3 +850,8 @@
 [data-theme="light"] .v2-f-label,
 [data-theme="light"] .v2-bom-total,
 [data-theme="light"] .v2-spec-empty { color: #5e6b7c; }
+[data-theme="light"] .v2-bom-qty { background: #ffffff; border-color: #e2e8f0; color: #0f172a; }
+[data-theme="light"] .v2-bom-qty:hover { border-color: #cbd5e1; }
+[data-theme="light"] .v2-bom-qty:focus { border-color: #e8322a; }
+[data-theme="light"] .v2-bom-remove { color: #94a3b8; }
+[data-theme="light"] .v2-bom-remove:hover { color: #fff; background: #ef4444; }
