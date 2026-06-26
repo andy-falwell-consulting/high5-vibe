@@ -15,21 +15,23 @@ const QBO_INCOME_NAMES = {
   '156': '4430 - Manuals and Miscellaneous Items',
 };
 
-// Push a product record to Shopify. Returns { shopifyId, variantId } on success.
+// Push a product record to Shopify via the GraphQL endpoint. Identifiers are
+// GraphQL GIDs (gid://shopify/Product/…) — the format already stored in FMP.
+// Returns { shopifyId, variantId } (both GIDs) on success.
 export async function pushToShopify(f, recordId, existingShopifyId = null) {
-  const variant = { price: String(f.Unit_Price || 0), sku: f.SKU || '' };
-  if (existingShopifyId && f._kat__Item_Variant_Id) variant.id = Number(f._kat__Item_Variant_Id);
-
-  const product = {
+  const body = {
+    action: existingShopifyId ? 'update' : 'create',
     title: f.Name,
-    body_html: f.Description || '',
-    status: existingShopifyId ? undefined : (f.status || 'draft'),
-    variants: [variant],
+    descriptionHtml: f.Description || '',
+    price: String(f.Unit_Price || 0),
+    sku: f.SKU || '',
   };
-
-  const action = existingShopifyId ? 'update' : 'create';
-  const body = { action, product };
-  if (existingShopifyId) body.productId = existingShopifyId;
+  if (existingShopifyId) {
+    body.productId = existingShopifyId;                 // GID
+    body.variantId = f._kat__Item_Variant_Id || null;   // GID (may be stale; server falls back to SKU)
+  } else {
+    body.status = f.status || 'draft';
+  }
 
   const res = await fetch('/api/shopify', {
     method: 'POST',
@@ -39,8 +41,7 @@ export async function pushToShopify(f, recordId, existingShopifyId = null) {
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Shopify error');
 
-  const p = data.product;
-  return { shopifyId: String(p.id), variantId: String(p.variants?.[0]?.id ?? '') };
+  return { shopifyId: data.productId, variantId: data.variantId || '' };
 }
 
 // Push a product record to QBO. Returns { qboId } on success.
