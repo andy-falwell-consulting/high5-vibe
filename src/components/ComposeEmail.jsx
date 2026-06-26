@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import './ComposeEmail.css'
 
-// Compose + send an email as the logged-in user (via /api/gmail-send → their
+// Compose + send an email as the logged-in user (via /api/google → their
 // Gmail). Open it with an `initial` of { to, cc, subject, body, attachments }.
 // attachments: [{ filename, mimeType, base64 }].
 export default function ComposeEmail({ initial = {}, fromLabel, onClose, onSent }) {
@@ -23,10 +23,10 @@ export default function ComposeEmail({ initial = {}, fromLabel, onClose, onSent 
     if (!to.trim() || !subject.trim()) { setError('To and Subject are required.'); setStatus('error'); return }
     setStatus('sending'); setError('')
     try {
-      const r = await fetch('/api/gmail-send', {
+      const r = await fetch('/api/google', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: to.trim(), cc: cc.trim() || undefined, subject, bodyText: body, attachments }),
+        body: JSON.stringify({ action: 'gmail.send', to: to.trim(), cc: cc.trim() || undefined, subject, bodyText: body, attachments }),
       })
       const data = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(data.error || 'Send failed')

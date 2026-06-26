@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { getRecord, updateRecord, addPortalRow, containerImageUrl, createRecord } from '../api/filemaker';
+import { getRecord, updateRecord, updatePortalRow, deletePortalRow, invalidateRecord, containerImageUrl, createRecord } from '../api/filemaker';
 import { getCurrentEnv } from '../config/fmpEnvironments';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
 import BomPickerModal from './BomPickerModal';
@@ -176,6 +176,7 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
   const [showBomPicker, setShowBomPicker] = useState(false);
+  const [bomBusy, setBomBusy] = useState(null);
   const [navWidth, setNavWidth] = useState(300);
   const [showNewItem, setShowNewItem] = useState(false);
   const [syncStatus, setSyncStatus] = useState({});
@@ -344,16 +345,67 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
     } finally { setUploadingImage(false); }
   };
 
+  // Add a BOM component by creating a line-item record linking the parent
+  // assembly and the component item via their foreign keys. (Writing the
+  // component Name through the portal relationship fails — a new line has no
+  // related item yet — which is why the old portal-add returned error 101.)
   const handleAddBomItem = useCallback(async ({ item, quantity }) => {
-    const result = await addPortalRow(LAYOUT, selected.recordId, 'Portal__Bill_of_Materials 4', {
-      'item_itmli_ITEM__billOfMaterials::Name': item.fieldData.Name,
-      'item_ITMLI__billOfMaterials::Quantity': quantity,
+    const parentItemId = selected?.fieldData?._kpt__Item_ID;
+    const componentItemId = item?.fieldData?._kpt__Item_ID;
+    if (!parentItemId || !componentItemId) {
+      alert('Could not add component: missing item ID.');
+      return;
+    }
+    const result = await createRecord('Item_ITMLI_billOfMaterials', {
+      '_kft__Item_ID__parent': parentItemId,
+      '_kft__Item_ID__assemblyLine': componentItemId,
+      'Quantity': Number(quantity),
     });
     if (result.messages?.[0]?.code === '0') {
+      invalidateRecord(LAYOUT, selected.recordId); // new line-item won't bust parent cache
       const fresh = await getRecord(LAYOUT, selected.recordId);
       setSelected(fresh.response.data[0]);
       setShowBomPicker(false);
+    } else {
+      alert(`Could not add component: ${result.messages?.[0]?.message || 'unknown error'}`);
     }
+  }, [selected]);
+
+  // Edit a BOM line quantity. The portal row carries its own recordId.
+  const handleUpdateBomQty = useCallback(async (row, qty) => {
+    const q = Number(qty);
+    if (!Number.isFinite(q) || q <= 0) return;
+    if (q === Number(row['item_ITMLI__billOfMaterials::Quantity'])) return;
+    setBomBusy(row.recordId);
+    try {
+      const result = await updatePortalRow(LAYOUT, selected.recordId, 'Portal__Bill_of_Materials 4', row.recordId, {
+        'item_ITMLI__billOfMaterials::Quantity': q,
+      });
+      if (result.messages?.[0]?.code === '0') {
+        invalidateRecord(LAYOUT, selected.recordId);
+        const fresh = await getRecord(LAYOUT, selected.recordId);
+        setSelected(fresh.response.data[0]);
+      } else {
+        alert(`Could not update quantity: ${result.messages?.[0]?.message || 'unknown error'}`);
+      }
+    } finally { setBomBusy(null); }
+  }, [selected]);
+
+  // Remove a BOM line. deleteRelated targets the line-item table occurrence.
+  const handleRemoveBomItem = useCallback(async (row) => {
+    const name = row['item_itmli_ITEM__billOfMaterials::Name'] || 'this component';
+    if (!window.confirm(`Remove ${name} from the bill of materials?`)) return;
+    setBomBusy(row.recordId);
+    try {
+      const result = await deletePortalRow(LAYOUT, selected.recordId, 'item_ITMLI__billOfMaterials', row.recordId);
+      if (result.messages?.[0]?.code === '0') {
+        invalidateRecord(LAYOUT, selected.recordId);
+        const fresh = await getRecord(LAYOUT, selected.recordId);
+        setSelected(fresh.response.data[0]);
+      } else {
+        alert(`Could not remove component: ${result.messages?.[0]?.message || 'unknown error'}`);
+      }
+    } finally { setBomBusy(null); }
   }, [selected]);
 
   const f = selected?.fieldData || {};
@@ -573,16 +625,33 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
                     ) : (
                       <div className="v2-table-wrap">
                         <table className="v2-table">
-                          <thead><tr><th>Name</th><th className="num">Qty</th><th className="num">Cost</th><th className="num">Total</th></tr></thead>
+                          <thead><tr><th>Name</th><th className="num">Qty</th><th className="num">Cost</th><th className="num">Total</th><th aria-label="Remove" /></tr></thead>
                           <tbody>
-                            {bom.map((row, i) => (
-                              <tr key={i}>
-                                <td>{row['item_itmli_ITEM__billOfMaterials::Name']}</td>
-                                <td className="num">{row['item_ITMLI__billOfMaterials::Quantity']}</td>
-                                <td className="num">${Number(row['item_itmli_ITEM__billOfMaterials::Cost']||0).toFixed(2)}</td>
-                                <td className="num">${Number(row['item_ITMLI__billOfMaterials::Total']||0).toFixed(2)}</td>
-                              </tr>
-                            ))}
+                            {bom.map((row) => {
+                              const qty = row['item_ITMLI__billOfMaterials::Quantity'];
+                              const busy = bomBusy === row.recordId;
+                              return (
+                                <tr key={row.recordId} className={busy ? 'v2-bom-busy' : ''}>
+                                  <td>{row['item_itmli_ITEM__billOfMaterials::Name']}</td>
+                                  <td className="num">
+                                    <input
+                                      key={`${row.recordId}:${qty}`}
+                                      className="v2-bom-qty"
+                                      type="number" min="1" step="1"
+                                      defaultValue={qty}
+                                      disabled={busy}
+                                      onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { e.currentTarget.value = qty; e.currentTarget.blur(); } }}
+                                      onBlur={e => handleUpdateBomQty(row, e.target.value)}
+                                    />
+                                  </td>
+                                  <td className="num">${Number(row['item_itmli_ITEM__billOfMaterials::Cost']||0).toFixed(2)}</td>
+                                  <td className="num">${Number(row['item_ITMLI__billOfMaterials::Total']||0).toFixed(2)}</td>
+                                  <td className="num">
+                                    <button className="v2-bom-remove" title="Remove component" disabled={busy} onClick={() => handleRemoveBomItem(row)}>✕</button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>

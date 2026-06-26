@@ -9,7 +9,7 @@ const DEFAULT_WIDTH = 196
 
 const ENV_DOT = { development: '#22c55e', staging: '#f59e0b', production: '#ef4444' }
 
-export default function NavRail({ modules, activeId, onSelect, theme, onToggleTheme, onOpenPalette, user, onLogout }) {
+export default function NavRail({ modules, activeId, onSelect, theme, onToggleTheme, onOpenPalette, user, onLogout, badges = {} }) {
   const [width, setWidth] = useState(DEFAULT_WIDTH)
   const [collapsed, setCollapsed] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
@@ -112,6 +112,7 @@ export default function NavRail({ modules, activeId, onSelect, theme, onToggleTh
 
   const navItem = (mod) => {
     const active = mod.id === activeId
+    const badge = badges[mod.id] || 0
     return (
       <button
         key={mod.id}
@@ -135,9 +136,17 @@ export default function NavRail({ modules, activeId, onSelect, theme, onToggleTh
         {active && showLabels && (
           <span style={{ position: 'absolute', left: 3, top: '50%', transform: 'translateY(-50%)', width: 3, height: 16, borderRadius: 2, background: '#e8322a' }} />
         )}
-        <span style={{ fontSize: 18, flexShrink: 0, color: active ? '#e8322a' : 'inherit', width: 18, textAlign: 'center' }}>{mod.icon}</span>
+        <span style={{ position: 'relative', fontSize: 18, flexShrink: 0, color: active ? '#e8322a' : 'inherit', width: 18, textAlign: 'center' }}>
+          {mod.icon}
+          {badge > 0 && !showLabels && (
+            <span style={{ position: 'absolute', top: -3, right: -4, width: 8, height: 8, borderRadius: '50%', background: '#e8322a', border: `1.5px solid ${active ? c.activeBg : c.bg}` }} />
+          )}
+        </span>
         {showLabels && (
-          <span style={{ fontSize: 14, fontWeight: active ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis' }}>{mod.label}</span>
+          <span style={{ fontSize: 14, fontWeight: active ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{mod.label}</span>
+        )}
+        {showLabels && badge > 0 && (
+          <span style={{ flexShrink: 0, minWidth: 18, height: 18, padding: '0 5px', boxSizing: 'border-box', borderRadius: 9, background: '#e8322a', color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{badge > 99 ? '99+' : badge}</span>
         )}
       </button>
     )

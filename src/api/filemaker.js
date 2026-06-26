@@ -493,6 +493,41 @@ export async function updateRecord(layout, recordId, fieldData) {
   return res.json();
 }
 
+// Update fields on an existing portal row (e.g. change a BOM line quantity).
+// rowRecordId is the portal row's own recordId from portalData.
+export async function updatePortalRow(layout, recordId, portalName, rowRecordId, rowData) {
+  const token = await getToken({ write: true });
+  const env = getCurrentEnv();
+  const res = await fetch(
+    `${getBasePath()}/fmi/data/v2/databases/${env.db}/layouts/${encodeURIComponent(layout)}/records/${recordId}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ portalData: { [portalName]: [{ recordId: String(rowRecordId), ...rowData }] } }),
+    }
+  );
+  if (res.status === 401) { invalidateWriteAuth(); return updatePortalRow(layout, recordId, portalName, rowRecordId, rowData); }
+  return res.json();
+}
+
+// Delete a related/portal row by its record id. `tableOccurrence` is the related
+// table-occurrence name (the part before "::" in the portal's field keys), NOT
+// the portal object name.
+export async function deletePortalRow(layout, recordId, tableOccurrence, rowRecordId) {
+  const token = await getToken({ write: true });
+  const env = getCurrentEnv();
+  const res = await fetch(
+    `${getBasePath()}/fmi/data/v2/databases/${env.db}/layouts/${encodeURIComponent(layout)}/records/${recordId}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ fieldData: { deleteRelated: `${tableOccurrence}.${rowRecordId}` } }),
+    }
+  );
+  if (res.status === 401) { invalidateWriteAuth(); return deletePortalRow(layout, recordId, tableOccurrence, rowRecordId); }
+  return res.json();
+}
+
 export async function deleteRecord(layout, recordId) {
   const token = await getToken({ write: true });
   const env = getCurrentEnv();

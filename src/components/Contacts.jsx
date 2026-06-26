@@ -4,6 +4,7 @@ import { useAllRecords } from '../hooks/useAllRecords';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
 import RecordFormModal from './RecordFormModal';
 import ComposeEmail from './ComposeEmail';
+import ReminderModal from './ReminderModal';
 import './Contacts.css';
 
 const LAYOUT = 'Contacts_New';
@@ -202,6 +203,7 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
   const [showNew, setShowNew] = useState(false);
   const [addMethod, setAddMethod] = useState(null); // 'phone' | 'email' | 'address'
   const [composeOpen, setComposeOpen] = useState(false);
+  const [remindOpen, setRemindOpen] = useState(false);
   const isResizing = useRef(false);
 
   // Add a phone/email/address row to the selected contact, then refresh detail.
@@ -412,6 +414,7 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
                 {saveStatus === 'saved' && <span className="ct-status saved">✓ Saved</span>}
                 {saveStatus === 'error' && <span className="ct-status error">✗ Failed</span>}
                 {!dataEditing && <button className="ct-btn-email" onClick={() => setComposeOpen(true)}>✉ Email</button>}
+                {!dataEditing && <button className="ct-btn-email" onClick={() => setRemindOpen(true)}>⏰ Remind</button>}
                 {!dataEditing ? (
                   <button className="ct-btn-edit" onClick={() => setDataEditing(true)}>✎ Edit</button>
                 ) : (
@@ -566,6 +569,18 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
             subject: `High 5 Adventure — ${f?.zz__Display__ct || f?.Name_Organization || ''}`.trim(),
           }}
           onClose={() => setComposeOpen(false)}
+        />
+      )}
+
+      {remindOpen && selected && (
+        <ReminderModal
+          initial={{
+            recordType: 'contacts',
+            recordId: String(selected.recordId),
+            recordLabel: f?.zz__Display__ct || f?.Name_Organization || '',
+            title: `Follow up with ${f?.zz__Display__ct || f?.Name_Organization || 'contact'}`,
+          }}
+          onClose={() => setRemindOpen(false)}
         />
       )}
     </div>
