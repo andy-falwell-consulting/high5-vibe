@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { getRecord, updateRecord, addPortalRow, updatePortalRow, deletePortalRow, containerImageUrl, createRecord } from '../api/filemaker';
+import { getRecord, updateRecord, updatePortalRow, deletePortalRow, invalidateRecord, containerImageUrl, createRecord } from '../api/filemaker';
 import { getCurrentEnv } from '../config/fmpEnvironments';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
 import BomPickerModal from './BomPickerModal';
@@ -345,12 +345,24 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
     } finally { setUploadingImage(false); }
   };
 
+  // Add a BOM component by creating a line-item record linking the parent
+  // assembly and the component item via their foreign keys. (Writing the
+  // component Name through the portal relationship fails — a new line has no
+  // related item yet — which is why the old portal-add returned error 101.)
   const handleAddBomItem = useCallback(async ({ item, quantity }) => {
-    const result = await addPortalRow(LAYOUT, selected.recordId, 'Portal__Bill_of_Materials 4', {
-      'item_itmli_ITEM__billOfMaterials::Name': item.fieldData.Name,
-      'item_ITMLI__billOfMaterials::Quantity': quantity,
+    const parentItemId = selected?.fieldData?._kpt__Item_ID;
+    const componentItemId = item?.fieldData?._kpt__Item_ID;
+    if (!parentItemId || !componentItemId) {
+      alert('Could not add component: missing item ID.');
+      return;
+    }
+    const result = await createRecord('Item_ITMLI_billOfMaterials', {
+      '_kft__Item_ID__parent': parentItemId,
+      '_kft__Item_ID__assemblyLine': componentItemId,
+      'Quantity': Number(quantity),
     });
     if (result.messages?.[0]?.code === '0') {
+      invalidateRecord(LAYOUT, selected.recordId); // new line-item won't bust parent cache
       const fresh = await getRecord(LAYOUT, selected.recordId);
       setSelected(fresh.response.data[0]);
       setShowBomPicker(false);
@@ -370,6 +382,7 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
         'item_ITMLI__billOfMaterials::Quantity': q,
       });
       if (result.messages?.[0]?.code === '0') {
+        invalidateRecord(LAYOUT, selected.recordId);
         const fresh = await getRecord(LAYOUT, selected.recordId);
         setSelected(fresh.response.data[0]);
       } else {
@@ -386,6 +399,7 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
     try {
       const result = await deletePortalRow(LAYOUT, selected.recordId, 'item_ITMLI__billOfMaterials', row.recordId);
       if (result.messages?.[0]?.code === '0') {
+        invalidateRecord(LAYOUT, selected.recordId);
         const fresh = await getRecord(LAYOUT, selected.recordId);
         setSelected(fresh.response.data[0]);
       } else {
