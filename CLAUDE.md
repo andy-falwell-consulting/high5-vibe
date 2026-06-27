@@ -22,11 +22,25 @@ src/
 
 ## Release workflow
 
-1. Bump `package.json` `version` before every commit that goes to `main`.
-2. Commit message format: `v1.0.X — short description`
-3. After push: `git tag v1.0.X && git push origin v1.0.X`
-4. PR title must include the version: `v1.0.X — short description`
-5. Branches: `main` = production, `new-ui` = staging/dev. PRs go `new-ui → main`.
+**Trunk-based.** `main` is the only permanent branch and is production
+(`db-livid.vercel.app`). Everything else is a short-lived feature branch that
+gets a Vercel **Preview** URL on push, then is squash-merged to `main` and
+deleted. No permanent staging branch — so there is no squash-divergence to
+realign (the `git reset --hard` dance is gone).
+
+Per change:
+
+1. `git checkout main && git pull` then `git checkout -b feat/<short-name>`.
+2. Bump `package.json` `version`. Commit format: `v1.0.X — short description`.
+3. Push the branch → Vercel auto-builds a **Preview** (unique URL + stable
+   `…-git-feat-<short-name>-…vercel.app` alias). Test it there.
+4. Like it? Open a PR (`feat/... → main`), title `v1.0.X — short description`,
+   **squash-merge**, then **delete the branch**. Don't like it? Just delete it.
+5. Merge to `main` deploys production. The auto-tag workflow tags `v1.0.X`
+   (`.github/workflows/auto-tag.yml`) — no manual `git tag` needed.
+
+Note: the old `high5-new-ui.vercel.app` URL is an orphan not attached to this
+project — it never updates. Production is `db-livid.vercel.app`.
 
 ---
 
