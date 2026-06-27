@@ -80,6 +80,8 @@ export async function runSync(db, key, budgetMs = 260000) {
       await redis.hset(rk(db, layout, 'recs'), entries);
       meta.cursor += data.length;
       meta.count += data.length;
+      // Persist progress every page so a killed slice resumes instead of restarting.
+      await redis.set(rk(db, layout, 'meta'), meta);
       if (meta.count >= meta.total) { meta.phase = 'idle'; break; }
     }
   } else {
@@ -117,15 +119,22 @@ export async function runSync(db, key, budgetMs = 260000) {
   return meta;
 }
 
-// Read the whole replicated set for the app. Returns { records, meta }.
-export async function readReplica(db, key) {
+// Cursor-paged read (HSCAN) so each HTTP response stays well under Vercel's
+// ~4.5MB body limit. Client starts at cursor '0' and loops until '0' returns.
+export async function scanReplica(db, key, cursor = '0', count = 1500) {
   const cfg = REPLICATED[key];
   if (!cfg) throw new Error('layout not replicated: ' + key);
-  const { layout } = cfg;
-  const [hash, meta] = await Promise.all([
-    redis.hgetall(rk(db, layout, 'recs')),
-    redis.get(rk(db, layout, 'meta')),
-  ]);
-  const records = hash ? Object.values(hash).map(v => (typeof v === 'string' ? JSON.parse(v) : v)) : [];
-  return { records, meta: meta || null };
+  const [next, flat] = await redis.hscan(rk(db, cfg.layout, 'recs'), cursor, { count });
+  const records = [];
+  for (let i = 1; i < flat.length; i += 2) {
+    const v = flat[i];
+    records.push(typeof v === 'string' ? JSON.parse(v) : v);
+  }
+  return { cursor: String(next), records };
+}
+
+export async function getMetaPublic(db, key) {
+  const cfg = REPLICATED[key];
+  if (!cfg) return null;
+  return (await redis.get(rk(db, cfg.layout, 'meta'))) || null;
 }
