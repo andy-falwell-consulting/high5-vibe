@@ -1,15 +1,20 @@
 name: Acceptance (post-deploy)
 
-# After Vercel finishes a PRODUCTION deploy, GitHub emits a deployment_status
-# event. We launch a Claude cloud agent that runs the acceptance checklist
-# (.github/acceptance-checklist.md) against the freshly-deployed URL and reports
-# PASS/FAIL in the job summary + logs.
+# claude-code-action only supports automation events: workflow_dispatch,
+# schedule, repository_dispatch, workflow_run (NOT push or deployment_status).
+# So we chain off the auto-tag workflow, which runs on every versioned push to
+# main (package.json bump). When it completes on main, we launch a Claude cloud
+# agent that waits for the new build to go live on the production URL, then runs
+# the acceptance checklist and reports PASS/FAIL in the job summary.
 #
+# Also runnable on demand via the Actions "Run workflow" button.
 # Requires repo secret: ANTHROPIC_API_KEY.
-# (Optional later: a stored test session secret to enable logged-in UI checks.)
 
 on:
-  deployment_status:
+  workflow_run:
+    workflows: ["Auto-tag on version bump"]
+    types: [completed]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -17,10 +22,11 @@ permissions:
 
 jobs:
   acceptance:
-    # Only on a successful PRODUCTION deploy — skip previews and pending/failed.
+    # Manual runs always; chained runs only for successful main builds.
     if: >
-      github.event.deployment_status.state == 'success' &&
-      github.event.deployment_status.environment == 'Production'
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,13 +37,20 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
             You are running post-deploy acceptance for the Belay app.
-            BASE_URL = ${{ github.event.deployment_status.environment_url || 'https://db-livid.vercel.app' }}
+            BASE_URL = https://db-livid.vercel.app
 
-            Read .github/acceptance-checklist.md and execute every check in it
-            against BASE_URL using curl + python3. Then print the PASS/FAIL
-            summary table and append it to $GITHUB_STEP_SUMMARY, ending with
-            the single ACCEPTANCE: PASS / FAIL line.
+            First, WAIT FOR THE DEPLOY: read the version from package.json (Read
+            tool), then poll BASE_URL every ~15s (curl the page, fetch the main
+            /assets/index-*.js, check it contains that version) until the live
+            build matches, up to 6 minutes. If it never matches, note it and
+            continue with the checks anyway.
+
+            Then read .github/acceptance-checklist.md and execute every check in
+            it against BASE_URL using curl + python3. Print the PASS/FAIL summary
+            table, append it to $GITHUB_STEP_SUMMARY (write the file path in that
+            env var with python3), and end with the single
+            ACCEPTANCE: PASS / FAIL line.
           claude_args: |
             --allowedTools "Bash(curl),Bash(python3),Read"
-            --max-turns 20
+            --max-turns 25
             --model claude-sonnet-4-6
