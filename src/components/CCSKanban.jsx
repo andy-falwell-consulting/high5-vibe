@@ -36,7 +36,7 @@ function matchesSearch(r, q) {
   const haystack = [
     f.zz__Display_Organization__ct,
     f.zz__Display_Contact__ct,
-    f['Type of Project'],
+    f['Type of Project(1)'],
     f['Lead Builder'], f.Builder1, f.Builder2, f.Builder3,
     f['Work Order'],
   ].filter(Boolean).join(' ').toLowerCase()
@@ -53,8 +53,8 @@ function KanbanCardView({ record, saving, dimmed }) {
         <div className="kb-card-contact">{f.zz__Display_Contact__ct}</div>
       )}
       <div className="kb-card-meta">
-        {f['Type of Project'] && (
-          <span className="kb-card-type">{f['Type of Project']}</span>
+        {f['Type of Project(1)'] && (
+          <span className="kb-card-type">{f['Type of Project(1)']}</span>
         )}
         {f['rcd start date'] && (
           <span className="kb-card-date">{f['rcd start date']}</span>
@@ -126,8 +126,8 @@ function KanbanDetail({ record, onClose, currentStatus, onNavigateTo }) {
         )}
 
         <div className="kb-detail-badges">
-          {f['Type of Project'] && (
-            <span className="kb-detail-badge">{f['Type of Project']}</span>
+          {f['Type of Project(1)'] && (
+            <span className="kb-detail-badge">{f['Type of Project(1)']}</span>
           )}
           {f['rcd start date'] && (
             <span className="kb-detail-badge kb-detail-badge--date">{f['rcd start date']}</span>
@@ -315,8 +315,9 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
     return localStatusRef.current[r.recordId] ?? r.fieldData.kanban_status
   }, [])
 
-  // Filter to only kanban records, then by active status
-  const kanbanRecords = displayRecords.filter(r => String(r.fieldData.add_to_kanban) === '1')
+  // Filter to only kanban records, then by active status. RCD_New has no
+  // add_to_kanban flag, so board membership = has a kanban_status.
+  const kanbanRecords = displayRecords.filter(r => !!String(r.fieldData.kanban_status || '').trim())
   const active = kanbanRecords.filter(r => ACTIVE_STATUSES.has(getStatus(r)))
 
   const byColumn = {}

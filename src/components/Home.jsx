@@ -40,7 +40,7 @@ export default function Home({ onOpen, onGoto, onOpenView, onOpenPalette }) {
     let alive = true, tries = 0
     const load = async () => {
       const [proj, cont, insp, prod] = await Promise.all([
-        readCacheAsync('RCD_app', RCD_CACHE_VERSION),
+        readCacheAsync('RCD_New', RCD_CACHE_VERSION),
         readCacheAsync('Contacts_New', 2),
         readCacheAsync('Inspections_New', 1),
         readCacheAsync('Products & Services_New', 4),
@@ -132,7 +132,7 @@ export default function Home({ onOpen, onGoto, onOpenView, onOpenPalette }) {
                       <span className="home-dot" style={{ background: c }} />
                       <span className="home-row-main">
                         <span className="home-row-title">{p.fieldData.zz__Display_Organization__ct || '—'}</span>
-                        <span className="home-row-sub">{p.fieldData['Type of Project'] || p.fieldData.kanban_status || ''}</span>
+                        <span className="home-row-sub">{p.fieldData['Type of Project(1)'] || p.fieldData.kanban_status || ''}</span>
                       </span>
                       <span className="home-row-meta">
                         <span className="home-row-date">{fmtDate(p.fieldData['rcd start date'])}</span>

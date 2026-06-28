@@ -25,7 +25,7 @@ const MODULES = {
     keyFields: ['zz__Display__ct', 'cntct_ADDR::zz__Display_Single_Line__ct', 'Type', 'Status', 'NameFirstLast', 'Name_Organization'],
   },
   projects: {
-    layout: 'RCD_app',
+    layout: 'RCD_New',
     keyFields: ['_kpt__RCD_ID', 'zz__Display_Organization__ct', 'zz__Display_Contact__ct', 'Status', 'kanban_status', 'rcd start date', 'rcd end date', 'Work Order'],
   },
   products: {

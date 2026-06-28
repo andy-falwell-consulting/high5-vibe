@@ -407,6 +407,7 @@ const REPLICA_LAYOUTS = {
   'Inspections_New': 'inspections',
   'trainings_New': 'trainings',
   'RMI_New': 'rmi',
+  'RCD_New': 'projects',
   'OELookup_New': 'oelookup',
   'Products & Services_New': 'products',
 };

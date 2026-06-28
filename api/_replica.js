@@ -26,6 +26,7 @@ export const REPLICATED = {
   inspections: { layout: 'Inspections_New',         modField: 'zz__Modified_On' },
   trainings:   { layout: 'trainings_New',           modField: 'zz__Modified_On' },
   rmi:         { layout: 'RMI_New',                 modField: 'zz__Modified_On' },
+  projects:    { layout: 'RCD_New',                 modField: 'zz__Modified_On' },
   oelookup:    { layout: 'OELookup_New',            snapshot: true, refreshMs: 6 * 3600 * 1000 },
   products:    { layout: 'Products & Services_New', snapshot: true, refreshMs: 6 * 3600 * 1000 },
 };

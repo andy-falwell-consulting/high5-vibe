@@ -344,7 +344,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
               <div className="cv2-hero">
                 <div className="cv2-hero-top">
                   <div className="cv2-hero-id">
-                    <div className="cv2-hero-type">{val('Type of Project') || 'Project'}</div>
+                    <div className="cv2-hero-type">{val('Type of Project(1)') || 'Project'}</div>
                     <h1 className="cv2-hero-org">{org}</h1>
                     <div className="cv2-hero-contact">
                       {f.zz__Display_Contact__ct && <><span className="cv2-ic">◉</span>{f.zz__Display_Contact__ct}</>}
@@ -365,7 +365,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                     <span className="cv2-pipe-stage">
                       {pipelineIdx >= 0
                         ? <><b style={{ color: '#993c1d' }}>Stage {pipelineIdx + 1} of {PIPELINE.length}</b> · {PIPELINE_SHORT[pipelineIdx]}</>
-                        : <button className="cv2-link-btn" onClick={() => { stage('kanban_status', PIPELINE[0]); stage('add_to_kanban', 1); }}>+ Add to pipeline</button>}
+                        : <button className="cv2-link-btn" onClick={() => { stage('kanban_status', PIPELINE[0]); }}>+ Add to pipeline</button>}
                     </span>
                   </div>
                   <div className="cv2-pipe">
@@ -477,7 +477,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                   <div className="cv2-card">
                     <div className="cv2-card-head"><span>Details</span></div>
                     <div className="cv2-detail-grid">
-                      <label>Project type</label><InlineSelect value={val('Type of Project')} options={PROJECT_TYPES} onChange={v => stage('Type of Project', v)} />
+                      <label>Project type</label><InlineSelect value={val('Type of Project(1)')} options={PROJECT_TYPES} onChange={v => stage('Type of Project(1)', v)} />
                       <label>Start date</label><InlineDate value={val('rcd start date')} onChange={v => stage('rcd start date', v)} />
                       <label>End date</label><InlineDate value={val('rcd end date')} onChange={v => stage('rcd end date', v)} />
                       <label>Stage</label><InlineSelect value={val('kanban_status')} options={PIPELINE} onChange={v => stage('kanban_status', v)} />
@@ -553,7 +553,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                 </div>
               )}
 
-              <AttachmentsPanel parentId={f._kpt__RCD_ID} api={CCS_ATT_API} invoiceDocNumber={f._kat__QuickBooks_Invoice_ID} />
+              <AttachmentsPanel parentId={f._kpt__RCD_ID} api={CCS_ATT_API} invoiceDocNumber={f['_kat__QuickBooks_Invoice_ID(1)']} />
 
               <div className="cv2-meta">
                 ID {f._kpt__RCD_ID} · Record {selected.recordId} · Created {f.zz__Created_On?.split(' ')[0] || '—'} by {f.zz__Created_By} · Modified {f.zz__Modified_On?.split(' ')[0] || '—'} by {f.zz__Modified_By}

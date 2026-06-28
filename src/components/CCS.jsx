@@ -37,7 +37,7 @@ const fmt = v => v || '—';
 const DEFAULT_PRIMARY_SECTIONS = [
   { id: 'contact',    title: 'Contact',        icon: '◉', type: 'contact' },
   { id: 'financial',  title: 'Financial',      icon: '$', type: 'financial' },
-  { id: 'project',    title: 'Project',        icon: '◈', fields: ['kanban_status','Type of Project','Status','rcd start date','rcd end date','Report Date Sent','Confirmed','add_to_kanban'] },
+  { id: 'project',    title: 'Project',        icon: '◈', fields: ['kanban_status','Type of Project(1)','Status','rcd start date','rcd end date','Report Date Sent','Confirmed'] },
   { id: 'team',       title: 'Team',           icon: '⊞', fields: ['Lead Builder','Builder1','Builder2','Builder3'] },
   { id: 'work_notes', title: 'Work & Notes',   icon: '✎', fields: ['Work Order','Notes'] },
 ];
@@ -50,7 +50,7 @@ const DEFAULT_CHECKLIST_SECTIONS = [
 ];
 
 const FIELD_LABELS = {
-  'Type of Project': 'Project Type', Status: 'Status',
+  'Type of Project(1)': 'Project Type', Status: 'Status',
   'rcd start date': 'Start Date', 'rcd end date': 'End Date',
   'Report Date Sent': 'Inspection Report Sent', Confirmed: 'Confirmed',
   'Lead Builder': 'Lead Builder', Builder1: 'Builder 1', Builder2: 'Builder 2', Builder3: 'Builder 3',
@@ -60,7 +60,7 @@ const FIELD_LABELS = {
 };
 
 const FIELD_CONFIG = {
-  'Type of Project':      { options: PROJECT_TYPES },
+  'Type of Project(1)':      { options: PROJECT_TYPES },
   Status:                 { options: STATUS_OPTIONS, special: 'status' },
   'rcd start date':       { type: 'date' },
   'rcd end date':         { type: 'date' },
@@ -228,7 +228,7 @@ function SectionContent({ section, f, editMode, onFieldReorder, edits, onChange,
         <div className="ccs-fin-row"><span className="ccs-fin-label">Deposit Inv.</span><span className="ccs-fin-val" /><span className="ccs-fin-recv">Received</span>{finField('cd_Received Deposit','','checkbox')}</div>
         <div className="ccs-fin-row"><span className="ccs-fin-label">PO #</span><span className="ccs-fin-val">{finField('po_number')}</span><span className="ccs-fin-recv">Received</span>{finField('cd_Received PO','','checkbox')}</div>
         <div className="ccs-fin-row"><span className="ccs-fin-label">Final Inv.</span><span className="ccs-fin-val">{finField('Final Sent','Sent','date')}</span><span className="ccs-fin-recv">Received</span>{finField('Final_Invoice_Received','','checkbox')}</div>
-        <div className="ccs-fin-row"><span className="ccs-fin-label">Invoice #</span><span className="ccs-fin-val">{finField('_kat__QuickBooks_Invoice_ID')}</span></div>
+        <div className="ccs-fin-row"><span className="ccs-fin-label">Invoice #</span><span className="ccs-fin-val">{finField('_kat__QuickBooks_Invoice_ID(1)')}</span></div>
       </div>
     );
   }
@@ -344,7 +344,7 @@ export default function CCS({ navTarget, onNavigateTo, onClearNav }) {
     records,
     storageKey: 'ccs_sort',
     name: f => f.zz__Display_Organization__ct || '',
-    searchKeys: ['zz__Display_Organization__ct', 'zz__Display_Contact__ct', 'Status', 'Type of Project', 'Work Order'],
+    searchKeys: ['zz__Display_Organization__ct', 'zz__Display_Contact__ct', 'Status', 'Type of Project(1)', 'Work Order'],
     chips: [
       { id: 'all', label: 'All' },
       { id: 'active', label: 'Active', color: '#3b82f6', match: f => projStatus(f.Status) === 'active' },
@@ -440,7 +440,7 @@ export default function CCS({ navTarget, onNavigateTo, onClearNav }) {
                     <span className="ccs-list-status" style={{ color: sc, borderColor: sc+'44', background: sc+'18' }}>{rf.Status}</span>
                   )}
                 </div>
-                {rf['Type of Project'] && <div className="ccs-list-type">{rf['Type of Project']}</div>}
+                {rf['Type of Project(1)'] && <div className="ccs-list-type">{rf['Type of Project(1)']}</div>}
                 {rf['rcd start date'] && <div className="ccs-list-date">{fmtDate(rf['rcd start date'])}</div>}
               </div>
             );
