@@ -1,0 +1,43 @@
+name: Acceptance (post-deploy)
+
+# After Vercel finishes a PRODUCTION deploy, GitHub emits a deployment_status
+# event. We launch a Claude cloud agent that runs the acceptance checklist
+# (.github/acceptance-checklist.md) against the freshly-deployed URL and reports
+# PASS/FAIL in the job summary + logs.
+#
+# Requires repo secret: ANTHROPIC_API_KEY.
+# (Optional later: a stored test session secret to enable logged-in UI checks.)
+
+on:
+  deployment_status:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  acceptance:
+    # Only on a successful PRODUCTION deploy — skip previews and pending/failed.
+    if: >
+      github.event.deployment_status.state == 'success' &&
+      github.event.deployment_status.environment == 'Production'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run acceptance checklist with Claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            You are running post-deploy acceptance for the Belay app.
+            BASE_URL = ${{ github.event.deployment_status.environment_url || 'https://db-livid.vercel.app' }}
+
+            Read .github/acceptance-checklist.md and execute every check in it
+            against BASE_URL using curl + python3. Then print the PASS/FAIL
+            summary table and append it to $GITHUB_STEP_SUMMARY, ending with
+            the single ACCEPTANCE: PASS / FAIL line.
+          claude_args: |
+            --allowedTools "Bash(curl),Bash(python3),Read"
+            --max-turns 20
+            --model claude-sonnet-4-6
