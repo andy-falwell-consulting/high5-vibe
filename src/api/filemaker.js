@@ -439,6 +439,36 @@ async function fetchFromReplica(layout, findQuery, onProgress) {
   }
 }
 
+// Push the current cached records for a layout/version to any live subscribers
+// (the useAllRecords hook), so a background refresh updates the list on screen.
+function notifySubscribers(mk) {
+  const subs = cacheSubscribers.get(mk);
+  if (subs?.size && memCache[mk]) {
+    const { records, total } = memCache[mk];
+    subs.forEach(cb => cb(records, total));
+  }
+}
+
+// Stale-while-revalidate for replica-backed layouts: after serving the cached
+// snapshot, quietly re-pull from the fast Redis replica and update the cache +
+// list. Cheap now that replica reads are ~1-6s (vs the slow FileMaker pagination
+// that LAZY_REFRESH was protecting against). Deduped so concurrent callers/
+// re-renders trigger at most one refresh in flight per layout/version.
+const revalidating = new Set();
+async function revalidateFromReplica(layout, cacheVersion) {
+  const mk = memKey(layout, cacheVersion);
+  if (revalidating.has(mk)) return;
+  revalidating.add(mk);
+  try {
+    const repl = await fetchFromReplica(layout, null);
+    if (repl) {
+      await writeCache(layout, repl.records, repl.total, true, cacheVersion);
+      notifySubscribers(mk);
+    }
+  } catch { /* ignore — keep serving cache */ }
+  finally { revalidating.delete(mk); }
+}
+
 export async function getAllRecords(layout, { onProgress, batchSize = 100, slimForStorage, cacheVersion, findQuery, sort } = {}) {
   const cached = await readCacheAsync(layout, cacheVersion);
 
@@ -449,9 +479,15 @@ export async function getAllRecords(layout, { onProgress, batchSize = 100, slimF
 
   if (cached) {
     if (onProgress) onProgress({ records: cached.records, total: cached.total, done: true });
-    // Lazy mode: show the cache and let hover/click refresh individual records,
-    // rather than re-fetching everything (which starves interactive calls).
-    if (!LAZY_REFRESH) fetchAllFromServer(layout, { batchSize, cacheVersion, findQuery, sort }).catch(() => {});
+    // Serve the cache instantly, then refresh in the background so separate
+    // browsers/tabs converge within seconds instead of waiting out the cache TTL.
+    if (REPLICA_LAYOUTS[layout] && !findQuery) {
+      revalidateFromReplica(layout, cacheVersion); // fast replica re-pull (stale-while-revalidate)
+    } else if (!LAZY_REFRESH) {
+      // Non-replica layouts stay lazy — a full FileMaker re-fetch is slow and
+      // would starve interactive calls.
+      fetchAllFromServer(layout, { batchSize, cacheVersion, findQuery, sort }).catch(() => {});
+    }
     return cached;
   }
 
