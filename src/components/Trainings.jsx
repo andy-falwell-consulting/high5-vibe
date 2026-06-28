@@ -225,7 +225,7 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
               return (
                 <div key={r.recordId}
                   className={`trn-list-item ${selected?.recordId === r.recordId ? 'active' : ''}`}
-                  onClick={() => { handleSelect(r); onRecordSelect?.(r.recordId); }}
+                  onClick={() => { handleSelect(r); onRecordSelect?.(r.recordId, r.fieldData?.zz__Display_Organization__ct); }}
                   // onMouseEnter={() => prefetchRecord(LAYOUT, r.recordId)}
                 >
                   <span className="trn-item-dot" style={{ background: color }} />

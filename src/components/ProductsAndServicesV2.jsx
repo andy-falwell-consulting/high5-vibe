@@ -521,7 +521,7 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
               return (
                 <div key={r.recordId}
                   className={`v2-list-item ${selected?.recordId === r.recordId ? 'active' : ''}`}
-                  onClick={() => { handleSelect(r); onRecordSelect?.(r.recordId); }}
+                  onClick={() => { handleSelect(r); onRecordSelect?.(r.recordId, r.fieldData?.Name); }}
                 >
                   <div className="v2-item-dot" style={{ background: color }} />
                   <div className="v2-item-text">

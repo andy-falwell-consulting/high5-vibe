@@ -226,7 +226,7 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
     if (!newId) throw new Error(res?.messages?.[0]?.message || 'Could not create the contact');
     getRecord(LAYOUT, newId).then(d => {
       const rec = d?.response?.data?.[0];
-      if (rec) { addCachedRecord(LAYOUT, CACHE_VERSION, rec); handleSelect(rec); onRecordSelect?.(rec.recordId); }
+      if (rec) { addCachedRecord(LAYOUT, CACHE_VERSION, rec); handleSelect(rec); onRecordSelect?.(rec.recordId, rec.fieldData?.zz__Display__ct); }
     }).catch(() => {});
   }
 
@@ -349,7 +349,7 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
               return (
                 <div key={r.recordId}
                   className={`ct-list-item ${selected?.recordId === r.recordId ? 'active' : ''}`}
-                  onClick={() => { handleSelect(r); onRecordSelect?.(r.recordId); }}
+                  onClick={() => { handleSelect(r); onRecordSelect?.(r.recordId, r.fieldData?.zz__Display__ct); }}
                   onMouseEnter={e => {
                     const rect = e.currentTarget.getBoundingClientRect();
                     setTooltip({ r, x: rect.right + 8, y: rect.top });

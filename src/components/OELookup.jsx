@@ -119,7 +119,7 @@ export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {})
           <ListBody c={controls} renderItem={r => (
             <div key={r.recordId}
               className={`oe-list-item ${selected?.recordId === r.recordId ? 'active' : ''}`}
-              onClick={() => { handleSelect(r); onRecordSelect?.(r.recordId); }}>
+              onClick={() => { handleSelect(r); onRecordSelect?.(r.recordId, r.fieldData?.['Program Type']); }}>
               <div className="oe-item-dot" style={{ background: TYPE_COLOR[r.fieldData?.['Open Enrollment or Custom']] ?? '#4a5568' }} />
               <div className="oe-item-text">
                 <div className="oe-item-name">{r.fieldData?.['Program Type'] || '—'}</div>

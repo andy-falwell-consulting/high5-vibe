@@ -309,7 +309,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
             const d = daysUntil(rf['rcd start date']);
             return (
               <div key={r.recordId} className={`cv2-list-item${selected?.recordId === r.recordId ? ' active' : ''}`}
-                onClick={() => { handleSelect(r); onRecordSelect?.(r.recordId); }} /* onMouseEnter={() => prefetchRecord(LAYOUT, r.recordId)} */>
+                onClick={() => { handleSelect(r); onRecordSelect?.(r.recordId, r.fieldData?.zz__Display_Organization__ct); }} /* onMouseEnter={() => prefetchRecord(LAYOUT, r.recordId)} */>
                 <span className="cv2-list-dot" style={{ background: c }} />
                 <div className="cv2-list-body">
                   <div className="cv2-list-org">{rf.zz__Display_Organization__ct || '—'}</div>

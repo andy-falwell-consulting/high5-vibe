@@ -177,7 +177,7 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
             return (
               <div key={r.recordId}
                 className={`est-list-item ${selected?.recordId === r.recordId ? 'active' : ''}`}
-                onClick={() => { handleSelect(r); onRecordSelect?.(r.recordId) }}>
+                onClick={() => { handleSelect(r); onRecordSelect?.(r.recordId, r.fieldData?.zz__Display_Contact__ct) }}>
                 <div className="est-item-dot" style={{ background: color }} />
                 <div className="est-item-text">
                   <div className="est-item-name">{fd.zz__Display_Contact__ct || fd.Title || '—'}</div>

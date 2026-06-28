@@ -59,13 +59,18 @@ export default function App() {
   const [user, setUser] = useState(null)
   const [authChecked, setAuthChecked] = useState(false)
   const [reminderDue, setReminderDue] = useState(0)
+  // Display name of the open record, so the tab reads e.g. "SUNY Potsdam · Belay"
+  // (set when a record is picked from a list; cleared on any navigation).
+  const [recordTitle, setRecordTitle] = useState(null)
 
-  // Browser-tab title reflects the active module, so multiple open tabs are
-  // distinguishable (e.g. "Inspections · Belay"). Home keeps the brand title.
+  // Browser-tab title reflects where you are, so multiple open tabs are
+  // distinguishable: a record name when one is open, else the module label,
+  // else the brand title on Home.
   useEffect(() => {
     const label = MODULES.find(m => m.id === activeModule)?.label
-    document.title = label && activeModule !== 'home' ? `${label} · Belay` : 'Belay — High 5 Ops'
-  }, [activeModule])
+    const base = recordTitle || (activeModule !== 'home' ? label : null)
+    document.title = base ? `${base} · Belay` : 'Belay — High 5 Ops'
+  }, [activeModule, recordTitle])
 
   // Auth check — /api/me returns 401 if not logged in, 404 in local dev (pass through)
   useEffect(() => {
@@ -151,6 +156,7 @@ export default function App() {
       setActiveModule(moduleId)
       setVisited(v => { const n = new Set(v); n.add(moduleId); return n })
       setNavTarget(recordId ? { moduleId, recordId } : null)
+      setRecordTitle(null) // name unknown on back/forward — fall back to module label
     }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
@@ -162,16 +168,18 @@ export default function App() {
   }
 
   function makeRecordSelectHandler(moduleId) {
-    return (recordId) => pushHash(moduleId, recordId)
+    return (recordId, name) => { setRecordTitle(name || null); pushHash(moduleId, recordId) }
   }
 
   function handleSelect(id) {
+    setRecordTitle(null)
     pushHash(id, null)
     setActiveModule(id)
     setVisited(v => { const n = new Set(v); n.add(id); return n })
   }
 
   function navigateTo(moduleId, recordId, view) {
+    setRecordTitle(null)
     pushHash(moduleId, recordId)
     setNavTarget({ moduleId, recordId, view })
     setActiveModule(moduleId)

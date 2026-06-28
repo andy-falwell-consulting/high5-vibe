@@ -208,7 +208,7 @@ export default function RMI({ navTarget, onClearNav, onRecordSelect } = {}) {
       if (rec) {
         addCachedRecord(LAYOUT, CACHE_VERSION, rec)
         handleSelect(rec)
-        onRecordSelect?.(rec.recordId)
+        onRecordSelect?.(rec.recordId, orgName(rec.fieldData))
       }
     }).catch(() => {})
   }
@@ -266,7 +266,7 @@ export default function RMI({ navTarget, onClearNav, onRecordSelect } = {}) {
               return (
                 <div key={r.recordId}
                   className={`rmi-list-item ${selected?.recordId === r.recordId ? 'active' : ''}`}
-                  onClick={() => { handleSelect(r); onRecordSelect?.(r.recordId) }}>
+                  onClick={() => { handleSelect(r); onRecordSelect?.(r.recordId, orgName(r.fieldData)) }}>
                   <span className="rmi-item-dot" style={{ background: color }} />
                   <div className="rmi-item-text">
                     <div className="rmi-item-name">{orgName(fd) || '—'}</div>

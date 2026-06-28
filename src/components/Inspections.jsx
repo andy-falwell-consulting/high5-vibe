@@ -220,7 +220,7 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
     if (!newId) throw new Error(res?.messages?.[0]?.message || 'Could not create the record');
     getRecord(LAYOUT, newId).then(d => {
       const rec = d?.response?.data?.[0];
-      if (rec) { addCachedRecord(LAYOUT, CACHE_VERSION, rec); handleSelect(rec); onRecordSelect?.(rec.recordId); }
+      if (rec) { addCachedRecord(LAYOUT, CACHE_VERSION, rec); handleSelect(rec); onRecordSelect?.(rec.recordId, rec.fieldData?.Organization || rec.fieldData?.['inspt_CNTCT__site::Name_Organization']); }
     }).catch(() => {});
   }
 
@@ -296,7 +296,7 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
               return (
                 <div key={r.recordId}
                   className={`insp-list-item ${selected?.recordId === r.recordId ? 'active' : ''}`}
-                  onClick={() => { handleSelect(r); onRecordSelect?.(r.recordId); }}
+                  onClick={() => { handleSelect(r); onRecordSelect?.(r.recordId, r.fieldData?.Organization || r.fieldData?.['inspt_CNTCT__site::Name_Organization']); }}
                   // onMouseEnter={() => prefetchRecord(LAYOUT, r.recordId)}
                 >
                   <span className="insp-item-dot" style={{ background: color }} />
