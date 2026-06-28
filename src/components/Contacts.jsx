@@ -6,6 +6,7 @@ import RecordFormModal from './RecordFormModal';
 import RecordSaveBar from './RecordSaveBar';
 import ComposeEmail from './ComposeEmail';
 import ReminderModal from './ReminderModal';
+import InvoicePane, { invoiceRowInfo } from './InvoicePane';
 import './Contacts.css';
 
 const LAYOUT = 'Contacts_New';
@@ -123,7 +124,7 @@ function initialsOf(name) {
 function buildActivity(p) {
   const items = [];
   rowsOf(p, 'inspections').forEach(r => items.push({ icon: '⚑', date: r['cntct_INSPT::Date'], title: 'Inspection', sub: r['cntct_INSPT::Inspectors Name'] }));
-  rowsOf(p, 'invoices').forEach(r => items.push({ icon: '$', date: r['cntct_INVO::Date'], title: `Invoice #${r['cntct_INVO::QuickBooks_Reference_Number'] || '—'}`, sub: money(r['cntct_INVO::zz__Total__xn']) }));
+  rowsOf(p, 'invoices').forEach(r => items.push({ icon: '$', date: r['cntct_INVO::Date'], title: `Invoice #${r['cntct_INVO::QuickBooks_Reference_Number'] || '—'}`, sub: money(invoiceRowInfo(r).total) }));
   rowsOf(p, 'estimates').forEach(r => items.push({ icon: '≡', date: r['cntct_ESTMT::Date'], title: r['cntct_ESTMT::Title'] || `Estimate ${r['cntct_ESTMT::_kpt__Estimate_ID']}`, sub: money(r['cntct_ESTMT::zz__Total__xn']) }));
   rowsOf(p, 'ccs').forEach(r => items.push({ icon: '◈', date: r['cntct_RCD::rcd start date'], title: `CCS project · ${r['cntct_RCD::Status'] || '—'}`, sub: `RCD #${r['cntct_RCD::_kpt__RCD_ID']}` }));
   rowsOf(p, 'rmi').forEach(r => items.push({ icon: '⚠', date: r['cntct_RMI::Entry_Date'], title: `Risk — ${r['cntct_RMI::Level_of_Risk'] || '—'}`, sub: r['cntct_RMI::Status'] }));
@@ -314,7 +315,7 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
       inspections: rowsOf(p, 'inspections').length,
       ccs: rowsOf(p, 'ccs').length,
       invoices: inv.length,
-      openBalance: inv.reduce((s, r) => s + num(r['cntct_INVO::zz__Balance_Due__xs']), 0),
+      openBalance: inv.reduce((s, r) => s + invoiceRowInfo(r).balance, 0),
       estimates: rowsOf(p, 'estimates').length,
     };
   }, [p]);
@@ -425,6 +426,9 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
               <div className="ct-metric"><div className="ct-metric-v" style={{ color: metrics.openBalance > 0 ? '#e8322a' : undefined }}>{money(metrics.openBalance)}</div><div className="ct-metric-l">Open balance</div></div>
               <div className="ct-metric"><div className="ct-metric-v">{metrics.estimates}</div><div className="ct-metric-l">Estimates</div></div>
             </div>
+
+            <InvoicePane contact={selected} />
+
 
             {/* ── Body: rail + tabs ── */}
             <div className="ct-body">

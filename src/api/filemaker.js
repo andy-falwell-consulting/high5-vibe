@@ -352,7 +352,7 @@ export function containerImageUrl(streamingUrl, { db, layout, recordId, field = 
   return `/api/image?db=${encodeURIComponent(db)}&layout=${encodeURIComponent(layout)}&recordId=${encodeURIComponent(recordId)}&field=${encodeURIComponent(field)}`;
 }
 
-async function findRecords(layout, query, limit, offset, signal, sort) {
+export async function findRecords(layout, query, limit, offset, signal, sort) {
   const token = await getToken();
   const env = getCurrentEnv();
   const body = { query, limit, offset };

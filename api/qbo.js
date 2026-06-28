@@ -1,6 +1,16 @@
 import { Redis } from '@upstash/redis';
+import { getGoogleSession } from './_googleSession.js';
 
 const redis = Redis.fromEnv();
+
+// Auth gate: a logged-in user (Google session cookie) OR a server job presenting
+// the sync key (x-sync-key header / ?key=, matched against QBO_SYNC_KEY). The
+// key path is disabled unless the env var is set.
+const SYNC_KEY = process.env.QBO_SYNC_KEY;
+async function authorized(req) {
+  if (SYNC_KEY && (req.headers['x-sync-key'] === SYNC_KEY || req.query?.key === SYNC_KEY)) return true;
+  return !!(await getGoogleSession(req));
+}
 const REALM_ID = process.env.QBO_REALM_ID;
 const CLIENT_ID = process.env.QBO_CLIENT_ID;
 const CLIENT_SECRET = process.env.QBO_CLIENT_SECRET;
@@ -54,6 +64,7 @@ async function qboRequest(path, method, body) {
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
+  if (!(await authorized(req))) return res.status(401).json({ error: 'unauthorized' });
 
   const { action, item, itemId } = req.body;
 
@@ -89,6 +100,44 @@ export default async function handler(req, res) {
         return res.status(r.ok ? 200 : r.status).json(data);
       }
       return res.status(400).json({ error: 'invoiceId or docNumber required' });
+    }
+
+    // Read-only: page the QBO customer list (slim) for reconciliation.
+    if (action === 'list-customers') {
+      const token = await getAccessToken();
+      const start = Number(req.body.start) || 1;
+      const max = Math.min(Number(req.body.max) || 1000, 1000);
+      const q = `SELECT * FROM Customer STARTPOSITION ${start} MAXRESULTS ${max}`;
+      const r = await fetch(`${QBO_BASE}/query?query=${encodeURIComponent(q)}&minorversion=65`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      });
+      const data = await r.json();
+      if (!r.ok) return res.status(r.status).json(data);
+      const customers = (data.QueryResponse?.Customer || []).map(c => ({
+        id: c.Id, displayName: c.DisplayName, companyName: c.CompanyName,
+        fullyQualifiedName: c.FullyQualifiedName, email: c.PrimaryEmailAddr?.Address,
+        active: c.Active, city: c.BillAddr?.City, state: c.BillAddr?.CountrySubDivisionCode, job: c.Job,
+      }));
+      return res.status(200).json({ customers, count: customers.length, start });
+    }
+
+    // Read-only: page the QBO invoice list (slim) — DocNumber + customer + totals.
+    if (action === 'list-invoices') {
+      const token = await getAccessToken();
+      const start = Number(req.body.start) || 1;
+      const max = Math.min(Number(req.body.max) || 1000, 1000);
+      const q = `SELECT * FROM Invoice STARTPOSITION ${start} MAXRESULTS ${max}`;
+      const r = await fetch(`${QBO_BASE}/query?query=${encodeURIComponent(q)}&minorversion=65`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      });
+      const data = await r.json();
+      if (!r.ok) return res.status(r.status).json(data);
+      const invoices = (data.QueryResponse?.Invoice || []).map(i => ({
+        id: i.Id, docNumber: i.DocNumber, customerId: i.CustomerRef?.value,
+        customerName: i.CustomerRef?.name, txnDate: i.TxnDate, total: i.TotalAmt,
+        balance: i.Balance, updated: i.MetaData?.LastUpdatedTime,
+      }));
+      return res.status(200).json({ invoices, count: invoices.length, start });
     }
 
     // Read-only: fetch the styled invoice PDF (base64). The real feature will
