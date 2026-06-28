@@ -4,8 +4,8 @@ name: Acceptance (post-deploy)
 # schedule, repository_dispatch, workflow_run (NOT push or deployment_status).
 # So we chain off the auto-tag workflow, which runs on every versioned push to
 # main (package.json bump). When it completes on main, we launch a Claude cloud
-# agent that waits for the new build to go live on the production URL, then runs
-# the acceptance checklist and reports PASS/FAIL in the job summary.
+# agent that runs the acceptance checklist against the production URL and reports
+# PASS/FAIL in the job summary.
 #
 # Also runnable on demand via the Actions "Run workflow" button.
 # Requires repo secret: ANTHROPIC_API_KEY.
@@ -36,21 +36,17 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            You are running post-deploy acceptance for the Belay app.
+            You are running a fast post-deploy acceptance smoke for the Belay app.
             BASE_URL = https://db-livid.vercel.app
 
-            First, WAIT FOR THE DEPLOY: read the version from package.json (Read
-            tool), then poll BASE_URL every ~15s (curl the page, fetch the main
-            /assets/index-*.js, check it contains that version) until the live
-            build matches, up to 6 minutes. If it never matches, note it and
-            continue with the checks anyway.
+            Read .github/acceptance-checklist.md and execute every check against
+            BASE_URL using curl + python3. Do NOT sleep or poll/wait — the deploy
+            is already live; run the checks once and move on. Keep it quick.
 
-            Then read .github/acceptance-checklist.md and execute every check in
-            it against BASE_URL using curl + python3. Print the PASS/FAIL summary
-            table, append it to $GITHUB_STEP_SUMMARY (write the file path in that
-            env var with python3), and end with the single
-            ACCEPTANCE: PASS / FAIL line.
+            Print the PASS/FAIL summary table, append it to $GITHUB_STEP_SUMMARY
+            (write the file path in that env var with python3), and end with the
+            single line ACCEPTANCE: PASS or ACCEPTANCE: FAIL (n critical).
           claude_args: |
             --allowedTools "Bash(curl),Bash(python3),Read"
-            --max-turns 25
+            --max-turns 15
             --model claude-sonnet-4-6
