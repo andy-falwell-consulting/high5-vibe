@@ -10,7 +10,7 @@ export const config = { maxDuration: 60 };
 const FMP_HOST = 'https://ILELLCO.pcifmhosting.com';
 const FMP_BASIC = 'Basic ' + Buffer.from('admin:itstime').toString('base64');
 const ALLOWED_DBS = ['High5_Core4_Dev', 'High5_Core4_Stage', 'High5_Core4'];
-const MODEL = 'claude-sonnet-4-6';
+const MODEL = 'claude-haiku-4-5';
 const MAX_TOOL_TURNS = 12;
 
 // ── FileMaker modules ────────────────────────────────────────────────────────
