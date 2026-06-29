@@ -46,7 +46,7 @@ export default function ProjectsWorkspace({ navTarget, onClearNav, onRecordSelec
   return (
     <div className="pw-root">
       <div className="pw-bar">
-        <span className="pw-title">Course projects</span>
+        <span className="pw-title">CCS</span>
         <div className="pw-views">
           {VIEWS.map(vw => (
             <button key={vw.id} className={`pw-view${view === vw.id ? ' active' : ''}`} onClick={() => go(vw.id)}>{vw.label}</button>
