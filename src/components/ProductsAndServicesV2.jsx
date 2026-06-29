@@ -176,7 +176,7 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
   const [showBomPicker, setShowBomPicker] = useState(false);
-  const [bomBusy, setBomBusy] = useState(null);
+  const [bomOps, setBomOps] = useState([]); // staged BOM edits: {type:'add'|'qty'|'remove', ...}
   const [navWidth, setNavWidth] = useState(300);
   const [showNewItem, setShowNewItem] = useState(false);
   const [syncStatus, setSyncStatus] = useState({});
@@ -232,7 +232,7 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
   });
 
   async function handleSelect(r) {
-    setEdits({}); setDataEditing(false); setSaveStatus(null); setImgBust(null);
+    setEdits({}); setBomOps([]); setDataEditing(false); setSaveStatus(null); setImgBust(null);
     setSelected(r);
     getRecord(LAYOUT, r.recordId).then(detail => {
       setSelected(prev => prev?.recordId === r.recordId ? detail.response.data[0] : prev);
@@ -247,25 +247,30 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
   }, [navTarget, records]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleFieldChange = useCallback((fk, v) => setEdits(p => ({ ...p, [fk]: v })), []);
-  const handleDiscard = () => { setEdits({}); setDataEditing(false); setSaveStatus(null); };
+  const handleDiscard = () => { setEdits({}); setBomOps([]); setDataEditing(false); setSaveStatus(null); };
 
   const handleSave = async () => {
     if (!selected) return;
-    if (!Object.keys(edits).length) { setDataEditing(false); setSaveStatus('saved'); setTimeout(() => setSaveStatus(null), 3000); return; }
+    const hasFieldEdits = Object.keys(edits).length > 0;
+    const hasBomOps = bomOps.length > 0;
+    if (!hasFieldEdits && !hasBomOps) { setDataEditing(false); setSaveStatus('saved'); setTimeout(() => setSaveStatus(null), 3000); return; }
     setSaving(true); setSaveStatus(null);
     try {
-      const res = await updateRecord(LAYOUT, selected.recordId, edits);
-      if (res.messages?.[0]?.code === '0') {
+      if (hasFieldEdits) {
+        const res = await updateRecord(LAYOUT, selected.recordId, edits);
+        if (res.messages?.[0]?.code !== '0') { setSaveStatus('error'); return; }
         const merged = { ...selected.fieldData, ...edits };
         setSelected(p => ({ ...p, fieldData: merged }));
-        setEdits({}); setDataEditing(false); setSaveStatus('saved');
-        setTimeout(() => setSaveStatus(null), 3000);
         const syncFields = Object.keys(edits).filter(k => AUTO_SYNC_FIELDS.has(k));
         if (syncFields.length) {
           if (merged._kat__Item_ID_Shopify) handleSyncPush('shopify');
           if (merged._kat__Item_ID_QuickBooks) handleSyncPush('qbo');
         }
-      } else { setSaveStatus('error'); }
+      }
+      if (hasBomOps) await applyBomOps(selected.recordId, selected.fieldData?._kpt__Item_ID, bomOps);
+      setEdits({}); setBomOps([]); setDataEditing(false); setSaveStatus('saved');
+      setTimeout(() => setSaveStatus(null), 3000);
+      if (hasBomOps) await reconcileBom(selected.recordId);
     } catch { setSaveStatus('error'); }
     finally { setSaving(false); }
   };
@@ -345,95 +350,83 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
     } finally { setUploadingImage(false); }
   };
 
-  // Optimistically patch the selected record's BOM rows for instant UI feedback,
-  // independent of the network / HTTP cache. reconcileBom() refetches the true
-  // server state (and updates the list cache) right after.
-  const patchBomRows = useCallback((recordId, updater) => {
-    setSelected(prev => {
-      if (!prev || prev.recordId !== recordId) return prev;
-      const rows = prev.portalData?.['Portal__Bill_of_Materials 4'] || [];
-      return { ...prev, portalData: { ...prev.portalData, 'Portal__Bill_of_Materials 4': updater(rows) } };
-    });
-  }, []);
+  // BOM edits are staged in `bomOps` and committed on Save (consistent with the
+  // field edits + Save/Discard used here and on the other record pages).
+  // reconcileBom() refetches the true server state after a successful save.
   const reconcileBom = useCallback(async (recordId) => {
     invalidateRecord(LAYOUT, recordId);
     try {
       const fresh = await getRecord(LAYOUT, recordId);
       const rec = fresh?.response?.data?.[0];
       if (rec) setSelected(prev => (prev?.recordId === recordId ? rec : prev));
-    } catch { /* keep optimistic state on failure */ }
+    } catch { /* keep current state on failure */ }
   }, []);
 
-  // Add a BOM component by creating a line-item record linking the parent
-  // assembly and the component item via their foreign keys. (Writing the
-  // component Name through the portal relationship fails — a new line has no
-  // related item yet — which is why the old portal-add returned error 101.)
-  const handleAddBomItem = useCallback(async ({ item, quantity }) => {
-    const parentItemId = selected?.fieldData?._kpt__Item_ID;
-    const componentItemId = item?.fieldData?._kpt__Item_ID;
-    if (!parentItemId || !componentItemId) {
-      alert('Could not add component: missing item ID.');
-      return;
+  // Commit the queued ops to FileMaker, in order. Adds create a line-item record
+  // linking parent assembly ↔ component via their foreign keys (writing the
+  // component through the portal relationship fails — a new line has no related
+  // item yet); qty/remove act on an existing portal row by its recordId.
+  const applyBomOps = async (recordId, parentItemId, ops) => {
+    for (const op of ops) {
+      let result;
+      if (op.type === 'add') {
+        if (!parentItemId || !op.componentItemId) throw new Error('Missing item ID for a component.');
+        result = await createRecord('Item_ITMLI_billOfMaterials', {
+          '_kft__Item_ID__parent': parentItemId,
+          '_kft__Item_ID__assemblyLine': op.componentItemId,
+          'Quantity': op.quantity,
+        });
+      } else if (op.type === 'qty') {
+        result = await updatePortalRow(LAYOUT, recordId, 'Portal__Bill_of_Materials 4', op.lineRecordId, {
+          'item_ITMLI__billOfMaterials::Quantity': op.quantity,
+        });
+      } else if (op.type === 'remove') {
+        result = await deletePortalRow(LAYOUT, recordId, 'item_ITMLI__billOfMaterials', op.lineRecordId);
+      }
+      if (result && result.messages?.[0]?.code !== '0') throw new Error(result.messages?.[0]?.message || 'BOM save failed');
     }
-    const recordId = selected.recordId;
-    const q = Number(quantity);
-    // Show the row immediately; the refetch swaps in the real one (id, exact total).
-    patchBomRows(recordId, rows => [...rows, {
-      recordId: `tmp-${Date.now()}`,
-      'item_itmli_ITEM__billOfMaterials::Name': item.fieldData.Name,
-      'item_itmli_ITEM__billOfMaterials::Cost': item.fieldData.Cost,
-      'item_ITMLI__billOfMaterials::Quantity': q,
-      'item_ITMLI__billOfMaterials::Total': Number(item.fieldData.Unit_Price || 0) * q,
+  };
+
+  // Stage a component add from the picker; the real line is created on Save.
+  const stageAddBom = ({ item, quantity }) => {
+    const componentItemId = item?.fieldData?._kpt__Item_ID;
+    if (!componentItemId) { alert('Could not add component: missing item ID.'); return; }
+    const q = Number(quantity) || 1;
+    setBomOps(ops => [...ops, {
+      type: 'add', tmpId: `tmp-${Date.now()}`, componentItemId,
+      name: item.fieldData.Name, cost: item.fieldData.Cost, unitPrice: item.fieldData.Unit_Price, quantity: q,
     }]);
     setShowBomPicker(false);
-    const result = await createRecord('Item_ITMLI_billOfMaterials', {
-      '_kft__Item_ID__parent': parentItemId,
-      '_kft__Item_ID__assemblyLine': componentItemId,
-      'Quantity': q,
-    });
-    if (result.messages?.[0]?.code !== '0') alert(`Could not add component: ${result.messages?.[0]?.message || 'unknown error'}`);
-    await reconcileBom(recordId);
-  }, [selected, patchBomRows, reconcileBom]);
+  };
 
-  // Edit a BOM line quantity. The portal row carries its own recordId.
-  const handleUpdateBomQty = useCallback(async (row, qty) => {
+  // Stage a quantity change. A not-yet-saved add is edited in place; a server line
+  // gets a qty op (dropped if the value returns to the saved original).
+  const stageBomQty = (row, qty) => {
     const q = Number(qty);
     if (!Number.isFinite(q) || q <= 0) return;
-    const oldQ = Number(row['item_ITMLI__billOfMaterials::Quantity']);
-    if (q === oldQ) return;
-    const recordId = selected.recordId;
-    setBomBusy(row.recordId);
-    const unit = oldQ > 0 ? Number(row['item_ITMLI__billOfMaterials::Total'] || 0) / oldQ : 0;
-    patchBomRows(recordId, rows => rows.map(r => r.recordId === row.recordId
-      ? { ...r, 'item_ITMLI__billOfMaterials::Quantity': q, 'item_ITMLI__billOfMaterials::Total': unit * q }
-      : r));
-    try {
-      const result = await updatePortalRow(LAYOUT, recordId, 'Portal__Bill_of_Materials 4', row.recordId, {
-        'item_ITMLI__billOfMaterials::Quantity': q,
-      });
-      if (result.messages?.[0]?.code !== '0') alert(`Could not update quantity: ${result.messages?.[0]?.message || 'unknown error'}`);
-      await reconcileBom(recordId);
-    } finally { setBomBusy(null); }
-  }, [selected, patchBomRows, reconcileBom]);
+    if (row._added) {
+      setBomOps(ops => ops.map(o => (o.type === 'add' && o.tmpId === row.recordId) ? { ...o, quantity: q } : o));
+      return;
+    }
+    const serverRow = (selected?.portalData?.['Portal__Bill_of_Materials 4'] || []).find(r => r.recordId === row.recordId);
+    const serverQ = serverRow ? Number(serverRow['item_ITMLI__billOfMaterials::Quantity']) : null;
+    setBomOps(ops => {
+      const rest = ops.filter(o => !(o.type === 'qty' && o.lineRecordId === row.recordId));
+      return q === serverQ ? rest : [...rest, { type: 'qty', lineRecordId: row.recordId, quantity: q }];
+    });
+  };
 
-  // Remove a BOM line. deleteRelated targets the line-item table occurrence.
-  const handleRemoveBomItem = useCallback(async (row) => {
-    const name = row['item_itmli_ITEM__billOfMaterials::Name'] || 'this component';
-    if (!window.confirm(`Remove ${name} from the bill of materials?`)) return;
-    const recordId = selected.recordId;
-    setBomBusy(row.recordId);
-    patchBomRows(recordId, rows => rows.filter(r => r.recordId !== row.recordId));
-    try {
-      const result = await deletePortalRow(LAYOUT, recordId, 'item_ITMLI__billOfMaterials', row.recordId);
-      if (result.messages?.[0]?.code !== '0') alert(`Could not remove component: ${result.messages?.[0]?.message || 'unknown error'}`);
-      await reconcileBom(recordId);
-    } finally { setBomBusy(null); }
-  }, [selected, patchBomRows, reconcileBom]);
+  // Stage a removal. A not-yet-saved add is just dropped; a server line gets a
+  // remove op (which also supersedes any pending qty change for that line).
+  const stageRemoveBom = (row) => {
+    if (row._added) { setBomOps(ops => ops.filter(o => !(o.type === 'add' && o.tmpId === row.recordId))); return; }
+    setBomOps(ops => [...ops.filter(o => o.lineRecordId !== row.recordId), { type: 'remove', lineRecordId: row.recordId }]);
+  };
 
   const f = selected?.fieldData || {};
   const portalData = selected?.portalData;
   const catColor = CATEGORY_COLORS[f.Category] || '#64748b';
-  const dirtyCount = Object.keys(edits).length;
+  const dirtyCount = Object.keys(edits).length + bomOps.length;
   const imgSrcBase = f.Picture ? containerImageUrl(f.Picture, { db: getCurrentEnv().db, layout: LAYOUT, recordId: selected?.recordId }) : null;
   const imgSrc = imgSrcBase ? (imgBust ? `${imgSrcBase}&t=${imgBust}` : imgSrcBase) : null;
 
@@ -448,7 +441,27 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
 
   // Pricing roll-up (reflects pending edits)
   const cost = Number(fval('Cost')) || 0;
-  const bom = portalData?.['Portal__Bill_of_Materials 4'] || [];
+  // BOM rows shown = saved server lines with staged ops applied (qty edits, removals)
+  // plus not-yet-saved additions, so the table and the price reflect pending edits.
+  const serverBom = portalData?.['Portal__Bill_of_Materials 4'] || [];
+  const bomRemoved = new Set(bomOps.filter(o => o.type === 'remove').map(o => o.lineRecordId));
+  const bomQtyOps = new Map(bomOps.filter(o => o.type === 'qty').map(o => [o.lineRecordId, o.quantity]));
+  const bom = [
+    ...serverBom.filter(r => !bomRemoved.has(r.recordId)).map(r => {
+      if (!bomQtyOps.has(r.recordId)) return r;
+      const q = bomQtyOps.get(r.recordId);
+      const oldQ = Number(r['item_ITMLI__billOfMaterials::Quantity']) || 0;
+      const unit = oldQ > 0 ? Number(r['item_ITMLI__billOfMaterials::Total'] || 0) / oldQ : 0;
+      return { ...r, _staged: true, 'item_ITMLI__billOfMaterials::Quantity': q, 'item_ITMLI__billOfMaterials::Total': unit * q };
+    }),
+    ...bomOps.filter(o => o.type === 'add').map(o => ({
+      recordId: o.tmpId, _staged: true, _added: true,
+      'item_itmli_ITEM__billOfMaterials::Name': o.name,
+      'item_itmli_ITEM__billOfMaterials::Cost': o.cost,
+      'item_ITMLI__billOfMaterials::Quantity': o.quantity,
+      'item_ITMLI__billOfMaterials::Total': Number(o.unitPrice || 0) * o.quantity,
+    })),
+  ];
   const bomTotal = bom.reduce((a, r) => a + Number(r['item_ITMLI__billOfMaterials::Total'] || 0), 0);
   // Assembly products are priced from their bill of materials (sum of component
   // line totals); everything else uses the unit price.
@@ -643,37 +656,39 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
                     <div className="v2-spec-head v2-spec-head-row">
                       <span>Bill of materials{bom.length > 0 && ` · ${bom.length}`}</span>
                       {bomTotal > 0 && <span className="v2-bom-total">Components ${bomTotal.toFixed(2)}</span>}
-                      <button className="v2-bom-add-btn" onClick={() => setShowBomPicker(true)}>+ Add</button>
+                      {dataEditing && <button className="v2-bom-add-btn" onClick={() => setShowBomPicker(true)}>+ Add</button>}
                     </div>
                     {bom.length === 0 ? (
-                      <p className="v2-spec-empty">{f.assembly_product ? 'No components yet — add parts to roll up cost.' : 'Not an assembly.'}</p>
+                      <p className="v2-spec-empty">{isAssembly ? (dataEditing ? 'No components yet — add parts to roll up cost.' : 'No components yet.') : 'Not an assembly.'}</p>
                     ) : (
                       <div className="v2-table-wrap">
                         <table className="v2-table">
-                          <thead><tr><th>Name</th><th className="num">Qty</th><th className="num">Cost</th><th className="num">Total</th><th aria-label="Remove" /></tr></thead>
+                          <thead><tr><th>Name</th><th className="num">Qty</th><th className="num">Cost</th><th className="num">Total</th>{dataEditing && <th aria-label="Remove" />}</tr></thead>
                           <tbody>
                             {bom.map((row) => {
                               const qty = row['item_ITMLI__billOfMaterials::Quantity'];
-                              const busy = bomBusy === row.recordId;
                               return (
-                                <tr key={row.recordId} className={busy ? 'v2-bom-busy' : ''}>
+                                <tr key={row.recordId} className={row._staged ? 'v2-bom-staged' : ''}>
                                   <td>{row['item_itmli_ITEM__billOfMaterials::Name']}</td>
                                   <td className="num">
-                                    <input
-                                      key={`${row.recordId}:${qty}`}
-                                      className="v2-bom-qty"
-                                      type="number" min="1" step="1"
-                                      defaultValue={qty}
-                                      disabled={busy}
-                                      onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { e.currentTarget.value = qty; e.currentTarget.blur(); } }}
-                                      onBlur={e => handleUpdateBomQty(row, e.target.value)}
-                                    />
+                                    {dataEditing ? (
+                                      <input
+                                        key={`${row.recordId}:${qty}`}
+                                        className="v2-bom-qty"
+                                        type="number" min="1" step="1"
+                                        defaultValue={qty}
+                                        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { e.currentTarget.value = qty; e.currentTarget.blur(); } }}
+                                        onBlur={e => stageBomQty(row, e.target.value)}
+                                      />
+                                    ) : qty}
                                   </td>
                                   <td className="num">${Number(row['item_itmli_ITEM__billOfMaterials::Cost']||0).toFixed(2)}</td>
                                   <td className="num">${Number(row['item_ITMLI__billOfMaterials::Total']||0).toFixed(2)}</td>
-                                  <td className="num">
-                                    <button className="v2-bom-remove" title="Remove component" disabled={busy} onClick={() => handleRemoveBomItem(row)}>✕</button>
-                                  </td>
+                                  {dataEditing && (
+                                    <td className="num">
+                                      <button className="v2-bom-remove" title="Remove component" onClick={() => stageRemoveBom(row)}>✕</button>
+                                    </td>
+                                  )}
                                 </tr>
                               );
                             })}
@@ -723,7 +738,7 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
         )}
       </main>
 
-      {showBomPicker && <BomPickerModal allRecords={records} onAdd={handleAddBomItem} onClose={() => setShowBomPicker(false)} />}
+      {showBomPicker && <BomPickerModal allRecords={records} onAdd={stageAddBom} onClose={() => setShowBomPicker(false)} />}
       {showNewItem && <NewItemModal onClose={() => setShowNewItem(false)} onCreate={handleCreate} />}
       {showLightbox && imgSrc && <ImageLightbox src={imgSrc} name={f.Name} onClose={() => setShowLightbox(false)} />}
     </div>

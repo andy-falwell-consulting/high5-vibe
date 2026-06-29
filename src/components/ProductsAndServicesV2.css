@@ -629,7 +629,7 @@
 }
 .v2-bom-remove:hover { color: #fff; background: #ef4444; }
 .v2-bom-remove:disabled { opacity: 0.4; cursor: default; }
-.v2-bom-busy { opacity: 0.55; }
+.v2-bom-staged td { box-shadow: inset 2px 0 0 #e8a322; }
 
 /* ── Drag ghost ────────────────────────────────────────────────── */
 .v2-section.drag-ghost {
