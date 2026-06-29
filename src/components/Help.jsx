@@ -78,7 +78,7 @@ const MODULE_DOCS = [
         category.</p>
     </>
   ) },
-  { id: 'projects', icon: '◈', name: 'Course projects', body: (
+  { id: 'projects', icon: '◈', name: 'CCS', body: (
     <p>Challenge-course (CCS) projects, with three views: <strong>Workspace</strong> (full detail),
       <strong> List</strong> (a sortable table), and <strong>Board</strong> (a kanban by pipeline stage,
       New inquiry → No Go). Edit project fields in the Workspace view with Edit → Save. You can

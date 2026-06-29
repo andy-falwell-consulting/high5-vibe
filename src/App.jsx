@@ -36,7 +36,7 @@ const MODULES = [
   { id: 'tnd', label: 'Team Development', icon: '✦', group: 'Records' },
   { id: 'oe-lookup', label: 'OE Lookup', icon: '◎', group: 'Records' },
   { id: 'products', label: 'Products & Services', icon: '◫', group: 'Records' },
-  { id: 'projects', label: 'Course projects', icon: '◈', group: 'Projects' },
+  { id: 'projects', label: 'CCS', icon: '◈', group: 'Projects' },
   { id: 'admin', label: 'Admin', icon: '⚙', group: 'System' },
   { id: 'help', label: 'Help', icon: '?', group: 'System' },
 ]
