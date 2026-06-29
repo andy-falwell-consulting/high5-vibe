@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { getCurrentEnv } from '../config/fmpEnvironments';
 import './AgentPanel.css';
 
@@ -110,9 +112,11 @@ export default function AgentPanel({ open, onClose, onOpenRecord }) {
           messages.map((m, i) => (
             <div key={i} className={`agent-msg ${m.role}${m.error ? ' error' : ''}`}>
               <div className="agent-bubble">
-                {m.content || (m.role === 'assistant' && loading && i === messages.length - 1
-                  ? <span className="agent-typing"><span></span><span></span><span></span></span>
-                  : '')}
+                {m.role === 'assistant' && m.content
+                  ? <div className="agent-markdown"><Markdown remarkPlugins={[remarkGfm]}>{m.content}</Markdown></div>
+                  : m.content || (m.role === 'assistant' && loading && i === messages.length - 1
+                    ? <span className="agent-typing"><span></span><span></span><span></span></span>
+                    : '')}
               </div>
               {m.sources?.length > 0 && (
                 <div className="agent-sources">

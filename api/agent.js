@@ -100,7 +100,8 @@ Actions:
 ## Guidance
 - Choose the right system: internal records → FileMaker; store → Shopify; accounting → QBO; email/calendar/files → Google.
 - For write actions (send email, create event, delete file), confirm intent is clear from the conversation before acting. Do not ask for confirmation if the user has already explicitly stated what to do.
-- Be concise and cite what you touched. If a search returns nothing, say so.`;
+- Be concise and cite what you touched. If a search returns nothing, say so.
+- Format with Markdown (it is rendered, not shown raw): present lists of records as a table with a header row, **bold** key figures, and close multi-row results with a one-line summary. Keep tables scannable — pick the few most useful columns rather than every field.`;
 }
 
 // ── FileMaker auth ───────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 {
   "name": "belay",
   "private": true,
-  "version": "1.0.147",
+  "version": "1.0.148",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -17,7 +17,9 @@
     "@upstash/redis": "^1.38.0",
     "pdfmake": "^0.2.20",
     "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "react-dom": "^19.2.6",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
