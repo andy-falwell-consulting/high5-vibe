@@ -6,7 +6,7 @@ import RecordFormModal from './RecordFormModal';
 import RecordSaveBar from './RecordSaveBar';
 import ComposeEmail from './ComposeEmail';
 import ReminderModal from './ReminderModal';
-import InvoicePane, { invoiceRowInfo } from './InvoicePane';
+import { invoiceRowInfo } from './InvoicePane';
 import './Contacts.css';
 
 const LAYOUT = 'Contacts_New';
@@ -97,7 +97,7 @@ const PORTAL_NAV = { inspections: 'inspections', ccs: 'projects', custom_trainin
 const TABS = [
   { id: 'overview',    label: 'Overview' },
   { id: 'engagements', label: 'Engagements', portals: ['inspections', 'custom_training', 'oe_training', 'ccs', 'certifications'] },
-  { id: 'financials',  label: 'Financials',  portals: ['estimates', 'invoices'] },
+  { id: 'financials',  label: 'Invoices',    portals: ['estimates', 'invoices'] },
   { id: 'risk',        label: 'Risk',        portals: ['rmi'] },
   { id: 'related',     label: 'Related',     portals: ['related'] },
   { id: 'notes',       label: 'Notes' },
@@ -182,8 +182,19 @@ function PortalTable({ id, rows, onOpenRow }) {
       <tbody>{rows.map((r, i) => <tr key={i}><td className="mono">{r['cntct_ESTMT::_kpt__Estimate_ID']}</td><td>{r['cntct_ESTMT::Date']}</td><td>{r['cntct_ESTMT::Title']}</td><td className="num">{money(r['cntct_ESTMT::zz__Total__xn'])}</td><td>{r['cntct_ESTMT::Status']}</td></tr>)}</tbody></table>
   );
   if (id === 'invoices') return (
-    <table className="ct-table"><thead><tr><th>QB Ref</th><th>Date</th><th className="num">Total</th><th className="num">Balance</th><th>Memo</th></tr></thead>
-      <tbody>{rows.map((r, i) => <tr key={i}><td className="mono">{r['cntct_INVO::QuickBooks_Reference_Number']}</td><td>{r['cntct_INVO::Date']}</td><td className="num">{money(r['cntct_INVO::zz__Total__xn'])}</td><td className="num" style={{ color: num(r['cntct_INVO::zz__Balance_Due__xs']) > 0 ? '#e8322a' : 'inherit' }}>{money(r['cntct_INVO::zz__Balance_Due__xs'])}</td><td>{r['cntct_INVO::Memo']}</td></tr>)}</tbody></table>
+    <table className="ct-table"><thead><tr><th>QB Ref</th><th>Date</th><th className="num">Total</th><th className="num">Balance</th><th>Status</th></tr></thead>
+      <tbody>{[...rows].sort((a, b) => parseFmDate(b['cntct_INVO::Date']) - parseFmDate(a['cntct_INVO::Date'])).map((r, i) => {
+        const info = invoiceRowInfo(r);
+        return (
+          <tr key={i}>
+            <td className="mono">#{r['cntct_INVO::QuickBooks_Reference_Number'] || '—'}</td>
+            <td>{r['cntct_INVO::Date']}</td>
+            <td className="num">{money(info.total)}</td>
+            <td className="num" style={{ color: info.balance > 0 ? '#e8322a' : 'inherit' }}>{money(info.balance)}</td>
+            <td>{info.status}</td>
+          </tr>
+        );
+      })}</tbody></table>
   );
   if (id === 'rmi') return (
     <table className="ct-table"><thead><tr><th>Entry date</th><th>Risk</th><th>Concern</th><th>Assigned</th><th>Status</th></tr></thead>
@@ -426,8 +437,6 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
               <div className="ct-metric"><div className="ct-metric-v" style={{ color: metrics.openBalance > 0 ? '#e8322a' : undefined }}>{money(metrics.openBalance)}</div><div className="ct-metric-l">Open balance</div></div>
               <div className="ct-metric"><div className="ct-metric-v">{metrics.estimates}</div><div className="ct-metric-l">Estimates</div></div>
             </div>
-
-            <InvoicePane contact={selected} />
 
 
             {/* ── Body: rail + tabs ── */}
