@@ -186,14 +186,14 @@ export default function NavRail({ modules, activeId, onSelect, theme, onToggleTh
         {/* ── Command palette trigger ── */}
         <div style={{ padding: showLabels ? '0 10px 8px' : '0 0 8px', display: 'flex', justifyContent: 'center' }}>
           {showLabels ? (
-            <button onClick={onOpenPalette} title="Search (⌘K)"
+            <button onClick={onOpenPalette} title="Search or ask the assistant (⌘K)"
               style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 9px', background: c.footerBtn, border: `1px solid ${c.footerBorder}`, borderRadius: 8, cursor: 'pointer', color: c.mutedLabel }}>
               <span style={{ fontSize: 16 }}>⌕</span>
-              <span style={{ flex: 1, textAlign: 'left', fontSize: 14 }}>Search…</span>
+              <span style={{ flex: 1, textAlign: 'left', fontSize: 14 }}>Search or ask…</span>
               <span style={{ fontFamily: 'monospace', fontSize: 12, border: `1px solid ${c.divider}`, borderRadius: 4, padding: '1px 5px' }}>⌘K</span>
             </button>
           ) : (
-            <button onClick={onOpenPalette} title="Search (⌘K)"
+            <button onClick={onOpenPalette} title="Search or ask the assistant (⌘K)"
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 30, background: 'none', border: 'none', cursor: 'pointer', color: c.mutedLabel, fontSize: 18 }}>⌕</button>
           )}
         </div>

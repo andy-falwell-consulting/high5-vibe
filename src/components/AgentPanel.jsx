@@ -13,17 +13,28 @@ const SUGGESTIONS = [
 
 const MODULE_LABEL = { inspections: 'Inspection', contacts: 'Contact', projects: 'Project', products: 'Product' };
 
-export default function AgentPanel({ open, onClose, onOpenRecord }) {
+export default function AgentPanel({ open, onClose, onOpenRecord, seedQuery, onSeedConsumed }) {
   const [messages, setMessages] = useState([]); // { role, content, sources?, error? }
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('');
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
+  const seededRef = useRef(null);
 
   useEffect(() => {
     if (open) setTimeout(() => inputRef.current?.focus(), 50);
   }, [open]);
+
+  // When opened from the command palette with a query, auto-send it once.
+  useEffect(() => {
+    if (!open) { seededRef.current = null; return; }
+    if (seedQuery && seededRef.current !== seedQuery) {
+      seededRef.current = seedQuery;
+      send(seedQuery);
+      onSeedConsumed?.();
+    }
+  }, [open, seedQuery]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, loading, status]);

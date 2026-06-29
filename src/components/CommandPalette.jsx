@@ -19,7 +19,7 @@ const SOURCES = [
 const PER_SOURCE = 6
 const clean = v => (v || '').replace(/[\r\n]+/g, ' ').trim()
 
-export default function CommandPalette({ open, onClose, onPick, modules, theme, onToggleTheme }) {
+export default function CommandPalette({ open, onClose, onPick, onAsk, modules, theme, onToggleTheme }) {
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
   const [datasets, setDatasets] = useState(null)
@@ -67,6 +67,14 @@ export default function CommandPalette({ open, onClose, onPick, modules, theme, 
       .map(m => ({ kind: 'page', module: m.id, title: m.label, icon: m.icon }))
     if (pages.length) out.push({ label: 'Go to', items: withIdx(pages) })
 
+    // Always offer the assistant — it handles anything that isn't a direct record
+    // jump (invoice amounts/dates, totals, cross-system questions, free-form asks).
+    const askText = query.trim()
+    out.push({ label: 'Assistant', items: withIdx([{
+      kind: 'ask', query: askText, icon: '✦', color: '#e8722a',
+      title: askText ? `Ask the assistant: “${askText}”` : 'Ask the assistant…',
+    }]) })
+
     const actions = []
     const themeLabel = theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'
     if (!q || themeLabel.toLowerCase().includes(q) || 'theme'.includes(q))
@@ -82,9 +90,10 @@ export default function CommandPalette({ open, onClose, onPick, modules, theme, 
     if (!item) return
     if (item.kind === 'record') onPick(item.module, item.recordId)
     else if (item.kind === 'page') onPick(item.module, null)
+    else if (item.kind === 'ask') onAsk(item.query)
     else if (item.kind === 'action' && item.id === 'theme') { onToggleTheme(); return }
     onClose()
-  }, [onPick, onClose, onToggleTheme])
+  }, [onPick, onAsk, onClose, onToggleTheme])
 
   const onKeyDown = (e) => {
     if (e.key === 'Escape') { e.preventDefault(); onClose() }
@@ -100,7 +109,7 @@ export default function CommandPalette({ open, onClose, onPick, modules, theme, 
       <div className="cmdk-modal" onMouseDown={e => e.stopPropagation()}>
         <div className="cmdk-input-row">
           <span className="cmdk-search-icon">⌕</span>
-          <input ref={inputRef} className="cmdk-input" placeholder="Search records, jump to a page…"
+          <input ref={inputRef} className="cmdk-input" placeholder="Search records, or ask the assistant…"
             value={query} onChange={e => { setQuery(e.target.value); setActive(0) }} onKeyDown={onKeyDown} />
           <span className="cmdk-kbd">esc</span>
         </div>

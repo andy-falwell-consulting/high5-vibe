@@ -93,7 +93,7 @@ export default function Home({ onOpen, onGoto, onOpenView, onOpenPalette }) {
             <div className="home-date">{today}</div>
           </div>
           <button className="home-search" onClick={onOpenPalette}>
-            <span>⌕</span> Search… <span className="home-kbd">⌘K</span>
+            <span>⌕</span> Search or ask… <span className="home-kbd">⌘K</span>
           </button>
         </header>
 

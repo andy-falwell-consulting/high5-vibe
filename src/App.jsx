@@ -60,6 +60,10 @@ export default function App() {
   const [navTarget, setNavTarget] = useState(initial.recordId ? { moduleId: initial.moduleId, recordId: initial.recordId } : null)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [agentOpen, setAgentOpen] = useState(false)
+  const [agentSeed, setAgentSeed] = useState(null)
+
+  // From the command palette: open the assistant, optionally seeded with a query.
+  const handleAsk = (q) => { setAgentSeed(q || null); setPaletteOpen(false); setAgentOpen(true) }
   const [user, setUser] = useState(null)
   const [authChecked, setAuthChecked] = useState(false)
   const [reminderDue, setReminderDue] = useState(0)
@@ -232,9 +236,8 @@ export default function App() {
         {visited.has('products') && <div style={{ display: activeModule === 'products' ? 'contents' : 'none' }}><ProductsAndServicesV2 navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('products')} /></div>}
         {visited.has('projects') && <div style={{ display: activeModule === 'projects' ? 'contents' : 'none' }}><ProjectsWorkspace navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('projects')} /></div>}
         {visited.has('admin') && <div style={{ display: activeModule === 'admin' ? 'contents' : 'none' }}><Admin /></div>}
-        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onPick={handlePalettePick} modules={MODULES} theme={theme} onToggleTheme={toggleTheme} />
-        {!agentOpen && <button className="agent-fab" onClick={() => setAgentOpen(true)} title="Ask the assistant">✦</button>}
-        <AgentPanel open={agentOpen} onClose={() => setAgentOpen(false)} onOpenRecord={(m, id) => navigateTo(m, id)} />
+        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onPick={handlePalettePick} onAsk={handleAsk} modules={MODULES} theme={theme} onToggleTheme={toggleTheme} />
+        <AgentPanel open={agentOpen} onClose={() => setAgentOpen(false)} onOpenRecord={(m, id) => navigateTo(m, id)} seedQuery={agentSeed} onSeedConsumed={() => setAgentSeed(null)} />
         <ReminderToaster onOpen={r => (r.recordType && r.recordId) ? navigateTo(r.recordType, r.recordId) : handleSelect('reminders')} />
     </div>
   )
