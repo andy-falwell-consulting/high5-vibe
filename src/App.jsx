@@ -15,6 +15,7 @@ import RMI from './components/RMI'
 import Reminders from './components/Reminders'
 import ReminderToaster from './components/ReminderToaster'
 import Admin from './components/Admin'
+import Help from './components/Help'
 import CommandPalette from './components/CommandPalette'
 import AgentPanel from './components/AgentPanel'
 import { getAllRecords, ensureFmpUserSession } from './api/filemaker'
@@ -37,6 +38,7 @@ const MODULES = [
   { id: 'products', label: 'Products & Services', icon: '◫', group: 'Records' },
   { id: 'projects', label: 'Course projects', icon: '◈', group: 'Projects' },
   { id: 'admin', label: 'Admin', icon: '⚙', group: 'System' },
+  { id: 'help', label: 'Help', icon: '?', group: 'System' },
 ]
 
 const MODULE_IDS = new Set(MODULES.map(m => m.id))
@@ -236,6 +238,7 @@ export default function App() {
         {visited.has('products') && <div style={{ display: activeModule === 'products' ? 'contents' : 'none' }}><ProductsAndServicesV2 navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('products')} /></div>}
         {visited.has('projects') && <div style={{ display: activeModule === 'projects' ? 'contents' : 'none' }}><ProjectsWorkspace navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('projects')} /></div>}
         {visited.has('admin') && <div style={{ display: activeModule === 'admin' ? 'contents' : 'none' }}><Admin /></div>}
+        {visited.has('help') && <div style={{ display: activeModule === 'help' ? 'contents' : 'none' }}><Help /></div>}
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onPick={handlePalettePick} onAsk={handleAsk} modules={MODULES} theme={theme} onToggleTheme={toggleTheme} />
         <AgentPanel open={agentOpen} onClose={() => setAgentOpen(false)} onOpenRecord={(m, id) => navigateTo(m, id)} seedQuery={agentSeed} onSeedConsumed={() => setAgentSeed(null)} />
         <ReminderToaster onOpen={r => (r.recordType && r.recordId) ? navigateTo(r.recordType, r.recordId) : handleSelect('reminders')} />
