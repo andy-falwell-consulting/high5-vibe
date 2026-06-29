@@ -63,10 +63,12 @@ Key types: Product (id, title, createdAt, status, totalInventory, variants), Ord
 Date filters: "created_at:>2026-03-01". Count: productsCount(query:...) { count }.
 
 ## QuickBooks Online (read/write)
-Tool: qbo_query(sql)
+Tool: qbo_query(sql) — returns { totalCount, entity, records }.
 Tables: Item, Invoice (DocNumber, TxnDate, TotalAmt, Balance, CustomerRef, CreateTime), Customer, Payment, Account.
 SQL: SELECT [fields|*|COUNT(*)] FROM [Table] WHERE [conditions] ORDER BY ... STARTPOSITION n MAXRESULTS n
-Dates are ISO 8601. Example: SELECT * FROM Invoice WHERE Balance > '0' ORDER BY DueDate ASC MAXRESULTS 50
+Dates are ISO 8601. Open invoices = Balance > '0'.
+- QBO has no SUM or GROUP BY. Get a count with SELECT COUNT(*) FROM ... ; to total a money column (e.g. Balance), fetch the matching rows and add them up yourself.
+- MAXRESULTS max is 1000 (default 100 if omitted). Never cap a "list everything / total" request at a small number like 50 — it silently drops rows. Use MAXRESULTS 1000, and if the COUNT(*) exceeds 1000, page with STARTPOSITION (1, then 1001, …) until you've covered every row.
 
 ## Gmail (full access)
 Tool: gmail(action, params)
@@ -104,7 +106,8 @@ Actions:
 - Choose the right system: internal records → FileMaker; store → Shopify; accounting → QBO; email/calendar/files → Google.
 - For write actions (send email, create event, delete file), confirm intent is clear from the conversation before acting. Do not ask for confirmation if the user has already explicitly stated what to do.
 - Be concise and cite what you touched. If a search returns nothing, say so.
-- Format with Markdown (it is rendered, not shown raw): present lists of records as a table with a header row, **bold** key figures, and close multi-row results with a one-line summary. Keep tables scannable — pick the few most useful columns rather than every field.`;
+- Format with Markdown (it is rendered, not shown raw): present lists of records as a table with a header row, **bold** key figures, and close multi-row results with a one-line summary. Keep tables scannable — pick the few most useful columns rather than every field.
+- For "how many" / "what's the total" questions, compute the real aggregate across ALL matching rows — not just one page — and lead with it: the count (COUNT(*)) and any money total (fetch + sum, since QBO can't SUM). When you also list a large result set, state the full count and total FIRST, then the rows, so the key number is never lost even if the list is long.`;
 }
 
 // ── FileMaker auth ───────────────────────────────────────────────────────────
