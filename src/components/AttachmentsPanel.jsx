@@ -13,7 +13,7 @@ import './AttachmentsPanel.css';
 // `actions` (optional): module-specific buttons rendered alongside the built-in
 // ones (e.g. Inspections' report generation). `reloadSignal`: bump it to make
 // the panel re-list (so an external action like "generate report" shows up).
-export default function AttachmentsPanel({ parentId, api, title = 'Attachments', invoiceDocNumber = null, actions = null, reloadSignal = 0 }) {
+export default function AttachmentsPanel({ parentId, api, title = 'Attachments', invoiceDocNumber = null, actions = null, reloadSignal = 0, readOnly = false }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(null); // 'upload' | recordId being deleted
@@ -88,38 +88,40 @@ export default function AttachmentsPanel({ parentId, api, title = 'Attachments',
         <h3>{title}</h3>
       </div>
 
-      <div className="att-actions">
-        {actions}
-        <button className="att-btn" disabled={busy === 'upload' || !parentId} onClick={() => fileInputRef.current?.click()}>
-          {busy === 'upload' ? 'Uploading…' : '⇪ Upload file'}
-        </button>
-        {invoiceDocNumber && (
-          <button className="att-btn invoice" disabled={busy === 'invoice' || !parentId} onClick={handleGetInvoice}
-            title={`QuickBooks invoice #${invoiceDocNumber}`}>
-            {busy === 'invoice' ? 'Fetching…' : (items.some(x => x.name === invoiceFileName(invoiceDocNumber)) ? '↻ Refresh invoice PDF' : '⬇ Get invoice PDF')}
+      {!readOnly && (
+        <div className="att-actions">
+          {actions}
+          <button className="att-btn" disabled={busy === 'upload' || !parentId} onClick={() => fileInputRef.current?.click()}>
+            {busy === 'upload' ? 'Uploading…' : '⇪ Upload file'}
           </button>
-        )}
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          style={{ display: 'none' }}
-          onChange={e => { handleFiles([...e.target.files]); e.target.value = ''; }}
-        />
-      </div>
+          {invoiceDocNumber && (
+            <button className="att-btn invoice" disabled={busy === 'invoice' || !parentId} onClick={handleGetInvoice}
+              title={`QuickBooks invoice #${invoiceDocNumber}`}>
+              {busy === 'invoice' ? 'Fetching…' : (items.some(x => x.name === invoiceFileName(invoiceDocNumber)) ? '↻ Refresh invoice PDF' : '⬇ Get invoice PDF')}
+            </button>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            style={{ display: 'none' }}
+            onChange={e => { handleFiles([...e.target.files]); e.target.value = ''; }}
+          />
+        </div>
+      )}
 
       {error && <p className="att-error">{error}</p>}
 
       <div
         className={`att-drop${dragOver ? ' over' : ''}`}
-        onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+        onDragOver={e => { if (readOnly) return; e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
-        onDrop={e => { e.preventDefault(); setDragOver(false); handleFiles([...e.dataTransfer.files]); }}
+        onDrop={e => { if (readOnly) return; e.preventDefault(); setDragOver(false); handleFiles([...e.dataTransfer.files]); }}
       >
         {loading ? (
           <p className="att-empty">Loading attachments…</p>
         ) : items.length === 0 ? (
-          <p className="att-empty">No attachments yet — drop files here, or use the button above.</p>
+          <p className="att-empty">{readOnly ? 'No attachments.' : 'No attachments yet — drop files here, or use the button above.'}</p>
         ) : (
           <ul className="att-grid">
             {items.map(a => (
@@ -133,9 +135,11 @@ export default function AttachmentsPanel({ parentId, api, title = 'Attachments',
                   <a className="att-name" href={a.url || undefined} onClick={e => { e.preventDefault(); if (a.hasFile) handleOpen(a); }} title={a.name}>{a.name}</a>
                   <span className="att-sub">{a.created ? a.created.split(' ')[0] : 'Just now'}{a.by ? ` · ${a.by}` : ''}</span>
                 </div>
-                <button className="att-del" title="Delete attachment" disabled={busy === a.recordId} onClick={() => handleDelete(a.recordId)}>
-                  {busy === a.recordId ? '…' : '✕'}
-                </button>
+                {!readOnly && (
+                  <button className="att-del" title="Delete attachment" disabled={busy === a.recordId} onClick={() => handleDelete(a.recordId)}>
+                    {busy === a.recordId ? '…' : '✕'}
+                  </button>
+                )}
               </li>
             ))}
           </ul>

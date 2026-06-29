@@ -32,7 +32,7 @@ const MODULES = [
   { id: 'rmi',         label: 'Risk Management', icon: '⚠', group: 'Records' },
   { id: 'trainings', label: 'Trainings', icon: '◳', group: 'Records' },
   { id: 'eol', label: 'Edge of Leadership', icon: '◆', group: 'Records' },
-  { id: 'tnd', label: 'Training & Development', icon: '✦', group: 'Records' },
+  { id: 'tnd', label: 'Team Development', icon: '✦', group: 'Records' },
   { id: 'oe-lookup', label: 'OE Lookup', icon: '◎', group: 'Records' },
   { id: 'products', label: 'Products & Services', icon: '◫', group: 'Records' },
   { id: 'projects', label: 'Course projects', icon: '◈', group: 'Projects' },

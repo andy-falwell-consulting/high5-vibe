@@ -9,6 +9,9 @@ import './TandD.css';
 
 const LAYOUT = 'trainings_New'; // TEMP placeholder — net-new module; swap to the real T&D layout once created in FileMaker
 const CACHE_VERSION = 1;
+// This page is view-only — records (fields + attachments) cannot be edited.
+// Flip to false to re-enable inline editing + the save bar.
+const RECORDS_LOCKED = true;
 
 const STATUS_COLOR = {
   'Final Invoiced': '#22c55e',
@@ -209,7 +212,7 @@ export default function TandD({ navTarget, onClearNav, onRecordSelect } = {}) {
         <div className="tnd-sidebar-header">
           <div className="tnd-sidebar-title">
             <div>
-              <div className="tnd-sidebar-module">Training & Development</div>
+              <div className="tnd-sidebar-module">Team Development</div>
               <div className="tnd-sidebar-count">{total ? `${total.toLocaleString()} programs` : 'Loading…'}</div>
             </div>
           </div>
@@ -270,32 +273,32 @@ export default function TandD({ navTarget, onClearNav, onRecordSelect } = {}) {
             <div className="tnd-content">
               <Section title="Program" icon="◈">
                 <div className="tnd-field-grid">
-                  <TextField label="Organization" fieldKey="zz__Display_Organization__ct" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} />
-                  <TextField label="Contact" fieldKey="zz__Display_Contact__ct" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} />
-                  <TextField label="Type of program" fieldKey="Type of Program" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="Status" fieldKey="Status" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="Start date" fieldKey="Start Date" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="End date" fieldKey="End Date" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="# Days" fieldKey="# Days" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="# Hours" fieldKey="# Hours" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="Audience" fieldKey="Audience" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="Group size" fieldKey="Group Size" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="Lead trainer" fieldKey="Lead Trainer" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="Workshop location" fieldKey="Workshop Location" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="Inspection required" fieldKey="Inspection Required" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
+                  <TextField label="Organization" fieldKey="zz__Display_Organization__ct" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable={false} />
+                  <TextField label="Contact" fieldKey="zz__Display_Contact__ct" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable={false} />
+                  <TextField label="Type of program" fieldKey="Type of Program" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable />
+                  <TextField label="Status" fieldKey="Status" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable />
+                  <TextField label="Start date" fieldKey="Start Date" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable />
+                  <TextField label="End date" fieldKey="End Date" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable />
+                  <TextField label="# Days" fieldKey="# Days" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable />
+                  <TextField label="# Hours" fieldKey="# Hours" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable />
+                  <TextField label="Audience" fieldKey="Audience" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable />
+                  <TextField label="Group size" fieldKey="Group Size" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable />
+                  <TextField label="Lead trainer" fieldKey="Lead Trainer" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable />
+                  <TextField label="Workshop location" fieldKey="Workshop Location" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable />
+                  <TextField label="Inspection required" fieldKey="Inspection Required" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable />
                   {otherTrainers && <div className="tnd-field wide"><label>Additional trainers</label><span className="tnd-value">{otherTrainers}</span></div>}
-                  <TextField label="Location address" fieldKey="Location Address" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable wide />
-                  <TextField label="Description of training" fieldKey="Description of Training" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable wide />
+                  <TextField label="Location address" fieldKey="Location Address" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable wide />
+                  <TextField label="Description of training" fieldKey="Description of Training" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable wide />
                 </div>
               </Section>
 
               <Section title="Contact" icon="◉">
                 <div className="tnd-field-grid">
-                  <TextField label="Contact" fieldKey="zz__Display_Contact__ct" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} />
-                  <TextField label="Phone" fieldKey="trnpp_cntct_PHONE::Number" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} mono />
-                  <TextField label="Mobile" fieldKey="trnpp_cntct_PHONE_mobile::Number" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} mono />
-                  <TextField label="Email" fieldKey="trnpp_cntct_INADR__email::zz__Address__ct" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} />
-                  <TextField label="Billing address" fieldKey="Address_Block_Billing" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} wide />
+                  <TextField label="Contact" fieldKey="zz__Display_Contact__ct" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable={false} />
+                  <TextField label="Phone" fieldKey="trnpp_cntct_PHONE::Number" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable={false} mono />
+                  <TextField label="Mobile" fieldKey="trnpp_cntct_PHONE_mobile::Number" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable={false} mono />
+                  <TextField label="Email" fieldKey="trnpp_cntct_INADR__email::zz__Address__ct" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable={false} />
+                  <TextField label="Billing address" fieldKey="Address_Block_Billing" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable={false} wide />
                 </div>
               </Section>
 
@@ -327,27 +330,27 @@ export default function TandD({ navTarget, onClearNav, onRecordSelect } = {}) {
               <Section title="Logistics" icon="⚐">
                 <div className="tnd-field-grid">
                   {LOGISTICS_FIELDS.map(l => (
-                    <TextField key={l.key} label={l.label} fieldKey={l.key} f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
+                    <TextField key={l.key} label={l.label} fieldKey={l.key} f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable />
                   ))}
-                  <TextField label="Logistics notes" fieldKey="Logistics Notes" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable wide />
+                  <TextField label="Logistics notes" fieldKey="Logistics Notes" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable wide />
                 </div>
               </Section>
 
               <Section title="Sales / pipeline" icon="◔">
                 <div className="tnd-field-grid">
-                  <TextField label="Proposed" fieldKey="Proposed" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="Confirmed" fieldKey="Confirmed" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="Final sent" fieldKey="Final Sent" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="Sent in-house" fieldKey="sent in-house" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="Email sent" fieldKey="email_sent_date" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="Deposit #" fieldKey="deposit_number" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="QB estimate ID" fieldKey="_kat__QuickBooks_Estimate_ID" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} mono />
-                  <TextField label="QB invoice ID" fieldKey="_kat__QuickBooks_Invoice_ID" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} mono />
+                  <TextField label="Proposed" fieldKey="Proposed" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable />
+                  <TextField label="Confirmed" fieldKey="Confirmed" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable />
+                  <TextField label="Final sent" fieldKey="Final Sent" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable />
+                  <TextField label="Sent in-house" fieldKey="sent in-house" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable />
+                  <TextField label="Email sent" fieldKey="email_sent_date" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable />
+                  <TextField label="Deposit #" fieldKey="deposit_number" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable />
+                  <TextField label="QB estimate ID" fieldKey="_kat__QuickBooks_Estimate_ID" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable={false} mono />
+                  <TextField label="QB invoice ID" fieldKey="_kat__QuickBooks_Invoice_ID" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable={false} mono />
                 </div>
               </Section>
 
               <div className="tnd-section tnd-section-att">
-                <AttachmentsPanel parentId={f._kpt__TrainingProposal_ID} api={trainingAttachments} title="Photos" invoiceDocNumber={f._kat__QuickBooks_Invoice_ID} />
+                <AttachmentsPanel parentId={f._kpt__TrainingProposal_ID} api={trainingAttachments} title="Photos" invoiceDocNumber={f._kat__QuickBooks_Invoice_ID} readOnly={RECORDS_LOCKED} />
               </div>
 
               <div className="tnd-record-footer">
