@@ -7,6 +7,7 @@ import RecordSaveBar from './RecordSaveBar';
 import ComposeEmail from './ComposeEmail';
 import ReminderModal from './ReminderModal';
 import { invoiceRowInfo } from './InvoicePane';
+import { getCurrentEnv } from '../config/fmpEnvironments';
 import './Contacts.css';
 
 const LAYOUT = 'Contacts_New';
@@ -92,7 +93,7 @@ const PORTAL_LABEL = {
 // is the related record's id in its own base table, which matches the target
 // module's layout. Only these two have a navigable destination module; other
 // portals (training, certs, estimates, invoices, risk, related) have none.
-const PORTAL_NAV = { inspections: 'inspections', ccs: 'projects', custom_training: 'trainings' };
+const PORTAL_NAV = { inspections: 'inspections', ccs: 'projects', custom_training: 'trainings', estimates: 'estimates', rmi: 'rmi', related: 'contacts' };
 
 const TABS = [
   { id: 'overview',    label: 'Overview' },
@@ -105,6 +106,30 @@ const TABS = [
 
 const money = v => '$' + Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
 const num = v => Number(v || 0);
+
+const INVO_LAYOUT = 'Invoices_Form';
+// Invoices have no in-app record page, so "open" = view the QBO PDF: lazily
+// fetch + attach it on first view. Opens a tab synchronously so popup blockers
+// don't eat it, then points it at the container URL.
+async function openInvoicePdf(recordId, docNumber) {
+  if (!recordId) return;
+  const win = window.open('', '_blank');
+  try {
+    invalidateRecord(INVO_LAYOUT, recordId);
+    let res = await getRecord(INVO_LAYOUT, recordId);
+    let streaming = res?.response?.data?.[0]?.fieldData?.Invoice_PDF;
+    if (!streaming) {
+      const resp = await fetch('/api/qbo', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'attach-invoice-pdf', db: getCurrentEnv().db, recordId, docNumber }),
+      });
+      if (resp.ok) { invalidateRecord(INVO_LAYOUT, recordId); res = await getRecord(INVO_LAYOUT, recordId); streaming = res?.response?.data?.[0]?.fieldData?.Invoice_PDF; }
+    }
+    if (!streaming) { win?.close(); window.alert('No PDF available for this invoice.'); return; }
+    let url = streaming; try { const u = new URL(streaming); url = u.pathname + u.search; } catch { /* use as-is */ }
+    if (win) win.location = url; else window.open(url, '_blank');
+  } catch { win?.close(); window.alert('Could not open the invoice PDF.'); }
+}
 
 const parseFmDate = v => {
   if (!v) return 0;
@@ -151,11 +176,11 @@ function FieldValue({ fieldKey, value, onChange, editing }) {
 // are clickable and deep-link into the related record's module.
 function PortalTable({ id, rows, onOpenRow }) {
   const linkProps = r => (onOpenRow && r.recordId)
-    ? { className: 'ct-row-link', onClick: () => onOpenRow(r.recordId), title: 'Open record' }
+    ? { className: 'ct-row-link', onClick: () => onOpenRow(r), title: 'Open' }
     : {};
   if (id === 'related') return (
     <table className="ct-table"><thead><tr><th>Name</th><th>Phone</th><th>Email</th></tr></thead>
-      <tbody>{rows.map((r, i) => <tr key={i}><td>{r['cntct_RLTN::zz__Display__ct']}</td><td className="mono">{r['cntct_rltn_cntct_PHONE::Number']}</td><td>{r['cntct_rltn_cntct_INADR__email::Address']}</td></tr>)}</tbody></table>
+      <tbody>{rows.map((r, i) => <tr key={i} {...linkProps(r)}><td>{r['cntct_RLTN::zz__Display__ct']}</td><td className="mono">{r['cntct_rltn_cntct_PHONE::Number']}</td><td>{r['cntct_rltn_cntct_INADR__email::Address']}</td></tr>)}</tbody></table>
   );
   if (id === 'inspections') return (
     <table className="ct-table"><thead><tr><th>Date</th><th>Organization</th><th>Contact</th><th>Inspector</th></tr></thead>
@@ -179,14 +204,14 @@ function PortalTable({ id, rows, onOpenRow }) {
   );
   if (id === 'estimates') return (
     <table className="ct-table"><thead><tr><th>ID</th><th>Date</th><th>Title</th><th className="num">Total</th><th>Status</th></tr></thead>
-      <tbody>{rows.map((r, i) => <tr key={i}><td className="mono">{r['cntct_ESTMT::_kpt__Estimate_ID']}</td><td>{r['cntct_ESTMT::Date']}</td><td>{r['cntct_ESTMT::Title']}</td><td className="num">{money(r['cntct_ESTMT::zz__Total__xn'])}</td><td>{r['cntct_ESTMT::Status']}</td></tr>)}</tbody></table>
+      <tbody>{rows.map((r, i) => <tr key={i} {...linkProps(r)}><td className="mono">{r['cntct_ESTMT::_kpt__Estimate_ID']}</td><td>{r['cntct_ESTMT::Date']}</td><td>{r['cntct_ESTMT::Title']}</td><td className="num">{money(r['cntct_ESTMT::zz__Total__xn'])}</td><td>{r['cntct_ESTMT::Status']}</td></tr>)}</tbody></table>
   );
   if (id === 'invoices') return (
     <table className="ct-table"><thead><tr><th>QB Ref</th><th>Date</th><th className="num">Total</th><th className="num">Balance</th><th>Status</th></tr></thead>
       <tbody>{[...rows].sort((a, b) => parseFmDate(b['cntct_INVO::Date']) - parseFmDate(a['cntct_INVO::Date'])).map((r, i) => {
         const info = invoiceRowInfo(r);
         return (
-          <tr key={i}>
+          <tr key={i} {...linkProps(r)}>
             <td className="mono">#{r['cntct_INVO::QuickBooks_Reference_Number'] || '—'}</td>
             <td>{r['cntct_INVO::Date']}</td>
             <td className="num">{money(info.total)}</td>
@@ -523,8 +548,12 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
                     const groups = t.portals.filter(id => rowsOf(p, id).length > 0);
                     if (groups.length === 0) return <p className="ct-empty-portal" key={t.id}>No records</p>;
                     return groups.map(id => {
-                      const targetModule = PORTAL_NAV[id];
-                      const onOpenRow = targetModule ? (recordId) => onNavigateTo?.(targetModule, recordId) : null;
+                      const onOpenRow =
+                        id === 'invoices'
+                          ? (r) => openInvoicePdf(r.recordId, r['cntct_INVO::QuickBooks_Reference_Number'])
+                          : PORTAL_NAV[id]
+                            ? (r) => onNavigateTo?.(PORTAL_NAV[id], r.recordId)
+                            : null;
                       return (
                         <div className="ct-portal-group" key={id}>
                           <div className="ct-portal-h">{PORTAL_LABEL[id]} <span className="ct-portal-n">{rowsOf(p, id).length}</span></div>
