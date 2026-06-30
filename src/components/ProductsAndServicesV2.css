@@ -293,6 +293,27 @@
   text-transform: uppercase;
 }
 
+/* Editable title — matches .v2-title but reads as an input. */
+.v2-title-input {
+  width: 100%;
+  margin: 0 0 6px;
+  font-family: 'Oswald', sans-serif;
+  font-size: 28px;
+  font-weight: 600;
+  color: #f1f5f9;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  background: #0f1117;
+  border: 1px solid #2a2f45;
+  border-radius: 8px;
+  padding: 4px 10px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.v2-title-input:focus { border-color: #e8322a; }
+[data-theme="light"] .v2-title-input { color: #0f172a; background: #ffffff; border-color: #e2e8f0; }
+
 .v2-meta-row {
   display: flex;
   align-items: center;
