@@ -8,6 +8,7 @@
   "crons": [
     { "path": "/api/sync?db=High5_Core4", "schedule": "*/5 * * * *" },
     { "path": "/api/sync?db=High5_Core4_Dev", "schedule": "*/5 * * * *" },
+    { "path": "/api/qbo-invoice-sync?db=High5_Core4", "schedule": "*/5 * * * *" },
     { "path": "/api/qbo-invoice-sync?db=High5_Core4_Dev", "schedule": "*/5 * * * *" },
     { "path": "/api/replica-reconcile?db=High5_Core4", "schedule": "0 * * * *" },
     { "path": "/api/replica-reconcile?db=High5_Core4_Dev", "schedule": "0 * * * *" }
