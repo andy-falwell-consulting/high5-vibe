@@ -173,6 +173,7 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
   const [imgStatus, setImgStatus] = useState(null);        // null | 'uploading' | 'saved'
   const imgInputRef = useRef(null);
   const previewRef = useRef(null);
+  const bomTotalRef = useRef(0);   // live BOM total, so the override toggle can seed Unit Price
   const isResizing = useRef(false);
 
   // Set/replace the optimistic preview, revoking the previous blob URL.
@@ -245,7 +246,15 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
     if (rec) { handleSelect(rec); onClearNav?.(); }
   }, [navTarget, records]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleFieldChange = useCallback((fk, v) => setEdits(p => ({ ...p, [fk]: v })), []);
+  const handleFieldChange = useCallback((fk, v) => setEdits(p => {
+    const next = { ...p, [fk]: v };
+    // Turning on "price override" seeds the unit price with the computed BOM
+    // total, so you start from component pricing and adjust from there.
+    if (fk === 'price_override' && v && bomTotalRef.current > 0) {
+      next.Unit_Price = Number(bomTotalRef.current.toFixed(2));
+    }
+    return next;
+  }), []);
   const handleDiscard = () => { setEdits({}); setBomOps([]); setDataEditing(false); setSaveStatus(null); };
 
   const handleSave = async () => {
@@ -477,10 +486,14 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
     })),
   ];
   const bomTotal = bom.reduce((a, r) => a + Number(r['item_ITMLI__billOfMaterials::Total'] || 0), 0);
+  bomTotalRef.current = bomTotal;
   // Assembly products are priced from their bill of materials (sum of component
-  // line totals); everything else uses the unit price.
+  // line totals); everything else uses the unit price. "Price override" lets an
+  // assembly use the manually-entered unit price instead — so you can compute
+  // component pricing, then bump it (e.g. Catwalk Outdoor).
   const isAssembly = !!fval('assembly_product');
-  const price = isAssembly ? bomTotal : (Number(fval('Unit_Price')) || 0);
+  const priceOverride = !!fval('price_override');
+  const price = (isAssembly && !priceOverride) ? bomTotal : (Number(fval('Unit_Price')) || 0);
   const profit = price - cost;
   const marginPct = price > 0 && cost > 0 ? (profit / price) * 100 : null;
   const marginColor = marginPct == null ? '#64748b' : marginPct < 0 ? '#ef4444' : marginPct < 15 ? '#f59e0b' : '#22c55e';
@@ -632,7 +645,7 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
                     {f.Vendor && <span className="v2-sku"><span className="dim">Vendor</span> {f.Vendor}</span>}
                   </div>
                   <div className="v2-kpis">
-                    <div className="v2-kpi"><div className="v2-kpi-label">Price{isAssembly ? ' · BOM' : ''}</div><div className="v2-kpi-num">{money(price)}</div></div>
+                    <div className="v2-kpi"><div className="v2-kpi-label">Price{isAssembly ? (priceOverride ? ' · override' : ' · BOM') : ''}</div><div className="v2-kpi-num">{money(price)}</div></div>
                     <div className="v2-kpi"><div className="v2-kpi-label">Cost</div><div className="v2-kpi-num">{cost ? money(cost) : '—'}</div></div>
                     <div className="v2-kpi"><div className="v2-kpi-label">Margin</div><div className="v2-kpi-num" style={{ color: marginColor }}>{marginPct == null ? '—' : `${marginPct.toFixed(1)}%`}</div></div>
                     <div className="v2-kpi"><div className="v2-kpi-label">Profit / unit</div><div className="v2-kpi-num" style={{ color: marginPct != null && profit < 0 ? '#ef4444' : undefined }}>{cost ? money(profit) : '—'}</div></div>
