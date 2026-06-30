@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { getRecord, prefetchRecord, updateRecord, createRecord, addCachedRecord, addPortalRow, invalidateRecord } from '../api/filemaker';
+import { getRecord, prefetchRecord, updateRecord, createRecord, addCachedRecord, addPortalRow, invalidateRecord, deleteRecord, findInLayout } from '../api/filemaker';
 import { useAllRecords } from '../hooks/useAllRecords';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
+import ContactPicker from './ContactPicker';
 import RecordFormModal from './RecordFormModal';
 import RecordSaveBar from './RecordSaveBar';
 import ComposeEmail from './ComposeEmail';
@@ -174,13 +175,13 @@ function FieldValue({ fieldKey, value, onChange, editing }) {
 
 // Read-only table for a portal occurrence. When `onOpenRow` is provided, rows
 // are clickable and deep-link into the related record's module.
-function PortalTable({ id, rows, onOpenRow }) {
+function PortalTable({ id, rows, onOpenRow, onRemove }) {
   const linkProps = r => (onOpenRow && r.recordId)
     ? { className: 'ct-row-link', onClick: () => onOpenRow(r), title: 'Open' }
     : {};
   if (id === 'related') return (
-    <table className="ct-table"><thead><tr><th>Name</th><th>Phone</th><th>Email</th></tr></thead>
-      <tbody>{rows.map((r, i) => <tr key={i} {...linkProps(r)}><td>{r['cntct_RLTN::zz__Display__ct']}</td><td className="mono">{r['cntct_rltn_cntct_PHONE::Number']}</td><td>{r['cntct_rltn_cntct_INADR__email::Address']}</td></tr>)}</tbody></table>
+    <table className="ct-table"><thead><tr><th>Name</th><th>Phone</th><th>Email</th>{onRemove && <th aria-label="Unlink" />}</tr></thead>
+      <tbody>{rows.map((r, i) => <tr key={i} {...linkProps(r)}><td>{r['cntct_rltn_CNTCT::zz__Display__ct'] || r['cntct_RLTN::zz__Display__ct']}</td><td className="mono">{r['cntct_rltn_cntct_PHONE::Number']}</td><td>{r['cntct_rltn_cntct_INADR__email::Address']}</td>{onRemove && <td className="num"><button className="ct-unlink" title="Unlink contact" onClick={(e) => { e.stopPropagation(); onRemove(r); }}>✕</button></td>}</tr>)}</tbody></table>
   );
   if (id === 'inspections') return (
     <table className="ct-table"><thead><tr><th>Date</th><th>Organization</th><th>Contact</th><th>Inspector</th></tr></thead>
@@ -241,6 +242,7 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
   const [addMethod, setAddMethod] = useState(null); // 'phone' | 'email' | 'address'
   const [composeOpen, setComposeOpen] = useState(false);
   const [remindOpen, setRemindOpen] = useState(false);
+  const [showLinkPicker, setShowLinkPicker] = useState(false);
   const isResizing = useRef(false);
 
   // Add a phone/email/address row to the selected contact, then refresh detail.
@@ -255,6 +257,48 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
     const d = await getRecord(LAYOUT, selected.recordId);
     const fresh = d?.response?.data?.[0];
     if (fresh) setSelected(fresh);
+  }
+
+  async function refreshSelected() {
+    invalidateRecord(LAYOUT, selected.recordId);
+    const d = await getRecord(LAYOUT, selected.recordId);
+    const fresh = d?.response?.data?.[0];
+    if (fresh) setSelected(fresh);
+  }
+
+  // Link an existing contact (reciprocal cntct_RLTN pair). "Sites" are org contacts;
+  // linking a person to one adds them to that site's related-contacts list and vice versa.
+  async function handleLinkContact(contact) {
+    const A = selected?.fieldData?._kpt__Contact_ID;
+    const B = contact?.fieldData?._kpt__Contact_ID;
+    setShowLinkPicker(false);
+    if (!A || !B || String(A) === String(B)) return;
+    try {
+      const existing = await findInLayout('Contact_rltn', [{ _kft__Contact_ID: `==${A}`, _kft__Contact_ID_Related: `==${B}` }], { limit: 1 });
+      if (!existing?.response?.data?.length) {
+        await createRecord('Contact_rltn', { _kft__Contact_ID: A, _kft__Contact_ID_Related: B });
+        await createRecord('Contact_rltn', { _kft__Contact_ID: B, _kft__Contact_ID_Related: A });
+      }
+      await refreshSelected();
+    } catch (e) { alert(`Could not link contact: ${e.message || e}`); }
+  }
+
+  // Remove a related-contact link — deletes both reciprocal cntct_RLTN records.
+  async function handleUnlinkContact(row) {
+    const A = selected?.fieldData?._kpt__Contact_ID;
+    if (!row?.recordId) return;
+    const name = row['cntct_rltn_CNTCT::zz__Display__ct'] || row['cntct_RLTN::zz__Display__ct'] || 'this contact';
+    if (!window.confirm(`Unlink ${name}?`)) return;
+    try {
+      let B = null;
+      try { const jr = await getRecord('Contact_rltn', row.recordId); B = jr?.response?.data?.[0]?.fieldData?._kft__Contact_ID_Related; } catch { /* ignore */ }
+      await deleteRecord('Contact_rltn', row.recordId);                       // A → B
+      if (A && B) {
+        const mirror = await findInLayout('Contact_rltn', [{ _kft__Contact_ID: `==${B}`, _kft__Contact_ID_Related: `==${A}` }], { limit: 5 });
+        for (const m of (mirror?.response?.data || [])) await deleteRecord('Contact_rltn', m.recordId);
+      }
+      await refreshSelected();
+    } catch (e) { alert(`Could not unlink contact: ${e.message || e}`); }
   }
 
   async function handleCreate(fieldData) {
@@ -545,21 +589,31 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
                   {TABS.filter(t => t.portals).map(t => {
                     if (tab !== t.id) return null;
                     const groups = t.portals.filter(id => rowsOf(p, id).length > 0);
-                    if (groups.length === 0) return <p className="ct-empty-portal" key={t.id}>No records</p>;
-                    return groups.map(id => {
-                      const onOpenRow =
-                        id === 'invoices'
-                          ? (r) => openInvoicePdf(r['cntct_INVO::QuickBooks_Reference_Number'])
-                          : PORTAL_NAV[id]
-                            ? (r) => onNavigateTo?.(PORTAL_NAV[id], r.recordId)
-                            : null;
-                      return (
-                        <div className="ct-portal-group" key={id}>
-                          <div className="ct-portal-h">{PORTAL_LABEL[id]} <span className="ct-portal-n">{rowsOf(p, id).length}</span></div>
-                          <div className="ct-table-wrap"><PortalTable id={id} rows={rowsOf(p, id)} onOpenRow={onOpenRow} /></div>
-                        </div>
-                      );
-                    });
+                    return (
+                      <div key={t.id}>
+                        {t.id === 'related' && (
+                          <div className="ct-related-actions">
+                            <button onClick={() => setShowLinkPicker(true)}>+ Link contact</button>
+                          </div>
+                        )}
+                        {groups.length === 0
+                          ? <p className="ct-empty-portal">{t.id === 'related' ? 'No linked contacts yet — use “+ Link contact” to add one.' : 'No records'}</p>
+                          : groups.map(id => {
+                            const onOpenRow =
+                              id === 'invoices'
+                                ? (r) => openInvoicePdf(r['cntct_INVO::QuickBooks_Reference_Number'])
+                                : PORTAL_NAV[id]
+                                  ? (r) => onNavigateTo?.(PORTAL_NAV[id], r.recordId)
+                                  : null;
+                            return (
+                              <div className="ct-portal-group" key={id}>
+                                <div className="ct-portal-h">{PORTAL_LABEL[id]} <span className="ct-portal-n">{rowsOf(p, id).length}</span></div>
+                                <div className="ct-table-wrap"><PortalTable id={id} rows={rowsOf(p, id)} onOpenRow={onOpenRow} onRemove={id === 'related' ? handleUnlinkContact : undefined} /></div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    );
                   })}
                 </div>
               </div>
@@ -613,6 +667,14 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
             title: `Follow up with ${f?.zz__Display__ct || f?.Name_Organization || 'contact'}`,
           }}
           onClose={() => setRemindOpen(false)}
+        />
+      )}
+
+      {showLinkPicker && selected && (
+        <ContactPicker
+          title={String(f?.Organization) === '1' ? 'Add a contact to this site' : 'Link a contact'}
+          onSelect={handleLinkContact}
+          onClose={() => setShowLinkPicker(false)}
         />
       )}
     </div>

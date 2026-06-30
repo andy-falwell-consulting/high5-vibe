@@ -545,6 +545,16 @@
 .ct-card-add button:hover { background: #e8322a; border-color: #e8322a; color: #fff; }
 [data-theme="light"] .ct-card-add button { background: #f1f5f9; border-color: #e2e8f0; color: #5e6b7c; }
 [data-theme="light"] .ct-card-add button:hover { background: #e8322a; border-color: #e8322a; color: #fff; }
+
+.ct-related-actions { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+.ct-related-actions button { padding: 4px 10px; border-radius: 6px; border: 1px solid #2d3148; background: #1e2130; color: #cbd5e1; font-size: 13px; font-weight: 600; cursor: pointer; }
+.ct-related-actions button:hover { background: #e8322a; border-color: #e8322a; color: #fff; }
+.ct-unlink { background: none; border: none; color: #64748b; cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 4px; line-height: 1; }
+.ct-unlink:hover { color: #fff; background: #ef4444; }
+[data-theme="light"] .ct-related-actions button { background: #f1f5f9; border-color: #e2e8f0; color: #334155; }
+[data-theme="light"] .ct-related-actions button:hover { background: #e8322a; border-color: #e8322a; color: #fff; }
+[data-theme="light"] .ct-unlink { color: #94a3b8; }
+[data-theme="light"] .ct-unlink:hover { color: #fff; background: #ef4444; }
 .ct-kv { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-top: 1px solid #1a1d2e; font-size: 15px; }
 .ct-kv:first-of-type { border-top: none; }
 .ct-kv-k { color: #8b97aa; flex-shrink: 0; }
