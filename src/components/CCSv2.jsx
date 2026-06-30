@@ -188,15 +188,6 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
     return '#d85a30';
   }, [eventUrgent, eventCritical]);
 
-  // Next actions: nearest incomplete items, in phase order
-  const nextActions = useMemo(() => {
-    const out = [];
-    for (const p of PHASES) for (const [k, label] of p.items) {
-      const v = k in edits ? edits[k] : f[k];
-      if (!isOn(v)) out.push({ key: k, label, phase: p.name, phaseId: p.id });
-    }
-    return out;
-  }, [edits, f]);
 
   // Financial roll-ups from portals
   const portals = selected?.portalData || {};
@@ -397,26 +388,6 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                 </div>
               </div>
 
-              {/* urgency / next actions */}
-              {(eventUrgent || nextActions.length > 0) && (
-                <div className={`cv2-next${eventCritical ? ' crit' : eventUrgent ? ' warn' : ''}`}>
-                  <div className="cv2-next-head">
-                    {eventUrgent
-                      ? <span className="cv2-next-title">{eventCritical ? '⚠ ' : '⏳ '}Event in {startDays} day{startDays === 1 ? '' : 's'} · {eventStat.all - eventStat.done} prep item{eventStat.all - eventStat.done === 1 ? '' : 's'} left</span>
-                      : <span className="cv2-next-title">Next actions</span>}
-                  </div>
-                  {nextActions.length === 0
-                    ? <div className="cv2-next-clear">✓ All checklist items complete</div>
-                    : <div className="cv2-next-chips">
-                        {nextActions.slice(0, 5).map(a => (
-                          <button key={a.key} className="cv2-next-chip" onClick={() => { toggle(a.key); setExpanded(p => ({ ...p, [a.phaseId]: true })); }}>
-                            <span className="cv2-next-box" /><span>{a.label}</span><span className="cv2-next-phase">{a.phase}</span>
-                          </button>
-                        ))}
-                        {nextActions.length > 5 && <span className="cv2-next-more">+{nextActions.length - 5} more</span>}
-                      </div>}
-                </div>
-              )}
 
               {/* KPIs */}
               <div className="cv2-kpis">
@@ -425,7 +396,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                 <div className="cv2-kpi"><div className="cv2-kpi-label">Balance due</div><div className="cv2-kpi-num" style={{ color: balanceDue ? '#854f0b' : 'inherit' }}>{fmtMoney(balanceDue)}</div></div>
                 <div className="cv2-kpi">
                   <div className="cv2-kpi-label">Event date</div>
-                  <div className="cv2-kpi-num">{fmtDateShort(val('rcd start date'))}</div>
+                  <div className="cv2-kpi-num">{fmtDate(val('rcd start date'))}</div>
                   {startDays != null && <div className={`cv2-kpi-sub${eventUrgent ? ' urg' : ''}`}>{startDays < 0 ? `${-startDays}d ago` : startDays === 0 ? 'today' : `in ${startDays}d`}</div>}
                 </div>
               </div>
