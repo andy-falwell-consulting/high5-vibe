@@ -301,6 +301,21 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
     } catch (e) { alert(`Could not unlink contact: ${e.message || e}`); }
   }
 
+  // Open the related contact. The related portal row's recordId is the Contact_rltn
+  // JOIN record, not the contact — so resolve _kft__Contact_ID_Related → the contact.
+  async function handleOpenRelated(row) {
+    if (!row?.recordId) return;
+    let B = null;
+    try { const jr = await getRecord('Contact_rltn', row.recordId); B = jr?.response?.data?.[0]?.fieldData?._kft__Contact_ID_Related; } catch { /* ignore */ }
+    if (!B) return;
+    let target = records.find(r => String(r.fieldData?._kpt__Contact_ID) === String(B));
+    if (!target) {
+      const res = await findInLayout('Contacts_New', [{ _kpt__Contact_ID: `==${B}` }], { limit: 1 });
+      target = res?.response?.data?.[0] || null;
+    }
+    if (target) { handleSelect(target); onRecordSelect?.(target.recordId, target.fieldData?.zz__Display__ct); }
+  }
+
   async function handleCreate(fieldData) {
     const res = await createRecord(LAYOUT, fieldData);
     const newId = res?.response?.recordId;
@@ -602,9 +617,11 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
                             const onOpenRow =
                               id === 'invoices'
                                 ? (r) => openInvoicePdf(r['cntct_INVO::QuickBooks_Reference_Number'])
-                                : PORTAL_NAV[id]
-                                  ? (r) => onNavigateTo?.(PORTAL_NAV[id], r.recordId)
-                                  : null;
+                                : id === 'related'
+                                  ? (r) => handleOpenRelated(r)
+                                  : PORTAL_NAV[id]
+                                    ? (r) => onNavigateTo?.(PORTAL_NAV[id], r.recordId)
+                                    : null;
                             return (
                               <div className="ct-portal-group" key={id}>
                                 <div className="ct-portal-h">{PORTAL_LABEL[id]} <span className="ct-portal-n">{rowsOf(p, id).length}</span></div>
