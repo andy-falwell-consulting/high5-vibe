@@ -24,32 +24,36 @@ const STATUS_OPTIONS = ['Proposed', 'Confirmed', 'Confirmed/Scheduled', 'In Prog
 const PROJECT_TYPES  = ['Inspection', 'New Construction', 'Renovation', 'Repair', 'Training', 'Other'];
 const BUILDER_OPTIONS = ['', 'Dave Klim', 'Lucas Germano', 'Gary Hillsgrove', 'Todd Brown', 'Ian Doak', 'Kyle Myers', 'Colin Morton'];
 
-// Phases → checklist fields (exact FileMaker keys), with friendly labels.
+// Phases → checklist fields (exact FileMaker keys), with labels mirroring the
+// RCD_New "Additional Info" tab (Pre-Proposal / Proposal / Contract and Deposit
+// / Job Prep). Keep this in sync with that tab.
 const PHASES = [
-  { id: 'pre_project', name: 'Pre-project', items: [
-    ['pp_New_cust_exist_course_survey', 'Site survey'], ['pp_Created Client Folder', 'Client folder created'],
-    ['pp_Create CCS for Site Eval', 'CCS for site eval'], ['p_CCS Estimate', 'CCS estimate'],
-    ['p_Training Plan', 'Training plan'], ['p_Drawings', 'Drawings'],
-    ['p_Mark as Proposed', 'Mark as proposed'], ['pp_Sent PD Form', 'Sent PD form'],
+  { id: 'pre_proposal', name: 'Pre-Proposal', items: [
+    ['pp_Sent PD Form', 'Sent Program Development Form'],
+    ['pp_New_cust_exist_course_survey', 'New customer with Existing Course Survey'],
+    ['pp_Created Client Folder', 'Create Client Folder on the Server'],
+    ['pp_Create CCS for Site Eval', 'Site Visit / Zoom Meeting (Create a CCS record for SITE EVAL)'],
   ]},
-  { id: 'contract', name: 'Contract & deposit', items: [
-    ['cd_Sent Contract', 'Sent contract'], ['cd_Add to Cal', 'Add to calendar'],
-    ['cd_Received Contract', 'Received contract'], ['cd_Received Deposit', 'Received deposit'],
-    ['cd_Received PO', 'Received PO'], ['Final_Invoice_Received', 'Final invoice received'],
+  { id: 'proposal', name: 'Proposal', items: [
+    ['p_CCS Estimate', 'CCS Estimate'],
+    ['p_Training Plan', 'Training Plan'],
+    ['p_Drawings', 'Drawings'],
+    ['p_Mark as Proposed', 'Mark as Proposed'],
   ]},
-  { id: 'install', name: 'Install prep', items: [
-    ['iprep_Prefab List', 'Prefab list'], ['iprep_Construction Layout', 'Construction layout'],
-    ['iprep_Training', 'Training'], ['iprep_Equipment', 'Equipment'], ['iprep_Need Inspection', 'Need inspection'],
+  { id: 'contract', name: 'Contract and Deposit', items: [
+    ['cd_Sent Contract', 'Send Contract and Deposit Invoice'],
+    ['cd_Add to Cal', 'Offer Dates and add to calendar'],
+    ['cd_Received Contract', 'Received Contract'],
+    ['cd_Received Deposit', 'Received Deposit'],
+    ['cd_Received PO', 'Received PO'],
   ]},
-  { id: 'event', name: 'Event prep', items: [
-    ['eprep_Setting Scheduled', 'Setting scheduled'], ['eprep_Setting Complete', 'Setting complete'],
-    ['eprep_Dig Safe', 'Dig safe'], ['eprep_Equipment Requested', 'Equipment requested'],
-    ['eprep_Equipment Reserved', 'Equipment reserved'], ['eprep_Poles Ordered', 'Poles ordered'],
-    ['eprep_Poles Delivered', 'Poles delivered'], ['eprep_Climbing Holds Ordered', 'Holds ordered'],
-    ['eprep_Climbing Holds Delivered', 'Holds delivered'], ['eprep_Tarps Mats Ordered', 'Tarps / mats ordered'],
-    ['eprep_Tarps Mats Delivered', 'Tarps / mats delivered'], ['eprep_Specialty Hardware', 'Specialty hardware'],
-    ['eprep_Lumber_ordered', 'Lumber ordered'], ['eprep_Lumber_ordered_delivered', 'Lumber delivered'],
-    ['eprep_Permits', 'Permits'],
+  { id: 'job_prep', name: 'Job Prep', items: [
+    ['Populate_Work_Order', 'Mark as confirmed/scheduled. Populate work order.'],
+    ['iprep_Prefab List', 'Prefab List'],
+    ['iprep_Construction Layout', 'Construction Layout'],
+    ['iprep_Training', 'Training, Notify Director of Training'],
+    ['iprep_Equipment', 'Equipment, Notify Catalog'],
+    ['iprep_Need Inspection', 'Inspection Needed?'],
   ]},
 ];
 
@@ -174,13 +178,13 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   const allPhasesDone = phaseStats.every(s => s.pct >= 1);
   const pipelineIdx = PIPELINE.indexOf(val('kanban_status'));
   const startDays = daysUntil(val('rcd start date'));
-  const eventStat = phaseStats.find(s => s.id === 'event');
+  const eventStat = phaseStats.find(s => s.id === 'job_prep');
   const eventUrgent = startDays != null && startDays >= 0 && startDays <= 30 && eventStat && eventStat.pct < 1;
   const eventCritical = eventUrgent && startDays <= 10;
 
   const phaseColor = useCallback((s) => {
     if (s.pct >= 1) return '#1d9e75';
-    if (s.id === 'event' && eventUrgent) return eventCritical ? '#e24b4a' : '#ba7517';
+    if (s.id === 'job_prep' && eventUrgent) return eventCritical ? '#e24b4a' : '#ba7517';
     return '#d85a30';
   }, [eventUrgent, eventCritical]);
 
