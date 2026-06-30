@@ -94,17 +94,23 @@ const PORTAL_LABEL = {
 
 // Portals whose rows deep-link into another module. The portal row's `recordId`
 // is the related record's id in its own base table, which matches the target
-// module's layout. Only these two have a navigable destination module; other
-// portals (training, certs, estimates, invoices, risk, related) have none.
+// module's layout. Invoices open the QBO PDF instead (handled separately).
+// OE Training (WKSRG) and Certifications (CTFC) have no Belay module to open.
 const PORTAL_NAV = { inspections: 'inspections', ccs: 'projects', custom_training: 'trainings', estimates: 'estimates', rmi: 'rmi', related: 'contacts' };
 
+// Tabs mirror the Contacts_New layout's portal tabs, one per portal.
 const TABS = [
-  { id: 'overview',    label: 'Overview' },
-  { id: 'engagements', label: 'Engagements', portals: ['inspections', 'custom_training', 'oe_training', 'ccs', 'certifications'] },
-  { id: 'financials',  label: 'Invoices',    portals: ['estimates', 'invoices'] },
-  { id: 'risk',        label: 'Risk',        portals: ['rmi'] },
-  { id: 'related',     label: 'Related',     portals: ['related'] },
-  { id: 'notes',       label: 'Notes' },
+  { id: 'overview',        label: 'Overview' },
+  { id: 'related',         label: 'Contacts',         portals: ['related'] },
+  { id: 'inspections',     label: 'Inspections',      portals: ['inspections'] },
+  { id: 'custom_training', label: 'Custom Training',   portals: ['custom_training'] },
+  { id: 'oe_training',     label: 'OE Training',       portals: ['oe_training'] },
+  { id: 'ccs',             label: 'CCS',               portals: ['ccs'] },
+  { id: 'certifications',  label: 'Certifications',    portals: ['certifications'] },
+  { id: 'estimates',       label: 'Estimates',         portals: ['estimates'] },
+  { id: 'invoices',        label: 'Invoices',          portals: ['invoices'] },
+  { id: 'rmi',             label: 'RMI',               portals: ['rmi'] },
+  { id: 'notes',           label: 'Notes' },
 ];
 
 const money = v => '$' + Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
@@ -224,7 +230,7 @@ function PortalTable({ id, rows, onOpenRow, onRemove }) {
   );
   if (id === 'rmi') return (
     <table className="ct-table"><thead><tr><th>Entry date</th><th>Risk</th><th>Concern</th><th>Assigned</th><th>Status</th></tr></thead>
-      <tbody>{rows.map((r, i) => <tr key={i}><td>{r['cntct_RMI::Entry_Date']}</td><td>{r['cntct_RMI::Level_of_Risk']}</td><td>{r['cntct_RMI::Level_of_Concern']}</td><td>{r['cntct_RMI::Assigned_To']}</td><td>{r['cntct_RMI::Status']}</td></tr>)}</tbody></table>
+      <tbody>{rows.map((r, i) => <tr key={i} {...linkProps(r)}><td>{r['cntct_RMI::Entry_Date']}</td><td>{r['cntct_RMI::Level_of_Risk']}</td><td>{r['cntct_RMI::Level_of_Concern']}</td><td>{r['cntct_RMI::Assigned_To']}</td><td>{r['cntct_RMI::Status']}</td></tr>)}</tbody></table>
   );
   return null;
 }
@@ -624,7 +630,6 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
                                     : null;
                             return (
                               <div className="ct-portal-group" key={id}>
-                                <div className="ct-portal-h">{PORTAL_LABEL[id]} <span className="ct-portal-n">{rowsOf(p, id).length}</span></div>
                                 <div className="ct-table-wrap"><PortalTable id={id} rows={rowsOf(p, id)} onOpenRow={onOpenRow} onRemove={id === 'related' ? handleUnlinkContact : undefined} /></div>
                               </div>
                             );
