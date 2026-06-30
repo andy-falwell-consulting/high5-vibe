@@ -616,7 +616,12 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
                   <input ref={imgInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
                 </div>
                 <div className="v2-hero-info">
-                  <h1 className="v2-title">{f.Name || '—'}</h1>
+                  {dataEditing ? (
+                    <input className="v2-title-input" value={fval('Name') ?? ''} placeholder="Product name"
+                      onChange={e => handleFieldChange('Name', e.target.value)} />
+                  ) : (
+                    <h1 className="v2-title">{f.Name || '—'}</h1>
+                  )}
                   <div className="v2-meta-row">
                     {f.Category && <span className="v2-cat-chip" style={{ background: catColor+'22', color: catColor, borderColor: catColor+'44' }}>{f.Category}</span>}
                     {f.Type && <span className="v2-type-chip">{f.Type}</span>}
