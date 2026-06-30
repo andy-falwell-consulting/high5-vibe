@@ -91,7 +91,7 @@ function FieldValue({ fieldKey, value, onChange, dataEditing }) {
     return <div className="sl-toggle-wrap"><input type="checkbox" className="sl-toggle" checked={!!value} onChange={e => !ro && ch(e.target.checked ? 1 : '')} readOnly={ro} /></div>;
 
   if (fieldKey === 'Cost' || fieldKey === 'Unit_Price') {
-    if (ro) return <span className="sl-value mono">{value != null ? `$${Number(value).toFixed(2)}` : '—'}</span>;
+    if (ro) return <span className="sl-value mono">{value != null && value !== '' ? money(value) : '—'}</span>;
     return <input type="number" step="0.01" value={value ?? ''} onChange={e => ch(e.target.value)} className="sl-input mono" />;
   }
 
@@ -116,6 +116,9 @@ function FieldValue({ fieldKey, value, onChange, dataEditing }) {
   if (ro) return <span className="sl-value">{value || '—'}</span>;
   return <input type="text" value={value || ''} onChange={e => ch(e.target.value)} className="sl-input" />;
 }
+
+// Money formatter with thousands separators, e.g. 1234.5 → "$1,234.50".
+const money = v => `$${(Number(v) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const AUTO_SYNC_FIELDS = new Set(['Name', 'Unit_Price', 'Description', 'SKU', 'QuickBooks_Account_Income']);
 
@@ -629,10 +632,10 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
                     {f.Vendor && <span className="v2-sku"><span className="dim">Vendor</span> {f.Vendor}</span>}
                   </div>
                   <div className="v2-kpis">
-                    <div className="v2-kpi"><div className="v2-kpi-label">Price{isAssembly ? ' · BOM' : ''}</div><div className="v2-kpi-num">${price.toFixed(2)}</div></div>
-                    <div className="v2-kpi"><div className="v2-kpi-label">Cost</div><div className="v2-kpi-num">{cost ? `$${cost.toFixed(2)}` : '—'}</div></div>
+                    <div className="v2-kpi"><div className="v2-kpi-label">Price{isAssembly ? ' · BOM' : ''}</div><div className="v2-kpi-num">{money(price)}</div></div>
+                    <div className="v2-kpi"><div className="v2-kpi-label">Cost</div><div className="v2-kpi-num">{cost ? money(cost) : '—'}</div></div>
                     <div className="v2-kpi"><div className="v2-kpi-label">Margin</div><div className="v2-kpi-num" style={{ color: marginColor }}>{marginPct == null ? '—' : `${marginPct.toFixed(1)}%`}</div></div>
-                    <div className="v2-kpi"><div className="v2-kpi-label">Profit / unit</div><div className="v2-kpi-num" style={{ color: marginPct != null && profit < 0 ? '#ef4444' : undefined }}>{cost ? `$${profit.toFixed(2)}` : '—'}</div></div>
+                    <div className="v2-kpi"><div className="v2-kpi-label">Profit / unit</div><div className="v2-kpi-num" style={{ color: marginPct != null && profit < 0 ? '#ef4444' : undefined }}>{cost ? money(profit) : '—'}</div></div>
                   </div>
                 </div>
               </div>
@@ -674,7 +677,7 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
                   <div className="v2-spec-card">
                     <div className="v2-spec-head v2-spec-head-row">
                       <span>Bill of materials{bom.length > 0 && ` · ${bom.length}`}</span>
-                      {bomTotal > 0 && <span className="v2-bom-total">Components ${bomTotal.toFixed(2)}</span>}
+                      {bomTotal > 0 && <span className="v2-bom-total">Components {money(bomTotal)}</span>}
                       {dataEditing && <button className="v2-bom-add-btn" onClick={() => setShowBomPicker(true)}>+ Add</button>}
                     </div>
                     {bom.length === 0 ? (
@@ -701,8 +704,8 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
                                       />
                                     ) : qty}
                                   </td>
-                                  <td className="num">${Number(row['item_itmli_ITEM__billOfMaterials::Cost']||0).toFixed(2)}</td>
-                                  <td className="num">${Number(row['item_ITMLI__billOfMaterials::Total']||0).toFixed(2)}</td>
+                                  <td className="num">{money(row['item_itmli_ITEM__billOfMaterials::Cost'])}</td>
+                                  <td className="num">{money(row['item_ITMLI__billOfMaterials::Total'])}</td>
                                   {dataEditing && (
                                     <td className="num">
                                       <button className="v2-bom-remove" title="Remove component" onClick={() => stageRemoveBom(row)}>✕</button>
