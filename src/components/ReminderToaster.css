@@ -15,20 +15,20 @@
 @keyframes rt-in { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
 
 .rt-head { display: flex; align-items: flex-start; gap: 10px; }
-.rt-icon { font-size: 16px; line-height: 1.3; flex-shrink: 0; }
+.rt-icon { font-size: 18px; line-height: 1.3; flex-shrink: 0; }
 .rt-text { flex: 1; min-width: 0; }
-.rt-title { font-size: 14px; font-weight: 500; color: #f1f5f9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rt-title { font-size: 15px; font-weight: 500; color: #f1f5f9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rt-meta { display: flex; align-items: center; gap: 8px; margin-top: 3px; }
-.rt-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: #93c5fd; background: #15233b; border: none; border-radius: 6px; padding: 2px 8px; cursor: pointer; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rt-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: #93c5fd; background: #15233b; border: none; border-radius: 6px; padding: 2px 8px; cursor: pointer; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rt-chip:hover { background: #1d3050; }
-.rt-when { font-size: 12px; color: #94a3b8; }
+.rt-when { font-size: 13px; color: #94a3b8; }
 .rt-when.now { color: #f0716a; font-weight: 500; }
 .rt-when.lead { color: #f0a93b; }
-.rt-x { background: none; border: none; color: #64748b; font-size: 14px; cursor: pointer; flex-shrink: 0; line-height: 1; }
+.rt-x { background: none; border: none; color: #64748b; font-size: 15px; cursor: pointer; flex-shrink: 0; line-height: 1; }
 .rt-x:hover { color: #e2e8f0; }
 
 .rt-actions { display: flex; gap: 6px; margin-top: 10px; padding-left: 26px; }
-.rt-btn { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 500; color: #cbd5e1; background: transparent; border: 1px solid #2d3148; border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+.rt-btn { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 500; color: #cbd5e1; background: transparent; border: 1px solid #2d3148; border-radius: 6px; padding: 5px 10px; cursor: pointer; }
 .rt-btn:hover { border-color: #4a5568; color: #f1f5f9; }
 .rt-btn.done { color: #4ade80; border-color: #1f4030; }
 .rt-btn.done:hover { background: #14361f; border-color: #22c55e; }

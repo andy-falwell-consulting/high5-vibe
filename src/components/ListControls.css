@@ -4,7 +4,7 @@
 .lc-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .lc-chip {
   display: inline-flex; align-items: center; gap: 5px;
-  font-size: 14px; padding: 3px 11px; border-radius: 20px;
+  font-size: 15px; padding: 3px 11px; border-radius: 20px;
   border: 1px solid #2a2f45; background: transparent; color: #94a3b8;
   cursor: pointer; font-family: inherit; transition: all 0.12s;
 }
@@ -17,12 +17,12 @@
 .lc-sort { position: relative; }
 .lc-sort-btn {
   display: inline-flex; align-items: center; gap: 6px;
-  font-size: 14px; padding: 5px 10px; border-radius: 7px;
+  font-size: 15px; padding: 5px 10px; border-radius: 7px;
   border: 1px solid #2a2f45; background: transparent; color: #cbd5e1;
   cursor: pointer; font-family: inherit;
 }
 .lc-sort-btn:hover { border-color: #3a4158; }
-.lc-sort-ic { font-size: 14px; color: #8b97aa; }
+.lc-sort-ic { font-size: 15px; color: #8b97aa; }
 .lc-sort-dir { color: #e8322a; font-weight: 600; }
 
 .lc-menu {
@@ -33,7 +33,7 @@
 .lc-menu-item {
   display: flex; align-items: center; justify-content: space-between;
   width: 100%; box-sizing: border-box; padding: 7px 9px; border-radius: 6px;
-  border: none; background: transparent; color: #cbd5e1; font-size: 14px;
+  border: none; background: transparent; color: #cbd5e1; font-size: 15px;
   cursor: pointer; text-align: left; font-family: inherit;
 }
 .lc-menu-item:hover { background: #262b3d; }
@@ -42,11 +42,11 @@
 .lc-menu-sep { height: 1px; background: #2a2f45; margin: 4px 2px; }
 
 .lc-right { display: flex; align-items: center; gap: 8px; }
-.lc-count { font-size: 13px; color: #79859a; font-variant-numeric: tabular-nums; }
+.lc-count { font-size: 14px; color: #79859a; font-variant-numeric: tabular-nums; }
 .lc-filter-btn {
   width: 28px; height: 26px; border-radius: 7px;
   border: 1px solid #2a2f45; background: transparent; color: #8b97aa;
-  cursor: pointer; font-size: 17px; line-height: 1;
+  cursor: pointer; font-size: 19px; line-height: 1;
 }
 .lc-filter-btn:hover { color: #e2e8f0; border-color: #3a4158; }
 .lc-filter-btn.active { color: #e8322a; border-color: #e8322a55; background: #e8322a14; }
@@ -56,16 +56,16 @@
   display: flex; align-items: center; gap: 8px;
   background: #1e2130; border: 1px solid #2a2f45; border-radius: 8px; padding: 6px 9px;
 }
-.lc-filter-ic { color: #79859a; font-size: 16px; }
-.lc-filter-input { flex: 1; background: transparent; border: none; outline: none; color: #e2e8f0; font-size: 14px; font-family: inherit; }
+.lc-filter-ic { color: #79859a; font-size: 18px; }
+.lc-filter-input { flex: 1; background: transparent; border: none; outline: none; color: #e2e8f0; font-size: 15px; font-family: inherit; }
 .lc-filter-input::placeholder { color: #79859a; }
-.lc-filter-x { background: none; border: none; color: #79859a; cursor: pointer; font-size: 14px; padding: 0 2px; }
+.lc-filter-x { background: none; border: none; color: #79859a; cursor: pointer; font-size: 15px; padding: 0 2px; }
 .lc-filter-x:hover { color: #e2e8f0; }
 
 /* ── A–Z section header ── */
 .lc-letter {
   position: sticky; top: 0; z-index: 2;
-  padding: 5px 16px; font-size: 13px; font-weight: 600; color: #79859a;
+  padding: 5px 16px; font-size: 14px; font-weight: 600; color: #79859a;
   background: #13151c; letter-spacing: 0.04em;
   border-bottom: 1px solid #1a1d2e;
 }

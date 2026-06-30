@@ -13,28 +13,28 @@
   padding: 12px 14px; border-bottom: 1px solid #1e2130;
 }
 [data-theme="light"] .agent-head { border-bottom-color: #e2e8f0; }
-.agent-title { font-size: 15px; font-weight: 600; color: #e6e8ec; display: flex; align-items: center; gap: 7px; }
+.agent-title { font-size: 17px; font-weight: 600; color: #e6e8ec; display: flex; align-items: center; gap: 7px; }
 [data-theme="light"] .agent-title { color: #0f172a; }
 .agent-spark { color: #e87722; }
 .agent-head-right { display: flex; align-items: center; gap: 6px; }
 .agent-clear, .agent-close {
   background: transparent; border: none; cursor: pointer; border-radius: 6px;
-  color: #9aa3b2; font-size: 13px; padding: 4px 8px;
+  color: #9aa3b2; font-size: 14px; padding: 4px 8px;
 }
-.agent-close { font-size: 15px; }
+.agent-close { font-size: 17px; }
 .agent-clear:hover, .agent-close:hover { background: #1a1e2b; color: #e6e8ec; }
 [data-theme="light"] .agent-clear:hover, [data-theme="light"] .agent-close:hover { background: #f1f5f9; color: #0f172a; }
 
 .agent-body { flex: 1; overflow-y: auto; padding: 16px 14px; display: flex; flex-direction: column; gap: 12px; }
 
 .agent-empty { margin: auto 0; text-align: center; color: #9aa3b2; }
-.agent-empty-title { font-size: 16px; font-weight: 600; color: #cbd5e1; margin: 0 0 4px; }
+.agent-empty-title { font-size: 18px; font-weight: 600; color: #cbd5e1; margin: 0 0 4px; }
 [data-theme="light"] .agent-empty-title { color: #334155; }
-.agent-empty-sub { font-size: 13px; margin: 0 0 18px; }
+.agent-empty-sub { font-size: 14px; margin: 0 0 18px; }
 .agent-suggest { display: flex; flex-direction: column; gap: 8px; }
 .agent-chip {
   text-align: left; background: #161a24; border: 1px solid #242a3a; border-radius: 9px;
-  color: #cbd5e1; font-size: 13px; padding: 9px 12px; cursor: pointer; font-family: inherit;
+  color: #cbd5e1; font-size: 14px; padding: 9px 12px; cursor: pointer; font-family: inherit;
   transition: background 0.15s, border-color 0.15s;
 }
 .agent-chip:hover { background: #1c2230; border-color: #e87722; }
@@ -45,7 +45,7 @@
 .agent-msg.user { align-items: flex-end; }
 .agent-msg.assistant { align-items: flex-start; }
 .agent-bubble {
-  max-width: 88%; padding: 9px 12px; border-radius: 12px; font-size: 14px; line-height: 1.5;
+  max-width: 88%; padding: 9px 12px; border-radius: 12px; font-size: 15px; line-height: 1.5;
   white-space: pre-wrap; word-wrap: break-word;
 }
 .agent-msg.user .agent-bubble { background: #e87722; color: #fff; border-bottom-right-radius: 4px; }
@@ -53,7 +53,7 @@
 [data-theme="light"] .agent-msg.assistant .agent-bubble { background: #f1f5f9; color: #1e293b; }
 .agent-msg.error .agent-bubble { background: #3a1d1d; color: #fca5a5; }
 [data-theme="light"] .agent-msg.error .agent-bubble { background: #fef2f2; color: #b91c1c; }
-.agent-tools { font-size: 11px; color: #6b7280; margin: 0 0 3px 2px; }
+.agent-tools { font-size: 12px; color: #6b7280; margin: 0 0 3px 2px; }
 
 /* Rendered markdown from the assistant — override the bubble's pre-wrap so block
    elements provide their own spacing instead of doubling up on newlines. */
@@ -62,13 +62,13 @@
 .agent-markdown > :last-child { margin-bottom: 0; }
 .agent-markdown p { margin: 0 0 8px; }
 .agent-markdown h1, .agent-markdown h2, .agent-markdown h3, .agent-markdown h4 {
-  margin: 12px 0 6px; font-size: 14px; font-weight: 600; line-height: 1.3;
+  margin: 12px 0 6px; font-size: 15px; font-weight: 600; line-height: 1.3;
 }
 .agent-markdown ul, .agent-markdown ol { margin: 0 0 8px; padding-left: 20px; }
 .agent-markdown li { margin: 2px 0; }
 .agent-markdown a { color: #e87722; text-decoration: underline; }
 .agent-markdown code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px;
   background: rgba(148, 163, 184, 0.18); padding: 1px 5px; border-radius: 4px;
 }
 .agent-markdown pre {
@@ -83,7 +83,7 @@
 
 /* Tables — the main reason for rendering markdown. Scrollable on overflow. */
 .agent-markdown table {
-  border-collapse: collapse; width: 100%; margin: 4px 0 10px; font-size: 12.5px;
+  border-collapse: collapse; width: 100%; margin: 4px 0 10px; font-size: 14px;
   display: block; overflow-x: auto;
 }
 .agent-markdown th, .agent-markdown td {
@@ -98,20 +98,20 @@
 .agent-source {
   display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
   background: #161a24; border: 1px solid #242a3a; border-radius: 8px;
-  color: #cbd5e1; font-size: 12px; padding: 4px 9px 4px 4px; cursor: pointer; font-family: inherit;
+  color: #cbd5e1; font-size: 13px; padding: 4px 9px 4px 4px; cursor: pointer; font-family: inherit;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   transition: background 0.15s, border-color 0.15s;
 }
 .agent-source:hover { background: #1c2230; border-color: #e87722; color: #fff; }
 .agent-source-mod {
-  flex-shrink: 0; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;
+  flex-shrink: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;
   background: #e8772222; color: #f0a061; border-radius: 5px; padding: 2px 6px;
 }
 [data-theme="light"] .agent-source { background: #f8fafc; border-color: #e2e8f0; color: #334155; }
 [data-theme="light"] .agent-source:hover { border-color: #e87722; color: #0f172a; background: #fff7ed; }
 [data-theme="light"] .agent-source-mod { background: #e8772218; color: #c2570f; }
 
-.agent-status { font-size: 12px; color: #9aa3b2; font-style: italic; padding: 2px 2px 0; }
+.agent-status { font-size: 13px; color: #9aa3b2; font-style: italic; padding: 2px 2px 0; }
 
 .agent-typing { display: inline-flex; gap: 4px; align-items: center; }
 .agent-typing span { width: 6px; height: 6px; border-radius: 50%; background: #6b7280; animation: agent-blink 1.2s infinite both; }
@@ -127,13 +127,13 @@
 .agent-input textarea {
   flex: 1; resize: none; max-height: 120px; box-sizing: border-box;
   background: #161a24; border: 1px solid #242a3a; border-radius: 10px;
-  color: #e6e8ec; font-size: 14px; padding: 9px 12px; font-family: inherit; outline: none; line-height: 1.4;
+  color: #e6e8ec; font-size: 15px; padding: 9px 12px; font-family: inherit; outline: none; line-height: 1.4;
 }
 .agent-input textarea:focus { border-color: #e87722; }
 [data-theme="light"] .agent-input textarea { background: #f8fafc; border-color: #e2e8f0; color: #0f172a; }
 .agent-input button {
   flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; border: none;
-  background: #e87722; color: #fff; font-size: 17px; cursor: pointer; transition: opacity 0.15s;
+  background: #e87722; color: #fff; font-size: 19px; cursor: pointer; transition: opacity 0.15s;
 }
 .agent-input button:disabled { opacity: 0.4; cursor: default; }
 
@@ -141,7 +141,7 @@
 .agent-fab {
   position: fixed; bottom: 22px; right: 22px; z-index: 55;
   width: 50px; height: 50px; border-radius: 50%; border: none; cursor: pointer;
-  background: #e87722; color: #fff; font-size: 22px;
+  background: #e87722; color: #fff; font-size: 24px;
   box-shadow: 0 6px 18px rgba(232,119,34,0.4);
   display: flex; align-items: center; justify-content: center;
   transition: transform 0.15s, box-shadow 0.15s;

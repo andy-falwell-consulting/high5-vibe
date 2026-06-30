@@ -34,7 +34,7 @@ export default function EnvSwitcher({ theme, onToggleTheme }) {
       padding: '5px 12px',
       background: envTheme.bg,
       borderBottom: `1px solid ${envTheme.border}`,
-      fontSize: 12,
+      fontSize: 13,
     }}>
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{ color: isLight ? '#64748b' : '#64748b', fontWeight: 500 }}>FMP</span>
@@ -42,7 +42,7 @@ export default function EnvSwitcher({ theme, onToggleTheme }) {
           value={currentId}
           onChange={handleChange}
           style={{
-            fontSize: 12, padding: '2px 6px', borderRadius: 5,
+            fontSize: 13, padding: '2px 6px', borderRadius: 5,
             border: `1px solid ${isLight ? '#cbd5e1' : '#334155'}`,
             background: isLight ? '#ffffff' : '#1e293b',
             color: isLight ? '#1e293b' : '#e2e8f0',
@@ -54,14 +54,14 @@ export default function EnvSwitcher({ theme, onToggleTheme }) {
           ))}
         </select>
         <span style={{
-          fontSize: 10, fontWeight: 700, padding: '2px 7px',
+          fontSize: 11, fontWeight: 700, padding: '2px 7px',
           borderRadius: 999, textTransform: 'uppercase', letterSpacing: '0.06em',
           background: envTheme.badgeBg, color: envTheme.badgeColor,
         }}>
           {currentId}
         </span>
         {(ENV_THEME[currentId] ?? ENV_THEME.development).label && (
-          <span style={{ color: envTheme.badgeColor, fontSize: 11, fontWeight: 600 }}>
+          <span style={{ color: envTheme.badgeColor, fontSize: 12, fontWeight: 600 }}>
             {(ENV_THEME[currentId] ?? ENV_THEME.development).label}
           </span>
         )}
@@ -71,13 +71,13 @@ export default function EnvSwitcher({ theme, onToggleTheme }) {
         title={isLight ? 'Switch to dark mode' : 'Switch to light mode'}
         style={{
           background: 'none', border: 'none', cursor: 'pointer',
-          fontSize: 14, padding: '2px 6px', marginRight: 8,
+          fontSize: 15, padding: '2px 6px', marginRight: 8,
           opacity: 0.7, lineHeight: 1,
         }}
       >
         {isLight ? '🌙' : '☀️'}
       </button>
-      <span style={{ fontSize: 10, fontWeight: 600, color: isLight ? '#475569' : '#475569', letterSpacing: '0.05em' }}>
+      <span style={{ fontSize: 11, fontWeight: 600, color: isLight ? '#475569' : '#475569', letterSpacing: '0.05em' }}>
         v{__APP_VERSION__}
       </span>
     </div>

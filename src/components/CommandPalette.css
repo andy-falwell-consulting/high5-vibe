@@ -19,14 +19,14 @@
   display: flex; align-items: center; gap: 11px;
   padding: 14px 16px; border-bottom: 1px solid #1e2130;
 }
-.cmdk-search-icon { font-size: 21px; color: #79859a; }
+.cmdk-search-icon { font-size: 23px; color: #79859a; }
 .cmdk-input {
   flex: 1; background: transparent; border: none; outline: none;
-  color: #e2e8f0; font-size: 17px; font-family: inherit;
+  color: #e2e8f0; font-size: 19px; font-family: inherit;
 }
 .cmdk-input::placeholder { color: #79859a; }
 .cmdk-kbd {
-  font-family: 'SF Mono', monospace; font-size: 13px; color: #8b97aa;
+  font-family: 'SF Mono', monospace; font-size: 14px; color: #8b97aa;
   border: 1px solid #2a2f45; border-radius: 5px; padding: 2px 7px;
 }
 
@@ -34,11 +34,11 @@
 .cmdk-results::-webkit-scrollbar { width: 6px; }
 .cmdk-results::-webkit-scrollbar-thumb { background: #2a2f45; border-radius: 3px; }
 
-.cmdk-empty { padding: 28px 12px; text-align: center; color: #79859a; font-size: 15px; }
+.cmdk-empty { padding: 28px 12px; text-align: center; color: #79859a; font-size: 17px; }
 
 .cmdk-section { margin-bottom: 4px; }
 .cmdk-section-label {
-  font-size: 12px; font-weight: 600; color: #79859a;
+  font-size: 13px; font-weight: 600; color: #79859a;
   letter-spacing: 0.04em; padding: 8px 10px 4px;
 }
 
@@ -50,17 +50,17 @@
   font-family: inherit;
 }
 .cmdk-item.active { background: #1e2236; }
-.cmdk-item-icon { font-size: 18px; width: 20px; text-align: center; flex-shrink: 0; }
+.cmdk-item-icon { font-size: 20px; width: 20px; text-align: center; flex-shrink: 0; }
 .cmdk-item-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.cmdk-item-title { font-size: 16px; color: #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cmdk-item-sub { font-size: 13px; color: #8b97aa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cmdk-tag { font-size: 12px; font-weight: 600; border-radius: 5px; padding: 2px 7px; flex-shrink: 0; }
-.cmdk-enter { color: #79859a; font-size: 15px; flex-shrink: 0; }
+.cmdk-item-title { font-size: 18px; color: #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmdk-item-sub { font-size: 14px; color: #8b97aa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmdk-tag { font-size: 13px; font-weight: 600; border-radius: 5px; padding: 2px 7px; flex-shrink: 0; }
+.cmdk-enter { color: #79859a; font-size: 17px; flex-shrink: 0; }
 
 .cmdk-footer {
   display: flex; align-items: center; gap: 16px;
   padding: 9px 16px; border-top: 1px solid #1e2130;
-  font-size: 13px; color: #79859a;
+  font-size: 14px; color: #79859a;
 }
 .cmdk-fkbd { font-family: 'SF Mono', monospace; color: #8b97aa; }
 

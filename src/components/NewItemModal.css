@@ -31,14 +31,14 @@
 .nim-header h2 {
   margin: 0;
   font-family: 'Oswald', sans-serif;
-  font-size: 21px;
+  font-size: 23px;
   font-weight: 600;
   color: #f1f5f9;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 .nim-close {
-  background: none; border: none; color: #79859a; font-size: 18px;
+  background: none; border: none; color: #79859a; font-size: 20px;
   cursor: pointer; padding: 4px 8px; border-radius: 4px;
 }
 .nim-close:hover { background: #1e2130; color: #e2e8f0; }
@@ -63,7 +63,7 @@
 }
 .nim-section h3 {
   margin: 0 0 4px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -81,7 +81,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 13px;
+  font-size: 14px;
   color: #8b97aa;
   font-weight: 500;
   text-transform: uppercase;
@@ -91,7 +91,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 13px;
+  font-size: 14px;
   color: #8b97aa;
   font-weight: 500;
   text-transform: uppercase;
@@ -105,7 +105,7 @@
   border: 1px solid #2a2f45;
   border-radius: 6px;
   color: #e2e8f0;
-  font-size: 14px;
+  font-size: 15px;
   padding: 7px 10px;
   outline: none;
   transition: border-color 0.15s;
@@ -123,7 +123,7 @@
   align-items: center;
   gap: 10px;
   cursor: pointer;
-  font-size: 15px;
+  font-size: 17px;
   color: #94a3b8;
 }
 .nim-toggle input[type=checkbox] { accent-color: #e8322a; width: 14px; height: 14px; cursor: pointer; }
@@ -137,9 +137,9 @@
   border-top: 1px solid #1e2130;
   flex-shrink: 0;
 }
-.nim-error { flex: 1; font-size: 14px; color: #f87171; }
+.nim-error { flex: 1; font-size: 15px; color: #f87171; }
 .nim-btn {
-  padding: 8px 20px; border-radius: 8px; font-size: 15px;
+  padding: 8px 20px; border-radius: 8px; font-size: 17px;
   font-weight: 600; cursor: pointer; border: none; transition: all 0.15s;
 }
 .nim-btn.cancel { background: #1e2130; color: #94a3b8; border: 1px solid #2a2f45; margin-left: auto; }

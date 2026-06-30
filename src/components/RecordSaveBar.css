@@ -6,12 +6,12 @@
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
   font-family: system-ui, -apple-system, sans-serif;
 }
-.rsb-count { font-size: 14px; font-weight: 600; color: #e2e8f0; }
-.rsb-err { font-size: 14px; color: #f87171; }
+.rsb-count { font-size: 15px; font-weight: 600; color: #e2e8f0; }
+.rsb-err { font-size: 15px; color: #f87171; }
 .rsb-spacer { flex: 1; }
-.rsb-discard { background: transparent; border: 1px solid #2d3148; color: #94a3b8; border-radius: 8px; padding: 6px 14px; font-size: 14px; cursor: pointer; font-family: inherit; }
+.rsb-discard { background: transparent; border: 1px solid #2d3148; color: #94a3b8; border-radius: 8px; padding: 6px 14px; font-size: 15px; cursor: pointer; font-family: inherit; }
 .rsb-discard:hover:not(:disabled) { color: #e2e8f0; border-color: #4a5568; }
-.rsb-save { background: #e8322a; border: none; color: #fff; border-radius: 8px; padding: 6px 18px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
+.rsb-save { background: #e8322a; border: none; color: #fff; border-radius: 8px; padding: 6px 18px; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit; }
 .rsb-save:hover:not(:disabled) { background: #c72820; }
 .rsb-save:disabled, .rsb-discard:disabled { opacity: 0.5; cursor: default; }
 
@@ -19,7 +19,7 @@
   position: sticky; bottom: 14px; align-self: center;
   margin: 8px auto 14px; padding: 8px 16px;
   background: #16a34a; color: #fff; border-radius: 20px;
-  font-size: 14px; font-weight: 600; width: fit-content;
+  font-size: 15px; font-weight: 600; width: fit-content;
 }
 
 /* Light theme */

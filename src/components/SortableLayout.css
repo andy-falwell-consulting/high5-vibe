@@ -22,7 +22,7 @@
 }
 .sl-section-header h3 {
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -30,7 +30,7 @@
 }
 
 .sl-section-icon {
-  font-size: 16px;
+  font-size: 18px;
   color: #e8322a;
   opacity: 0.8;
   width: 18px;
@@ -38,7 +38,7 @@
 }
 
 .sl-chevron {
-  font-size: 12px;
+  font-size: 13px;
   color: #79859a;
   margin-left: auto;
   transition: transform 0.2s;
@@ -74,7 +74,7 @@
 .sl-field.layout-edit:hover { background: #171a28; }
 
 .sl-field label {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.07em;
@@ -82,7 +82,7 @@
 }
 
 .sl-value {
-  font-size: 15px;
+  font-size: 17px;
   color: #cbd5e1;
   line-height: 1.4;
 }
@@ -104,7 +104,7 @@
   border: 1px solid #2a2f45;
   border-radius: 6px;
   color: #e2e8f0;
-  font-size: 15px;
+  font-size: 17px;
   padding: 6px 8px;
   width: 100%;
   outline: none;
@@ -124,7 +124,7 @@
   border: 1px solid #2a2f45;
   border-radius: 6px;
   color: #94a3b8;
-  font-size: 15px;
+  font-size: 17px;
   padding: 8px 10px;
   width: 100%;
   resize: vertical;
@@ -144,7 +144,7 @@
 }
 
 .sl-textarea-display {
-  font-size: 15px;
+  font-size: 17px;
   color: #94a3b8;
   line-height: 1.6;
   white-space: pre-wrap;
@@ -154,7 +154,7 @@
 .sl-drag-handle, .sl-field-handle {
   cursor: grab;
   color: #79859a;
-  font-size: 16px;
+  font-size: 18px;
   padding: 2px 4px;
   border-radius: 4px;
   transition: color 0.1s, background 0.1s;
@@ -163,7 +163,7 @@
 }
 .sl-drag-handle:hover, .sl-field-handle:hover { color: #e8322a; background: #e8322a11; }
 .sl-drag-handle:active, .sl-field-handle:active { cursor: grabbing; }
-.sl-field-handle { font-size: 14px; }
+.sl-field-handle { font-size: 15px; }
 
 /* ── Ghost overlay ───────────────────────────────────────────── */
 .sl-section.drag-ghost {
@@ -173,7 +173,7 @@
 
 /* ── Layout hint bar ─────────────────────────────────────────── */
 .sl-layout-hint {
-  font-size: 13px;
+  font-size: 14px;
   color: #79859a;
   padding: 6px 20px;
   background: #0d0f14;
@@ -186,7 +186,7 @@
   margin: 0;
   color: #79859a;
   font-style: italic;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 /* ── Status pill (shared across layouts) ─────────────────────── */
@@ -195,7 +195,7 @@
   align-items: center;
   padding: 2px 8px;
   border-radius: 10px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   border: 1px solid;
 }
@@ -213,7 +213,7 @@
   border: 1px solid #2a2f45;
   border-radius: 8px;
   color: #94a3b8;
-  font-size: 13px;
+  font-size: 14px;
   padding: 5px 8px;
   outline: none;
   cursor: pointer;
@@ -225,7 +225,7 @@
   border: 1px solid #2a2f45;
   border-radius: 8px;
   color: #94a3b8;
-  font-size: 15px;
+  font-size: 17px;
   padding: 4px 10px;
   cursor: pointer;
   white-space: nowrap;

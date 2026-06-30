@@ -5,11 +5,11 @@
   padding: 8px 16px; background: #13151c; border-bottom: 1px solid #1e2130;
   font-family: 'Source Sans 3', -apple-system, sans-serif;
 }
-.pw-title { font-size: 14px; font-weight: 600; color: #8b97aa; letter-spacing: 0.02em; }
+.pw-title { font-size: 15px; font-weight: 600; color: #8b97aa; letter-spacing: 0.02em; }
 
 .pw-views { display: flex; gap: 2px; background: #0f1117; border: 1px solid #1e2130; border-radius: 8px; padding: 2px; }
 .pw-view {
-  font-size: 14px; padding: 4px 13px; border-radius: 6px;
+  font-size: 15px; padding: 4px 13px; border-radius: 6px;
   border: none; background: transparent; color: #94a3b8; cursor: pointer; font-family: inherit;
   transition: background 0.12s, color 0.12s;
 }

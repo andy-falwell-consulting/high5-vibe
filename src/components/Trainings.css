@@ -5,7 +5,7 @@
   min-height: 0;
   background: #0f1117;
   font-family: 'Source Sans 3', 'Myriad Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 15px;
+  font-size: 17px;
   color: #e2e8f0;
   overflow: hidden;
 }
@@ -21,8 +21,8 @@
 }
 .trn-sidebar-header { padding: 20px 16px 12px; border-bottom: 1px solid #1e2130; }
 .trn-sidebar-title { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
-.trn-sidebar-module { font-size: 15px; font-weight: 600; color: #f1f5f9; }
-.trn-sidebar-count { font-size: 13px; color: #8b97aa; margin-top: 1px; }
+.trn-sidebar-module { font-size: 17px; font-weight: 600; color: #f1f5f9; }
+.trn-sidebar-count { font-size: 14px; color: #8b97aa; margin-top: 1px; }
 
 /* ── List ──────────────────────────────────────────────────────── */
 .trn-list { list-style: none; margin: 0; padding: 8px 0; overflow-y: auto; flex: 1; }
@@ -42,12 +42,12 @@
 .trn-item-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; opacity: 0.85; }
 .trn-item-text { min-width: 0; }
 .trn-item-name {
-  font-size: 14px; font-weight: 500; color: #cbd5e1;
+  font-size: 15px; font-weight: 500; color: #cbd5e1;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .trn-list-item.active .trn-item-name { color: #e2e8f0; }
 .trn-item-sub {
-  font-size: 13px; color: #79859a; margin-top: 1px;
+  font-size: 14px; color: #79859a; margin-top: 1px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
@@ -77,8 +77,8 @@
   align-items: center; justify-content: center;
   flex: 1; height: 100%; color: #79859a; gap: 12px;
 }
-.trn-empty-icon { font-size: 55px; opacity: 0.3; }
-.trn-empty-state p { font-size: 16px; margin: 0; }
+.trn-empty-icon { font-size: 61px; opacity: 0.3; }
+.trn-empty-state p { font-size: 18px; margin: 0; }
 
 /* ── Top Bar ───────────────────────────────────────────────────── */
 .trn-topbar {
@@ -91,12 +91,12 @@
 .trn-title {
   margin: 0 0 6px;
   font-family: 'Oswald', sans-serif;
-  font-size: 25px; font-weight: 600;
+  font-size: 28px; font-weight: 600;
   color: #f1f5f9; letter-spacing: 0.02em;
   line-height: 1.2; text-transform: uppercase;
 }
 .trn-meta-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.trn-chip { font-size: 13px; font-weight: 600; padding: 2px 8px; border-radius: 20px; border: 1px solid; }
+.trn-chip { font-size: 14px; font-weight: 600; padding: 2px 8px; border-radius: 20px; border: 1px solid; }
 .trn-chip.type { background: #1e2130; color: #94a3b8; border-color: #2a2f45; }
 .trn-chip.muted { background: #1e2130; color: #8b97aa; border-color: #2a2f45; }
 .trn-chip.status { letter-spacing: 0.02em; }
@@ -107,8 +107,8 @@
 .trn-section:hover { border-color: #2a2f45; }
 .trn-section-att { padding: 14px 16px; }
 .trn-section-header { display: flex; align-items: center; gap: 8px; padding: 12px 16px 10px; border-bottom: 1px solid #1e2130; }
-.trn-section-icon { font-size: 16px; color: #e8322a; opacity: 0.8; width: 18px; text-align: center; }
-.trn-section h3 { margin: 0; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #79859a; }
+.trn-section-icon { font-size: 18px; color: #e8322a; opacity: 0.8; width: 18px; text-align: center; }
+.trn-section h3 { margin: 0; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #79859a; }
 
 /* ── Field Grid ────────────────────────────────────────────────── */
 .trn-field-grid {
@@ -118,16 +118,16 @@
 }
 .trn-field { padding: 14px 16px; background: #13151c; display: flex; flex-direction: column; gap: 5px; }
 .trn-field.wide { grid-column: 1 / -1; }
-.trn-field label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: #79859a; }
-.trn-value { font-size: 15px; color: #cbd5e1; line-height: 1.4; white-space: pre-wrap; }
+.trn-field label { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: #79859a; }
+.trn-value { font-size: 17px; color: #cbd5e1; line-height: 1.4; white-space: pre-wrap; }
 .trn-value.mono { font-family: 'SF Mono', 'Fira Mono', monospace; color: #86efac; }
 
 /* ── Table ─────────────────────────────────────────────────────── */
 .trn-table-wrap { overflow-x: auto; }
-.trn-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.trn-table { width: 100%; border-collapse: collapse; font-size: 15px; }
 .trn-table th {
   padding: 10px 16px; text-align: left;
-  font-size: 12px; font-weight: 600;
+  font-size: 13px; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.07em;
   color: #79859a; border-bottom: 1px solid #1e2130; white-space: nowrap;
 }
@@ -143,32 +143,32 @@
 .trn-btn-edit, .trn-btn-discard {
   padding: 6px 14px; border-radius: 6px;
   border: 1px solid #334155; background: transparent;
-  color: #94a3b8; font-size: 15px; cursor: pointer;
+  color: #94a3b8; font-size: 17px; cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
 .trn-btn-edit:hover, .trn-btn-discard:hover { background: #1e293b; color: #e2e8f0; }
 .trn-btn-discard:disabled { opacity: 0.4; cursor: default; }
 .trn-btn-save {
   padding: 6px 16px; border-radius: 6px; border: none;
-  background: #e87722; color: #fff; font-size: 15px; font-weight: 600; cursor: pointer;
+  background: #e87722; color: #fff; font-size: 17px; font-weight: 600; cursor: pointer;
   transition: opacity 0.15s;
 }
 .trn-btn-save:disabled { opacity: 0.4; cursor: default; }
 .trn-btn-save:not(:disabled):hover { opacity: 0.85; }
-.trn-status { font-size: 14px; font-weight: 600; }
+.trn-status { font-size: 15px; font-weight: 600; }
 .trn-status.saved { color: #4ade80; }
 .trn-status.error { color: #f87171; }
 .trn-input {
   width: 100%; box-sizing: border-box;
   background: #0f172a; border: 1px solid #334155;
   border-radius: 5px; color: #e2e8f0;
-  font-size: 15px; padding: 5px 8px; outline: none; font-family: inherit;
+  font-size: 17px; padding: 5px 8px; outline: none; font-family: inherit;
 }
 .trn-input:focus { border-color: #e87722; box-shadow: 0 0 0 2px #e8772222; }
 .trn-dirty-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #e87722; margin-left: 6px; vertical-align: middle; }
 
 /* ── Footer ────────────────────────────────────────────────────── */
-.trn-record-footer { font-size: 12px; color: #6b7280; text-align: right; padding: 0 0 8px; font-family: monospace; }
+.trn-record-footer { font-size: 13px; color: #6b7280; text-align: right; padding: 0 0 8px; font-family: monospace; }
 
 /* ── Light Theme ───────────────────────────────────────────────── */
 [data-theme="light"] .trn-container { background: #f8fafc; color: #0f172a; }

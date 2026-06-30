@@ -5,7 +5,7 @@
   min-height: 0;
   background: #0f1117;
   font-family: 'Source Sans 3', 'Myriad Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 15px;
+  font-size: 17px;
   color: #e2e8f0;
   overflow: hidden;
 }
@@ -31,7 +31,7 @@
   gap: 12px;
   margin-bottom: 14px;
 }
-.insp-new-btn { margin-left: auto; flex-shrink: 0; padding: 5px 10px; border-radius: 6px; border: 1px solid #2d3148; background: #1e2130; color: #cbd5e1; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+.insp-new-btn { margin-left: auto; flex-shrink: 0; padding: 5px 10px; border-radius: 6px; border: 1px solid #2d3148; background: #1e2130; color: #cbd5e1; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
 .insp-new-btn:hover { background: #e8322a; border-color: #e8322a; color: #fff; }
 [data-theme="light"] .insp-new-btn { background: #f1f5f9; border-color: #e2e8f0; color: #334155; }
 [data-theme="light"] .insp-new-btn:hover { background: #e8322a; border-color: #e8322a; color: #fff; }
@@ -45,7 +45,7 @@
   align-items: center;
   justify-content: center;
   font-family: 'Oswald', sans-serif;
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 700;
   color: #e8322a;
   flex-shrink: 0;
@@ -53,13 +53,13 @@
 }
 
 .insp-sidebar-module {
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 600;
   color: #f1f5f9;
 }
 
 .insp-sidebar-count {
-  font-size: 13px;
+  font-size: 14px;
   color: #8b97aa;
   margin-top: 1px;
 }
@@ -68,13 +68,13 @@
 .insp-search-icon {
   position: absolute; left: 10px; top: 50%;
   transform: translateY(-50%);
-  color: #79859a; font-size: 18px; pointer-events: none;
+  color: #79859a; font-size: 20px; pointer-events: none;
 }
 .insp-search {
   width: 100%; padding: 8px 10px 8px 32px;
   background: #1e2130; border: 1px solid #2a2f45;
   border-radius: 8px; color: #e2e8f0;
-  font-size: 14px; outline: none;
+  font-size: 15px; outline: none;
   transition: border-color 0.15s;
   font-family: inherit;
 }
@@ -105,12 +105,12 @@
 }
 .insp-item-text { min-width: 0; }
 .insp-item-name {
-  font-size: 14px; font-weight: 500; color: #cbd5e1;
+  font-size: 15px; font-weight: 500; color: #cbd5e1;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .insp-list-item.active .insp-item-name { color: #e2e8f0; }
 .insp-item-sub {
-  font-size: 13px; color: #79859a; margin-top: 1px;
+  font-size: 14px; color: #79859a; margin-top: 1px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
@@ -146,8 +146,8 @@
   align-items: center; justify-content: center;
   flex: 1; height: 100%; color: #79859a; gap: 12px;
 }
-.insp-empty-icon { font-size: 55px; opacity: 0.3; }
-.insp-empty-state p { font-size: 16px; margin: 0; }
+.insp-empty-icon { font-size: 61px; opacity: 0.3; }
+.insp-empty-state p { font-size: 18px; margin: 0; }
 
 /* ── Top Bar ───────────────────────────────────────────────────── */
 .insp-topbar {
@@ -161,7 +161,7 @@
 .insp-title {
   margin: 0 0 6px;
   font-family: 'Oswald', sans-serif;
-  font-size: 25px; font-weight: 600;
+  font-size: 28px; font-weight: 600;
   color: #f1f5f9; letter-spacing: 0.02em;
   line-height: 1.2; text-transform: uppercase;
 }
@@ -169,7 +169,7 @@
 .insp-meta-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 .insp-chip {
-  font-size: 13px; font-weight: 600;
+  font-size: 14px; font-weight: 600;
   padding: 2px 8px; border-radius: 20px; border: 1px solid;
 }
 .insp-chip.type { background: #1e2130; color: #94a3b8; border-color: #2a2f45; }
@@ -190,9 +190,9 @@
   display: flex; align-items: center; gap: 8px;
   padding: 12px 16px 10px; border-bottom: 1px solid #1e2130;
 }
-.insp-section-icon { font-size: 16px; color: #e8322a; opacity: 0.8; width: 18px; text-align: center; }
+.insp-section-icon { font-size: 18px; color: #e8322a; opacity: 0.8; width: 18px; text-align: center; }
 .insp-section h3 {
-  margin: 0; font-size: 13px; font-weight: 600;
+  margin: 0; font-size: 14px; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.08em; color: #79859a;
 }
 
@@ -208,10 +208,10 @@
 }
 .insp-field.wide { grid-column: 1 / -1; }
 .insp-field label {
-  font-size: 12px; font-weight: 600;
+  font-size: 13px; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.07em; color: #79859a;
 }
-.insp-value { font-size: 15px; color: #cbd5e1; line-height: 1.4; white-space: pre-wrap; }
+.insp-value { font-size: 17px; color: #cbd5e1; line-height: 1.4; white-space: pre-wrap; }
 .insp-value.mono { font-family: 'SF Mono', 'Fira Mono', monospace; color: #86efac; }
 
 /* ── Check Grid (More Info) ────────────────────────────────────── */
@@ -228,21 +228,21 @@
   width: 16px; height: 16px; flex-shrink: 0;
   border: 1px solid #2a2f45; border-radius: 4px;
   display: flex; align-items: center; justify-content: center;
-  font-size: 13px; color: #0f1117; background: #0f1117;
+  font-size: 14px; color: #0f1117; background: #0f1117;
 }
 .insp-check-row.on .insp-check-box {
   background: #22c55e; border-color: #22c55e; color: #0f1117;
   font-weight: 700;
 }
-.insp-check-label { font-size: 14px; color: #94a3b8; }
+.insp-check-label { font-size: 15px; color: #94a3b8; }
 .insp-check-row.on .insp-check-label { color: #e2e8f0; }
 
 /* ── Table ─────────────────────────────────────────────────────── */
 .insp-table-wrap { overflow-x: auto; }
-.insp-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.insp-table { width: 100%; border-collapse: collapse; font-size: 15px; }
 .insp-table th {
   padding: 10px 16px; text-align: left;
-  font-size: 12px; font-weight: 600;
+  font-size: 13px; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.07em;
   color: #79859a; border-bottom: 1px solid #1e2130;
   white-space: nowrap;
@@ -259,7 +259,7 @@
 .insp-table tr:last-child td { border-bottom: none; }
 
 .insp-empty-portal {
-  color: #8b97aa; font-size: 14px;
+  color: #8b97aa; font-size: 15px;
   padding: 14px 16px; font-style: italic;
 }
 
@@ -269,7 +269,7 @@
 .insp-btn-edit, .insp-btn-discard {
   padding: 6px 14px; border-radius: 6px;
   border: 1px solid #334155; background: transparent;
-  color: #94a3b8; font-size: 15px; cursor: pointer;
+  color: #94a3b8; font-size: 17px; cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
 .insp-btn-edit:hover, .insp-btn-discard:hover { background: #1e293b; color: #e2e8f0; }
@@ -278,13 +278,13 @@
 .insp-btn-save {
   padding: 6px 16px; border-radius: 6px; border: none;
   background: #e87722; color: #fff;
-  font-size: 15px; font-weight: 600; cursor: pointer;
+  font-size: 17px; font-weight: 600; cursor: pointer;
   transition: opacity 0.15s;
 }
 .insp-btn-save:disabled { opacity: 0.4; cursor: default; }
 .insp-btn-save:not(:disabled):hover { opacity: 0.85; }
 
-.insp-status { font-size: 14px; font-weight: 600; }
+.insp-status { font-size: 15px; font-weight: 600; }
 .insp-status.saved { color: #4ade80; }
 .insp-status.error { color: #f87171; }
 
@@ -292,7 +292,7 @@
   width: 100%; box-sizing: border-box;
   background: #0f172a; border: 1px solid #334155;
   border-radius: 5px; color: #e2e8f0;
-  font-size: 15px; padding: 5px 8px; outline: none;
+  font-size: 17px; padding: 5px 8px; outline: none;
   font-family: inherit;
 }
 .insp-input:focus { border-color: #e87722; box-shadow: 0 0 0 2px #e8772222; }
@@ -308,7 +308,7 @@
   align-self: flex-start;
   padding: 4px 12px 4px 8px; border-radius: 20px;
   border: 1px solid #334155; background: #0f172a;
-  color: #94a3b8; font-size: 14px; font-weight: 600;
+  color: #94a3b8; font-size: 15px; font-weight: 600;
   cursor: pointer; font-family: inherit;
   transition: all 0.15s;
 }
@@ -325,7 +325,7 @@
 
 /* ── Footer ────────────────────────────────────────────────────── */
 .insp-record-footer {
-  font-size: 12px; color: #6b7280;
+  font-size: 13px; color: #6b7280;
   text-align: right; padding: 0 0 8px;
   font-family: monospace;
 }
@@ -385,7 +385,7 @@
 .insp-att-btn {
   padding: 6px 14px; border-radius: 6px;
   border: 1px solid #334155; background: transparent;
-  color: #94a3b8; font-size: 14px; cursor: pointer;
+  color: #94a3b8; font-size: 15px; cursor: pointer;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 .insp-att-btn:hover:not(:disabled) { background: #1e293b; color: #e2e8f0; }
@@ -393,14 +393,14 @@
 .insp-att-btn.primary { border-color: #e87722; color: #f8b27a; }
 .insp-att-btn.primary:hover:not(:disabled) { background: #e8772218; color: #f8b27a; }
 
-.insp-att-error { color: #f87171; font-size: 14px; margin: 0 0 10px; }
+.insp-att-error { color: #f87171; font-size: 15px; margin: 0 0 10px; }
 
 .insp-att-drop {
   border: 1.5px dashed #334155; border-radius: 8px;
   padding: 14px; transition: border-color 0.15s, background 0.15s;
 }
 .insp-att-drop.over { border-color: #e87722; background: #e8772212; }
-.insp-att-empty { color: #64748b; font-size: 14px; text-align: center; margin: 18px 0; }
+.insp-att-empty { color: #64748b; font-size: 15px; text-align: center; margin: 18px 0; }
 
 .insp-att-grid {
   list-style: none; margin: 0; padding: 0;
@@ -415,19 +415,19 @@
   height: 96px; background: #1e293b; text-decoration: none; overflow: hidden;
 }
 .insp-att-thumb img { width: 100%; height: 100%; object-fit: cover; }
-.insp-att-ext { font-size: 18px; font-weight: 700; letter-spacing: 0.5px; color: #e87722; }
+.insp-att-ext { font-size: 20px; font-weight: 700; letter-spacing: 0.5px; color: #e87722; }
 .insp-att-meta { padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .insp-att-name {
-  font-size: 13px; color: #e2e8f0; text-decoration: none;
+  font-size: 14px; color: #e2e8f0; text-decoration: none;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .insp-att-name:hover { color: #f8b27a; }
-.insp-att-sub { font-size: 12px; color: #64748b; }
+.insp-att-sub { font-size: 13px; color: #64748b; }
 .insp-att-del {
   position: absolute; top: 6px; right: 6px;
   width: 22px; height: 22px; border-radius: 50%;
   border: none; background: #0f172acc; color: #94a3b8;
-  font-size: 12px; line-height: 1; cursor: pointer; transition: background 0.15s, color 0.15s;
+  font-size: 13px; line-height: 1; cursor: pointer; transition: background 0.15s, color 0.15s;
 }
 .insp-att-del:hover:not(:disabled) { background: #e8322a; color: #fff; }
 .insp-att-del:disabled { opacity: 0.5; cursor: default; }

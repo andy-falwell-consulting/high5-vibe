@@ -31,7 +31,7 @@
   align-items: center;
   justify-content: center;
   font-family: 'Oswald', sans-serif;
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 700;
   border: 1px solid #333;
   margin-bottom: 4px;
@@ -40,7 +40,7 @@
 .ls-title {
   margin: 0;
   font-family: 'Oswald', sans-serif;
-  font-size: 28px;
+  font-size: 31px;
   font-weight: 600;
   color: #f1f5f9;
   letter-spacing: 0.04em;
@@ -49,7 +49,7 @@
 
 .ls-sub {
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
   color: #79859a;
 }
 
@@ -57,7 +57,7 @@
   background: #2d1a1a;
   border: 1px solid #7f1d1d;
   color: #fca5a5;
-  font-size: 13px;
+  font-size: 14px;
   padding: 8px 12px;
   border-radius: 8px;
   width: 100%;
@@ -74,7 +74,7 @@
   color: #3c4043;
   border: 1px solid #dadce0;
   border-radius: 8px;
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
@@ -97,7 +97,7 @@
 
 .ls-note {
   margin: 4px 0 0;
-  font-size: 12px;
+  font-size: 13px;
   color: #4a5568;
 }
 

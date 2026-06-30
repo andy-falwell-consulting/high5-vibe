@@ -11,9 +11,9 @@
   color: #e2e8f0; font-family: system-ui, -apple-system, sans-serif;
 }
 .rmm-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid #1e2130; flex-shrink: 0; }
-.rmm-header h3 { margin: 0; font-size: 15px; font-weight: 700; color: #f1f5f9; }
-.rmm-sub { font-size: 12px; font-weight: 400; color: #64748b; }
-.rmm-close { background: none; border: none; color: #64748b; font-size: 18px; cursor: pointer; line-height: 1; }
+.rmm-header h3 { margin: 0; font-size: 17px; font-weight: 700; color: #f1f5f9; }
+.rmm-sub { font-size: 13px; font-weight: 400; color: #64748b; }
+.rmm-close { background: none; border: none; color: #64748b; font-size: 20px; cursor: pointer; line-height: 1; }
 .rmm-close:hover:not(:disabled) { color: #e2e8f0; }
 .rmm-close:disabled { opacity: 0.4; cursor: default; }
 
@@ -21,19 +21,19 @@
 .rmm-row { display: flex; gap: 12px; }
 .rmm-row .rmm-field { flex: 1; }
 .rmm-field { display: flex; flex-direction: column; gap: 5px; }
-.rmm-field > span { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: #94a3b8; text-transform: uppercase; }
+.rmm-field > span { font-size: 12px; font-weight: 600; letter-spacing: 0.04em; color: #94a3b8; text-transform: uppercase; }
 .rmm-field input, .rmm-field textarea, .rmm-field select {
   width: 100%; box-sizing: border-box;
   background: #0f1117; border: 1px solid #2d3148; border-radius: 6px;
-  padding: 8px 10px; color: #e2e8f0; font-size: 14px; font-family: inherit; outline: none;
+  padding: 8px 10px; color: #e2e8f0; font-size: 15px; font-family: inherit; outline: none;
 }
 .rmm-field input:focus, .rmm-field textarea:focus, .rmm-field select:focus { border-color: #3b82f6; }
 .rmm-field textarea { resize: vertical; line-height: 1.5; }
 .rmm-field input[type="date"], .rmm-field input[type="time"] { color-scheme: dark; }
 
 .rmm-footer { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 13px 18px; border-top: 1px solid #1e2130; flex-shrink: 0; }
-.rmm-error { margin-right: auto; color: #e8322a; font-size: 13px; }
-.rmm-btn { padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid transparent; }
+.rmm-error { margin-right: auto; color: #e8322a; font-size: 14px; }
+.rmm-btn { padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; border: 1px solid transparent; }
 .rmm-btn.cancel { background: transparent; color: #94a3b8; border-color: #2d3148; }
 .rmm-btn.cancel:hover:not(:disabled) { color: #e2e8f0; border-color: #4a5568; }
 .rmm-btn.save { background: #e8322a; color: #fff; }
