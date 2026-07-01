@@ -168,19 +168,21 @@ export default function CreateInQBO({ type = 'estimate', env = 'production', dra
                       <label>Customer</label>
                       <CustomerPicker env={env} value={customer} initial={customerInitial} onChange={setCustomer} />
                     </div>
-                    <table className="ciq-lines">
-                      <thead><tr><th>Line (from High5)</th><th>QBO item</th><th className="num">Qty</th><th className="num">Price</th><th className="num">Amount</th></tr></thead>
-                      <tbody>
-                        {lines.map((l, i) => (
-                          <tr key={i} className={l.itemId ? '' : 'ciq-unresolved'}>
-                            <td>{l.productName || l.description || '—'}</td>
-                            <td>{l.linked ? <span className="ciq-linked" title="Linked product">{l.itemName}</span>
-                              : <ItemPicker catalog={catalog} value={l.itemId} onChange={(id, name) => pickItem(i, id, name)} />}</td>
-                            <td className="num">{l.qty}</td><td className="num">{money(l.unitPrice)}</td><td className="num">{money(l.amount)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    <div className="ciq-lines">
+                      {lines.map((l, i) => (
+                        <div key={i} className={`ciq-line${l.itemId ? '' : ' unresolved'}`}>
+                          <div className="ciq-line-top">
+                            <span className="ciq-line-name">{l.productName || l.description || '—'}</span>
+                            <span className="ciq-line-nums">{l.qty ?? 1} × {money(l.unitPrice)} = <b>{money(l.amount)}</b></span>
+                          </div>
+                          <div className="ciq-line-pick">
+                            <span className="ciq-line-arrow">QBO item</span>
+                            {l.linked ? <span className="ciq-linked" title="Linked product">{l.itemName}</span>
+                              : <ItemPicker catalog={catalog} value={l.itemId} onChange={(id, name) => pickItem(i, id, name)} />}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                     {error && <div className="ciq-error">{error}</div>}
                   </div>
                   <div className="ciq-foot">
