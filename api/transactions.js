@@ -30,7 +30,7 @@ export default async function handler(req, res) {
     }
 
     const cursor = String(req.query?.cursor ?? '0');
-    const [next, flat] = await redis.hscan(recsKey(db), cursor, { count: 1500 });
+    const [next, flat] = await redis.hscan(recsKey(db), cursor, { count: 5000 });
     const records = [];
     for (let i = 1; i < flat.length; i += 2) records.push(slim(parse(flat[i])));
     return res.status(200).json({ cursor: String(next), records });

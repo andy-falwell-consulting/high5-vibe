@@ -1,5 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import ListToolbar, { useListControls, ListBody } from './ListControls';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import ListToolbar, { useListControls } from './ListControls';
+
+const ROW_H = 54; // fixed row height (px) — must match .txn-row in CSS for virtualization
 import './Transactions.css';
 
 // Read-only ledger of QBO sales transactions (mirror served by /api/transactions).
@@ -53,8 +55,8 @@ export default function Transactions({ onRecordSelect } = {}) {
     return () => { alive = false; };
   }, []);
 
-  // Status options derived from the loaded set.
-  const statuses = Array.from(new Set(records.map(r => r.status).filter(Boolean))).sort();
+  // Status options derived from the loaded set (memoized — don't rescan 34k every render).
+  const statuses = useMemo(() => Array.from(new Set(records.map(r => r.status).filter(Boolean))).sort(), [records]);
 
   const controls = useListControls({
     records,
@@ -71,11 +73,31 @@ export default function Transactions({ onRecordSelect } = {}) {
       { id: 'date', label: 'Date', value: f => parseDate(f.date) },
       { id: 'amount', label: 'Amount', value: f => Number(f.total || 0) },
       { id: 'number', label: 'Number', value: f => Number(f.docNumber) || 0 },
-      { id: 'customer', label: 'Customer', alpha: true, value: f => (f.customerName || '').toLowerCase() },
+      { id: 'customer', label: 'Customer', value: f => (f.customerName || '').toLowerCase() },
     ],
     defaultSort: 'date',
     defaultOrder: 'desc',
   });
+
+  // Virtualized list — render only the rows in view (the ledger can be 30k+ rows;
+  // rendering them all bloats the DOM and slows the whole app).
+  const scrollRef = useRef(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewH, setViewH] = useState(800);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => setScrollTop(el.scrollTop);
+    el.addEventListener('scroll', onScroll, { passive: true });
+    const ro = new ResizeObserver(() => setViewH(el.clientHeight || 800));
+    ro.observe(el);
+    setViewH(el.clientHeight || 800);
+    return () => { el.removeEventListener('scroll', onScroll); ro.disconnect(); };
+  }, [loading, error]);
+  const rows = controls.processed;
+  const startIdx = Math.max(0, Math.floor(scrollTop / ROW_H) - 6);
+  const endIdx = Math.min(rows.length, Math.ceil((scrollTop + viewH) / ROW_H) + 6);
+  const visibleRows = rows.slice(startIdx, endIdx);
 
   const handleSelect = useCallback((r) => {
     setSelected(r); setDetail(null);
@@ -122,22 +144,30 @@ export default function Transactions({ onRecordSelect } = {}) {
           <div className="txn-loading">{Array.from({ length: 12 }, (_, i) => <div key={i} className="txn-skeleton" />)}</div>
         ) : error ? (
           <div className="txn-empty"><p>Failed to load transactions.</p><p className="dim">{error}</p></div>
+        ) : rows.length === 0 ? (
+          <div className="txn-empty"><p>No transactions match.</p></div>
         ) : (
-          <ListBody c={controls} renderItem={r => {
-            const tm = TYPE_META[r.type] || {};
-            return (
-              <div key={r.type + r.id}
-                className={`txn-row ${selected && selected.id === r.id && selected.type === r.type ? 'active' : ''}`}
-                onClick={() => handleSelect(r)}>
-                <span className="txn-type" style={{ background: tm.color + '22', color: tm.color }}>{tm.short}</span>
-                <div className="txn-row-main">
-                  <div className="txn-row-top"><span className="txn-num">#{r.docNumber || '—'}</span><span className="txn-amt">{money(r.total)}</span></div>
-                  <div className="txn-row-sub"><span className="txn-cust">{r.customerName || '—'}</span><span className="txn-date">{fmtDate(r.date)}</span></div>
-                </div>
-                <span className="txn-status-dot" style={{ background: statusColor(r.status) }} title={r.status} />
-              </div>
-            );
-          }} />
+          <div className="txn-scroll" ref={scrollRef}>
+            <div className="txn-virtual" style={{ height: rows.length * ROW_H }}>
+              {visibleRows.map((r, i) => {
+                const idx = startIdx + i;
+                const tm = TYPE_META[r.type] || {};
+                return (
+                  <div key={r.type + r.id}
+                    className={`txn-row ${selected && selected.id === r.id && selected.type === r.type ? 'active' : ''}`}
+                    style={{ top: idx * ROW_H }}
+                    onClick={() => handleSelect(r)}>
+                    <span className="txn-type" style={{ background: tm.color + '22', color: tm.color }}>{tm.short}</span>
+                    <div className="txn-row-main">
+                      <div className="txn-row-top"><span className="txn-num">#{r.docNumber || '—'}</span><span className="txn-amt">{money(r.total)}</span></div>
+                      <div className="txn-row-sub"><span className="txn-cust">{r.customerName || '—'}</span><span className="txn-date">{fmtDate(r.date)}</span></div>
+                    </div>
+                    <span className="txn-status-dot" style={{ background: statusColor(r.status) }} title={r.status} />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         )}
       </aside>
 
