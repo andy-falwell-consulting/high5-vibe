@@ -58,7 +58,8 @@ export async function getAccessToken(env = 'production') {
 
 export async function qboRequest(path, method, body, env = 'production') {
   const token = await getAccessToken(env);
-  const resp = await fetch(`${qboBase(env)}${path}?minorversion=65`, {
+  const sep = path.includes('?') ? '&' : '?'; // some ops (e.g. ?operation=delete) already carry a query
+  const resp = await fetch(`${qboBase(env)}${path}${sep}minorversion=65`, {
     method,
     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
     body: body ? JSON.stringify(body) : undefined,
