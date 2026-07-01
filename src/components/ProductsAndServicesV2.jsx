@@ -470,23 +470,31 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
   const serverBom = portalData?.['Portal__Bill_of_Materials 4'] || [];
   const bomRemoved = new Set(bomOps.filter(o => o.type === 'remove').map(o => o.lineRecordId));
   const bomQtyOps = new Map(bomOps.filter(o => o.type === 'qty').map(o => [o.lineRecordId, o.quantity]));
+  // Each line's total is computed LIVE = qty × the component's current unit price
+  // (item_itmli_ITEM__billOfMaterials::Unit_Price), not the stored ::Total, which
+  // is a snapshot frozen at add-time and goes stale when a component's price
+  // changes. _liveTotal drives the price so assemblies always reflect current
+  // component pricing; _storedTotal is kept to flag drift.
   const bom = [
     ...serverBom.filter(r => !bomRemoved.has(r.recordId)).map(r => {
-      if (!bomQtyOps.has(r.recordId)) return r;
-      const q = bomQtyOps.get(r.recordId);
-      const oldQ = Number(r['item_ITMLI__billOfMaterials::Quantity']) || 0;
-      const unit = oldQ > 0 ? Number(r['item_ITMLI__billOfMaterials::Total'] || 0) / oldQ : 0;
-      return { ...r, _staged: true, 'item_ITMLI__billOfMaterials::Quantity': q, 'item_ITMLI__billOfMaterials::Total': unit * q };
+      const q = bomQtyOps.has(r.recordId) ? bomQtyOps.get(r.recordId) : (Number(r['item_ITMLI__billOfMaterials::Quantity']) || 0);
+      const unit = Number(r['item_itmli_ITEM__billOfMaterials::Unit_Price']) || 0;
+      return { ...r, _staged: bomQtyOps.has(r.recordId), 'item_ITMLI__billOfMaterials::Quantity': q, _unit: unit, _liveTotal: unit * q, _storedTotal: Number(r['item_ITMLI__billOfMaterials::Total']) || 0 };
     }),
-    ...bomOps.filter(o => o.type === 'add').map(o => ({
-      recordId: o.tmpId, _staged: true, _added: true,
-      'item_itmli_ITEM__billOfMaterials::Name': o.name,
-      'item_itmli_ITEM__billOfMaterials::Cost': o.cost,
-      'item_ITMLI__billOfMaterials::Quantity': o.quantity,
-      'item_ITMLI__billOfMaterials::Total': Number(o.unitPrice || 0) * o.quantity,
-    })),
+    ...bomOps.filter(o => o.type === 'add').map(o => {
+      const unit = Number(o.unitPrice || 0);
+      return {
+        recordId: o.tmpId, _staged: true, _added: true,
+        'item_itmli_ITEM__billOfMaterials::Name': o.name,
+        'item_itmli_ITEM__billOfMaterials::Cost': o.cost,
+        'item_itmli_ITEM__billOfMaterials::Unit_Price': unit,
+        'item_ITMLI__billOfMaterials::Quantity': o.quantity,
+        _unit: unit, _liveTotal: unit * o.quantity, _storedTotal: unit * o.quantity,
+      };
+    }),
   ];
-  const bomTotal = bom.reduce((a, r) => a + Number(r['item_ITMLI__billOfMaterials::Total'] || 0), 0);
+  const bomTotal = bom.reduce((a, r) => a + r._liveTotal, 0);
+  const bomDrift = bom.some(r => Math.abs((r._liveTotal || 0) - (r._storedTotal || 0)) > 0.02);
   bomTotalRef.current = bomTotal;
   // Assembly products are priced from their bill of materials (sum of component
   // line totals); everything else uses the unit price. "Price override" lets an
@@ -700,7 +708,7 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
                   <div className="v2-spec-card">
                     <div className="v2-spec-head v2-spec-head-row">
                       <span>Bill of materials{bom.length > 0 && ` · ${bom.length}`}</span>
-                      {bomTotal > 0 && <span className="v2-bom-total">Components {money(bomTotal)}</span>}
+                      {bomTotal > 0 && <span className="v2-bom-total">Components {money(bomTotal)}{bomDrift && <span className="v2-bom-live" title="Line totals recalculated from current component prices — the values stored in FileMaker were out of date.">live</span>}</span>}
                       {dataEditing && <button className="v2-bom-add-btn" onClick={() => setShowBomPicker(true)}>+ Add</button>}
                     </div>
                     {bom.length === 0 ? (
@@ -708,7 +716,7 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
                     ) : (
                       <div className="v2-table-wrap">
                         <table className="v2-table">
-                          <thead><tr><th>Name</th><th className="num">Qty</th><th className="num">Cost</th><th className="num">Total</th>{dataEditing && <th aria-label="Remove" />}</tr></thead>
+                          <thead><tr><th>Name</th><th className="num">Qty</th><th className="num">Unit price</th><th className="num">Total</th>{dataEditing && <th aria-label="Remove" />}</tr></thead>
                           <tbody>
                             {bom.map((row) => {
                               const qty = row['item_ITMLI__billOfMaterials::Quantity'];
@@ -727,8 +735,8 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
                                       />
                                     ) : qty}
                                   </td>
-                                  <td className="num">{money(row['item_itmli_ITEM__billOfMaterials::Cost'])}</td>
-                                  <td className="num">{money(row['item_ITMLI__billOfMaterials::Total'])}</td>
+                                  <td className="num">{money(row._unit)}</td>
+                                  <td className="num">{money(row._liveTotal)}</td>
                                   {dataEditing && (
                                     <td className="num">
                                       <button className="v2-bom-remove" title="Remove component" onClick={() => stageRemoveBom(row)}>✕</button>
