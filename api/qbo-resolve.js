@@ -1,11 +1,14 @@
-// Resolve a customer name + item names to QBO ids, by querying QBO directly
-// (the target system). Returns matches (with alternates) so the shared
-// "Create in QBO" panel can auto-fill and let the user confirm/pick.
+// Resolve a customer name + line item names to QBO ids for the shared
+// "Create in QBO" panel. Per line: prefer the product's stored link
+// (_kat__Item_ID_QuickBooks); otherwise offer QBO candidates by name so the
+// user can pick (and the pick is remembered onto the product).
 //   POST { env, customerName, itemNames: [] }
 import { getGoogleSession } from './_googleSession.js';
 import { qboQuery } from './_qbo.js';
+import { fmpToken, fmFind } from './_fmp.js';
 
 const SYNC_KEY = process.env.QBO_SYNC_KEY;
+const FMP_DB = 'High5_Core4';
 async function authorized(req) {
   if (SYNC_KEY && (req.headers['x-sync-key'] === SYNC_KEY || req.query?.key === SYNC_KEY)) return true;
   return !!(await getGoogleSession(req));
@@ -16,14 +19,18 @@ const envOf = v => (v === 'sandbox' ? 'sandbox' : 'production');
 async function matchCustomer(name, env) {
   if (!name) return [];
   let m = (await qboQuery(`SELECT Id, DisplayName FROM Customer WHERE DisplayName = '${esc(name)}'`, env)).Customer || [];
-  if (!m.length) m = (await qboQuery(`SELECT Id, DisplayName FROM Customer WHERE DisplayName LIKE '%${esc(name)}%' MAXRESULTS 5`, env)).Customer || [];
+  if (!m.length) m = (await qboQuery(`SELECT Id, DisplayName FROM Customer WHERE DisplayName LIKE '%${esc(name)}%' MAXRESULTS 6`, env)).Customer || [];
   return m.map(c => ({ id: c.Id, name: c.DisplayName }));
 }
-async function matchItem(name, env) {
+async function candItems(name, env) {
   if (!name) return [];
   let m = (await qboQuery(`SELECT Id, Name, FullyQualifiedName FROM Item WHERE Name = '${esc(name)}'`, env)).Item || [];
-  if (!m.length) m = (await qboQuery(`SELECT Id, Name, FullyQualifiedName FROM Item WHERE Name LIKE '%${esc(name)}%' MAXRESULTS 4`, env)).Item || [];
+  if (!m.length) m = (await qboQuery(`SELECT Id, Name, FullyQualifiedName FROM Item WHERE Name LIKE '%${esc(name)}%' MAXRESULTS 5`, env)).Item || [];
   return m.map(i => ({ id: i.Id, name: i.FullyQualifiedName || i.Name }));
+}
+async function itemName(id, env) {
+  const m = (await qboQuery(`SELECT Id, FullyQualifiedName FROM Item WHERE Id = '${esc(id)}'`, env)).Item || [];
+  return m[0]?.FullyQualifiedName || null;
 }
 
 export default async function handler(req, res) {
@@ -32,11 +39,24 @@ export default async function handler(req, res) {
   const { env: e, customerName, itemNames = [] } = req.body || {};
   const env = envOf(e);
   try {
+    const fmTok = await fmpToken(FMP_DB);
     const custMatches = await matchCustomer(customerName, env);
+
     const items = [];
     for (const name of itemNames) {
-      const matches = await matchItem(name, env);
-      items.push({ query: name, matched: matches[0] || null, matches });
+      // FMP product for this line (to read + later write the link)
+      const prod = name ? (await fmFind(FMP_DB, 'Products & Services_New', [{ Name: `==${esc(name)}` }], fmTok, 1))[0] : null;
+      const productRecordId = prod?.recordId || null;
+      const linkedId = prod?.fieldData?._kat__Item_ID_QuickBooks || null;
+
+      let matched = null, candidates = [];
+      if (linkedId) {
+        matched = { id: String(linkedId), name: (await itemName(linkedId, env)) || `#${linkedId}`, linked: true };
+      } else {
+        candidates = await candItems(name, env);
+        matched = candidates[0] || null;
+      }
+      items.push({ query: name, productRecordId, matched, candidates });
     }
     return res.status(200).json({
       env,

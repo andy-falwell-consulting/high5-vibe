@@ -3,7 +3,11 @@ import { getRecord, updateRecord, invalidateRecord, patchCachedRecord } from '..
 import { useAllRecords } from '../hooks/useAllRecords'
 import ListToolbar, { useListControls, ListBody } from './ListControls'
 import RecordSaveBar from './RecordSaveBar'
+import CreateInQBO from './CreateInQBO'
 import './Estimates.css'
+
+// FileMaker MM/DD/YYYY → QBO YYYY-MM-DD
+const toIsoDate = v => { if (!v) return undefined; const [m, d, y] = String(v).split(' ')[0].split('/'); return y ? `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}` : undefined }
 
 const LAYOUT = 'Estimates_New'
 const CACHE_VERSION = 1
@@ -234,6 +238,31 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
                     <span className="est-total-amount">{fmtCurrency(displayTotal)}</span>
                   </div>
                 )}
+                <CreateInQBO
+                  type="estimate"
+                  env="production"
+                  existingId={f.qbo_estimate_id || null}
+                  draft={{
+                    customerName: f.zz__Display_Contact__ct,
+                    txnDate: toIsoDate(f.Date),
+                    memo: f.Memo || undefined,
+                    lines: lineItems
+                      .filter(li => li['estmt_ESTLI::Item_Name'] || li['estmt_ESTLI::Description'])
+                      .map(li => ({
+                        productName: li['estmt_ESTLI::Item_Name'] || '',
+                        description: li['estmt_ESTLI::Description'] || '',
+                        qty: li['estmt_ESTLI::Quantity'],
+                        unitPrice: li['estmt_ESTLI::Unit_Price'],
+                        amount: li['estmt_ESTLI::Amount'],
+                      })),
+                  }}
+                  onCreated={(qboId) => {
+                    updateRecord(LAYOUT, selected.recordId, { qbo_estimate_id: String(qboId) })
+                      .then(() => { patchCachedRecord(LAYOUT, CACHE_VERSION, selected.recordId, { qbo_estimate_id: String(qboId) }); })
+                      .catch(() => {})
+                    setSelected(s => ({ ...s, fieldData: { ...s.fieldData, qbo_estimate_id: String(qboId) } }))
+                  }}
+                />
               </div>
             </div>
 
