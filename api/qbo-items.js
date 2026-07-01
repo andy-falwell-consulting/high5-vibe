@@ -3,6 +3,8 @@
 import { getGoogleSession } from './_googleSession.js';
 import { qboQuery } from './_qbo.js';
 
+export const config = { maxDuration: 60 };
+
 const SYNC_KEY = process.env.QBO_SYNC_KEY;
 async function authorized(req) {
   if (SYNC_KEY && (req.headers['x-sync-key'] === SYNC_KEY || req.query?.key === SYNC_KEY)) return true;
