@@ -147,9 +147,13 @@ export default function CreateInQBO({ type = 'estimate', env = 'production', dra
 
   return (
     <>
-      <button className="ciq-trigger" onClick={openPanel} disabled={!!existingId}>
-        {existingId ? `✓ In QBO #${existingId}` : (label || `Create QBO ${typeLabel}`)}
-      </button>
+      {existingId ? (
+        <a className="ciq-trigger ciq-trigger-linked" target="_blank" rel="noreferrer"
+          href={`https://app.qbo.intuit.com/app/${type === 'invoice' ? 'invoice' : 'estimate'}?txnId=${encodeURIComponent(existingId)}`}
+          title="Open in QuickBooks Online">✓ In QBO #{existingId} ↗</a>
+      ) : (
+        <button className="ciq-trigger" onClick={openPanel}>{label || `Create QBO ${typeLabel}`}</button>
+      )}
       {open && (
         <div className="ciq-backdrop" onClick={e => e.target === e.currentTarget && setOpen(false)}>
           <div className="ciq-modal">
