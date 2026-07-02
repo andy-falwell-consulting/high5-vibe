@@ -35,12 +35,18 @@ const money = v => { const n = Number(String(v ?? '').replace(/[^0-9.\-]/g, ''))
 const priceDrift = (a, b) => { const x = money(a), y = money(b); return x != null && y != null && Math.abs(x - y) >= 0.005; };
 
 // ── FileMaker: page every product ───────────────────────────────────
+// Use _find with `portal: []` to suppress the BOM portals — a GET /records
+// returns every product's full bill-of-materials portal, which balloons the
+// payload and stalls the whole run. We only need flat fields here.
 async function loadFmProducts(db, token) {
   const out = [];
   for (let offset = 1, guard = 0; guard < 200; guard++) {
-    const r = await fetch(`${FMP_HOST}/fmi/data/v2/databases/${db}/layouts/${encodeURIComponent(LAYOUT)}/records?_limit=500&_offset=${offset}`,
-      { headers: { Authorization: `Bearer ${token}` } });
+    const r = await fetch(`${FMP_HOST}/fmi/data/v2/databases/${db}/layouts/${encodeURIComponent(LAYOUT)}/_find`, {
+      method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: [{ _kpt__Item_ID: '*' }], portal: [], limit: 500, offset }),
+    });
     const j = await r.json().catch(() => ({}));
+    if (j?.messages?.[0]?.code === '401') break; // no more records
     const rows = j?.response?.data || [];
     if (!rows.length) break;
     for (const rec of rows) {
