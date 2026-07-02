@@ -126,7 +126,10 @@ export default async function handler(req, res) {
   // Index QBO + Shopify by id and by normalized SKU (note SKU collisions).
   const qById = new Map(qbo.map(i => [i.id, i]));
   const qBySku = new Map(); for (const i of qbo) { const k = normSku(i.sku); if (k) (qBySku.get(k) || qBySku.set(k, []).get(k)).push(i); }
-  const sById = new Map(shop.map(v => [digits(v.productId), v]));   // key by numeric product id
+  // Shopify is variant-grained: key by VARIANT id (a product can hold many
+  // variants at different prices). Product id only groups them.
+  const sByVariant = new Map(shop.map(v => [digits(v.variantId), v]));
+  const sByProduct = new Map(); for (const v of shop) { const k = digits(v.productId); if (k) (sByProduct.get(k) || sByProduct.set(k, []).get(k)).push(v); }
   const sBySku = new Map(); for (const v of shop) { const k = normSku(v.sku); if (k) (sBySku.get(k) || sBySku.set(k, []).get(k)).push(v); }
 
   const B = {
@@ -167,16 +170,21 @@ export default async function handler(req, res) {
 
     // ---- Shopify side ----
     if (p.shopifyId) {
-      const v = sById.get(digits(p.shopifyId));
-      if (!v) B.shop_link_broken.push({ ...row, storedId: p.shopifyId });
+      // Resolve the exact variant: prefer the stored variant id, then the SKU
+      // within the linked product, then (single-variant products) the lone variant.
+      const prodVars = sByProduct.get(digits(p.shopifyId)) || [];
+      let v = (p.variantId && sByVariant.get(digits(p.variantId)))
+        || (sk && prodVars.find(x => normSku(x.sku) === sk))
+        || (prodVars.length === 1 ? prodVars[0] : null);
+      if (!v) B.shop_link_broken.push({ ...row, storedId: p.shopifyId, reason: prodVars.length ? 'variant-unresolved' : 'product-missing' });
       else {
-        matchedS.add(digits(v.productId));
-        if (priceDrift(p.price, v.price)) B.shop_price_drift.push({ ...row, fmPrice: money(p.price), shopPrice: money(v.price), productId: v.productId });
-        else B.shop_linked_clean.push({ recordId: p.recordId, sku: p.sku, productId: v.productId });
+        matchedS.add(digits(v.variantId));
+        if (priceDrift(p.price, v.price)) B.shop_price_drift.push({ ...row, fmPrice: money(p.price), shopPrice: money(v.price), productId: v.productId, variantId: v.variantId });
+        else B.shop_linked_clean.push({ recordId: p.recordId, sku: p.sku, variantId: v.variantId });
       }
     } else if (sk && sBySku.has(sk)) {
-      const cands = sBySku.get(sk); cands.forEach(c => matchedS.add(digits(c.productId)));
-      B.shop_linkable.push({ ...row, shopCandidates: cands.map(c => ({ productId: c.productId, title: c.title, price: money(c.price), status: c.status })) });
+      const cands = sBySku.get(sk); cands.forEach(c => matchedS.add(digits(c.variantId)));
+      B.shop_linkable.push({ ...row, shopCandidates: cands.map(c => ({ productId: c.productId, variantId: c.variantId, title: c.title, price: money(c.price), status: c.status })) });
     } else {
       B.shop_no_match.push({ ...row });
     }
@@ -184,10 +192,15 @@ export default async function handler(req, res) {
 
   // Orphans: live in QBO/Shopify with a SKU but no FM product references them.
   for (const i of qbo) if (normSku(i.sku) && !matchedQ.has(i.id) && !fmBySku.has(normSku(i.sku))) B.qbo_orphan.push({ id: i.id, name: i.name, sku: i.sku, active: i.active, price: money(i.price) });
-  for (const v of shop) if (normSku(v.sku) && !matchedS.has(digits(v.productId)) && !fmBySku.has(normSku(v.sku))) B.shop_orphan.push({ productId: v.productId, title: v.title, sku: v.sku, status: v.status, price: money(v.price) });
+  for (const v of shop) if (normSku(v.sku) && !matchedS.has(digits(v.variantId)) && !fmBySku.has(normSku(v.sku))) B.shop_orphan.push({ productId: v.productId, variantId: v.variantId, title: v.title, sku: v.sku, status: v.status, price: money(v.price) });
 
   const summary = Object.fromEntries(Object.entries(B).map(([k, v]) => [k, v.length]));
-  summary._totals = { fm_products: fm.length, qbo_items: qbo.length, shopify_variants: shop.length };
+  summary._totals = {
+    fm_products: fm.length, qbo_items: qbo.length, shopify_variants: shop.length,
+    fm_with_sku: fm.filter(p => normSku(p.sku)).length,
+    qbo_with_sku: qbo.filter(i => normSku(i.sku)).length,
+    shop_with_sku: shop.filter(v => normSku(v.sku)).length,
+  };
 
   if (req.query?.bucket && B[req.query.bucket]) return res.status(200).json({ db, bucket: req.query.bucket, count: B[req.query.bucket].length, rows: B[req.query.bucket] });
   if (req.query?.full === '1') return res.status(200).json({ db, summary, buckets: B });
