@@ -93,6 +93,7 @@ export default async function handler(req, res) {
   }
 
   const maxRecords = Math.max(1, Number(req.query?.max || 100000));
+  const BUDGET_MS = 220000; // return well under Vercel's 300s kill
   const started = Date.now();
   const token = await fmpToken(db);
 
@@ -104,7 +105,7 @@ export default async function handler(req, res) {
     if (only && only !== key) continue;
     let updated = 0, noContact = 0, noAddress = 0, noRoute = 0, scanned = 0, remaining = null;
     let offset = 1;
-    while (Date.now() - started < 250000 && scanned < maxRecords) {
+    while (Date.now() - started < BUDGET_MS && scanned < maxRecords) {
       // records where the distance field is EMPTY (never touch filled ones)
       const r = await fetch(`${FMP_HOST}/fmi/data/v2/databases/${db}/layouts/${encodeURIComponent(cfg.layout)}/_find`, {
         method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -117,15 +118,23 @@ export default async function handler(req, res) {
       if (!rows.length) break;
 
       for (const rec of rows) {
-        if (Date.now() - started >= 250000 || scanned >= maxRecords) break;
+        if (Date.now() - started >= BUDGET_MS || scanned >= maxRecords) break;
         scanned++;
         const cid = rec.fieldData?._kft__Contact_ID;
         let addr = null;
         if (cid) {
           addr = contactCache.get(String(cid));
           if (addr === undefined) {
-            const c = (await fmFind(db, 'Contacts_New', [{ _kpt__Contact_ID: `==${cid}` }], token, 1))[0];
-            addr = c ? contactAddress(c) : null;
+            // Redis-backed contact→address cache ("" = known addressless), so
+            // re-scanning skip-heavy pages costs ~10ms/record, not an FMP find.
+            const cached = await redis.hget('dist:contactaddr', String(cid));
+            if (cached != null) {
+              addr = cached === '' ? null : cached;
+            } else {
+              const c = (await fmFind(db, 'Contacts_New', [{ _kpt__Contact_ID: `==${cid}` }], token, 1))[0];
+              addr = c ? contactAddress(c) : null;
+              await redis.hset('dist:contactaddr', { [String(cid)]: addr || '' });
+            }
             contactCache.set(String(cid), addr);
           }
         }
