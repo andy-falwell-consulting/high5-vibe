@@ -447,7 +447,7 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
           <div className="ct-loading">{[...Array(8)].map((_, i) => <div key={i} className="ct-skeleton" />)}</div>
         ) : (
           <div className="ct-list">
-            <ListBody c={list} renderItem={r => {
+            <ListBody c={list} activeId={selected?.recordId} renderItem={r => {
               const color = STATUS_COLOR[r.fieldData.Status] || STATUS_COLOR.default;
               return (
                 <div key={r.recordId}

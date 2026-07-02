@@ -291,7 +291,7 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
           <div className="insp-loading">{[...Array(8)].map((_, i) => <div key={i} className="insp-skeleton" />)}</div>
         ) : (
           <div className="insp-list">
-            <ListBody c={list} renderItem={r => {
+            <ListBody c={list} activeId={selected?.recordId} renderItem={r => {
               const color = STATUS_COLOR[statusOf(r.fieldData)] || STATUS_COLOR.default;
               return (
                 <div key={r.recordId}

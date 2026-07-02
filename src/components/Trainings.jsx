@@ -315,7 +315,7 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
           <div className="trn-loading">{[...Array(8)].map((_, i) => <div key={i} className="trn-skeleton" />)}</div>
         ) : (
           <div className="trn-list">
-            <ListBody c={list} renderItem={r => {
+            <ListBody c={list} activeId={selected?.recordId} renderItem={r => {
               const color = STATUS_COLOR[r.fieldData.Status] || STATUS_COLOR.default;
               return (
                 <div key={r.recordId}

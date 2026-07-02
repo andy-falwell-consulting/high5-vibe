@@ -223,7 +223,7 @@ export default function TandD({ navTarget, onClearNav, onRecordSelect } = {}) {
           <div className="tnd-loading">{[...Array(8)].map((_, i) => <div key={i} className="tnd-skeleton" />)}</div>
         ) : (
           <div className="tnd-list">
-            <ListBody c={list} renderItem={r => {
+            <ListBody c={list} activeId={selected?.recordId} renderItem={r => {
               const color = STATUS_COLOR[r.fieldData.Status] || STATUS_COLOR.default;
               return (
                 <div key={r.recordId}

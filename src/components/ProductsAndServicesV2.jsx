@@ -571,7 +571,7 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
           <div className="v2-loading">{[...Array(8)].map((_, i) => <div key={i} className="v2-skeleton" />)}</div>
         ) : (
           <div className="v2-list">
-            <ListBody c={list} renderItem={r => {
+            <ListBody c={list} activeId={selected?.recordId} renderItem={r => {
               const color = CATEGORY_COLORS[r.fieldData.Category] || '#64748b';
               return (
                 <div key={r.recordId}

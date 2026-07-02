@@ -424,7 +424,7 @@ export default function CCS({ navTarget, onNavigateTo, onClearNav }) {
           <ListToolbar c={list} unit="projects" />
         </div>
         <div className="ccs-list">
-          <ListBody c={list} renderItem={r => {
+          <ListBody c={list} activeId={selected?.recordId} renderItem={r => {
             const rf = r.fieldData;
             const sc = statusColor(rf.Status);
             return (

@@ -258,7 +258,7 @@ export default function RMI({ navTarget, onClearNav, onRecordSelect } = {}) {
           <div className="rmi-empty-state"><p>Failed to load records.</p></div>
         ) : (
           <div className="rmi-list">
-            <ListBody c={list} renderItem={r => {
+            <ListBody c={list} activeId={selected?.recordId} renderItem={r => {
               const fd = r.fieldData
               const status = fd.Status || ''
               const color = STATUS_COLOR[status] || STATUS_COLOR.default

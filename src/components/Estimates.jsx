@@ -173,7 +173,7 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
           <div className="est-empty-state"><p>Failed to load records.</p></div>
         ) : (
           <div className="est-list-body">
-          <ListBody c={controls} renderItem={r => {
+          <ListBody c={controls} activeId={selected?.recordId} renderItem={r => {
             const fd = r.fieldData
             const st = fd.Status || 'Draft'
             const color = STATUS_COLOR[st] ?? '#64748b'

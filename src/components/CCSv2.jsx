@@ -312,7 +312,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
           <ListToolbar c={list} unit="projects" />
         </div>
         <div className="cv2-list">
-          <ListBody c={list} renderItem={r => {
+          <ListBody c={list} activeId={selected?.recordId} renderItem={r => {
             const rf = r.fieldData; const c = statusColor(rf.Status);
             const d = daysUntil(rf['rcd start date']);
             return (
