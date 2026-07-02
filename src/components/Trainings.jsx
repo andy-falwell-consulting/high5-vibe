@@ -17,30 +17,34 @@ const STATUS_COLOR = {
   default:          '#64748b',
 };
 
-// Proposed vs. actual cost lines. Each row is shown only when at least one side
-// has a value; the totals row always shows.
-const COST_LINES = [
-  { label: 'Staffing',            prop: 'Prog Staffing Cost',            act: 'Act Prog Staffing' },
-  { label: 'Planning',            prop: 'Prog Planning Time',            act: 'Act Prog Planning' },
-  { label: 'Travel days',         prop: 'Prog Travel Days',              act: 'Act Prog Travel Days' },
-  { label: 'Training materials',  prop: 'Prog Training Materials',       act: 'Act Prog Materials' },
-  { label: 'Shipping',            prop: 'Prog Shipping',                 act: 'Act Prog Shipping' },
-  { label: 'Equipment',           prop: 'Prog Equipment',                act: 'Act Prog Equipment' },
-  { label: 'Food',                prop: 'Prog Food',                     act: 'Act Prog Food' },
-  { label: 'Lodging',             prop: 'Prog Lodging',                  act: 'Act Prog Lodging' },
-  { label: 'Client food/lodging', prop: 'Prog Participant Food Lodging', act: 'Act Prog Client Food Lodging' },
-  { label: 'Lodging — dorms',     prop: 'Prog Participant Lodging Dorms', act: 'Act Prog Client Lodging Dorms' },
-  { label: 'Lodging — cabins',    prop: 'Prog Participant Lodging Cabins', act: 'Act Prog Client Lodging Cabins' },
-  { label: 'Lodging — yurt',      prop: 'Prog Participant Lodging Yurt', act: 'Act Prog Client Lodging Yurt' },
-  { label: 'Airfare',             prop: 'Prog Airfare',                  act: 'Act Prog Airfare' },
-  { label: 'Car rental',          prop: 'Prog Car Rental',               act: 'Act Prog Car Rental' },
-  { label: 'Misc travel',         prop: 'Prog Misc Travel',              act: 'Act Prog Misc Travel' },
-  { label: 'Mileage',             prop: 'Prog Mileage',                  act: null },
-  { label: 'Rental — tent',       prop: 'Prog Rental Fee Tent',          act: null },
-  { label: 'Rental — tables/chairs', prop: 'Prog Rental Fee Tables Chairs', act: null },
-  { label: 'Rental — porta-potty', prop: 'Prog Rental Fee PortaPotty',   act: null },
-  { label: 'Rental — other',      prop: 'Prog Rental Fee Other',         act: null },
-  { label: 'NY state surcharge',  prop: 'ny_state_surcharge',            act: 'act_ny_state_surchage' },
+// Cost grids mirroring the FMP "Training Costs/Expenses" tab: Program Costs and
+// Trainer Costs, each with Estimated + Actual columns (editable). `act: null`
+// means the layout has no actual-side field for that line.
+const PROGRAM_COSTS = [
+  { label: 'Trainer fee',           est: 'Prog Staffing Cost',              act: 'Act Prog Staffing' },
+  { label: 'Planning time',         est: 'Prog Planning Time',              act: 'Act Prog Planning' },
+  { label: 'Travel time fee',       est: 'Prog Travel Days',                act: 'Act Prog Travel Days' },
+  { label: 'Training materials',    est: 'Prog Training Materials',         act: 'Act Prog Materials' },
+  { label: 'Catalog product / equipment', est: 'Prog Equipment',            act: 'Act Prog Equipment' },
+  { label: 'Shipping fee',          est: 'Prog Shipping',                   act: 'Act Prog Shipping' },
+  { label: 'NY state surcharge',    est: 'ny_state_surcharge',              act: 'act_ny_state_surchage' },
+  { label: 'Client food & lodging', est: 'Prog Participant Food Lodging',   act: 'Act Prog Client Food Lodging' },
+  { label: 'Client lodging — dorms',  est: 'Prog Participant Lodging Dorms',  act: 'Act Prog Client Lodging Dorms' },
+  { label: 'Client lodging — cabins', est: 'Prog Participant Lodging Cabins', act: 'Act Prog Client Lodging Cabins' },
+  { label: 'Client lodging — yurt',   est: 'Prog Participant Lodging Yurt',   act: 'Act Prog Client Lodging Yurt' },
+  { label: 'Rental — tent',         est: 'Prog Rental Fee Tent',            act: null },
+  { label: 'Rental — tables/chairs', est: 'Prog Rental Fee Tables Chairs',  act: null },
+  { label: 'Rental — porta-potty',  est: 'Prog Rental Fee PortaPotty',      act: null },
+  { label: 'Rental — other',        est: 'Prog Rental Fee Other',           act: null },
+];
+const TRAINER_COSTS = [
+  { label: 'Food',        est: 'Prog Food',        act: 'Act Prog Food' },
+  { label: 'Lodging',     est: 'Prog Lodging',     act: 'Act Prog Lodging' },
+  { label: '# of miles',  est: 'No of Miles',      act: null },
+  { label: 'Mileage',     est: 'Prog Mileage',     act: null },
+  { label: 'Airfare',     est: 'Prog Airfare',     act: 'Act Prog Airfare' },
+  { label: 'Car rental',  est: 'Prog Car Rental',  act: 'Act Prog Car Rental' },
+  { label: 'Misc travel', est: 'Prog Misc Travel', act: 'Act Prog Misc Travel' },
 ];
 
 const LOGISTICS_FIELDS = [
@@ -122,6 +126,52 @@ function CheckField({ label, fieldKey, f, edits, onChange }) {
   );
 }
 
+// Multi-line text (Notes, Description, Logistics notes). `onStamp` renders a
+// Stamp button that prepends "user date time:" — mirroring FMP's Stamp.
+function TextAreaField({ label, fieldKey, f, edits, onChange, onStamp, rows = 5 }) {
+  const v = val(f, edits, fieldKey);
+  const dirty = isDirty(f, edits, fieldKey);
+  return (
+    <div className="trn-field wide">
+      <label>{label}{dirty && <span className="trn-dirty-dot" />}{onStamp && <button className="trn-stamp-btn" onClick={() => onStamp(fieldKey)}>⏱ Stamp</button>}</label>
+      <textarea className="trn-input trn-textarea" rows={rows} value={fmText(v) || ''} onChange={e => onChange(fieldKey, e.target.value)} />
+    </div>
+  );
+}
+
+// Editable Estimated/Actual cost grid (one FMP costs group).
+function CostTable({ title, lines, f, edits, onChange, totals }) {
+  const cell = (fk) => {
+    if (!fk) return <td className="num trn-cost-na">—</td>;
+    const v = val(f, edits, fk);
+    const dirty = isDirty(f, edits, fk);
+    return (
+      <td className="num">
+        <input className={`trn-cost-input${dirty ? ' dirty' : ''}`} inputMode="decimal" value={v ?? ''} placeholder="—"
+          onChange={e => onChange(fk, e.target.value)} />
+      </td>
+    );
+  };
+  return (
+    <div className="trn-cost-card">
+      <div className="trn-cost-title">{title}</div>
+      <table className="trn-table trn-cost-table">
+        <thead><tr><th /><th className="num">Estimated</th><th className="num">Actual</th></tr></thead>
+        <tbody>
+          {lines.map(l => (
+            <tr key={l.label}><td>{l.label}</td>{cell(l.est)}{cell(l.act)}</tr>
+          ))}
+          {totals && (
+            <tr className="total"><td>Total</td>
+              <td className="num">{money(f[totals.est])}</td>
+              <td className="num">{money(f[totals.act])}</td></tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function Section({ title, icon, children }) {
   return (
     <div className="trn-section">
@@ -141,6 +191,7 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
   const [edits, setEdits] = useState({});
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
+  const [tab, setTab] = useState('info');
   const isResizing = useRef(false);
 
   const orgName = f => f.zz__Display_Organization__ct || '';
@@ -191,6 +242,19 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
   const handleFieldChange = useCallback((fk, v) => setEdits(p => ({ ...p, [fk]: v })), []);
   const handleDiscard = () => { setEdits({}); setSaveStatus(null); };
 
+  // FMP-style "Stamp": prepend "user M/D/YYYY h:mm:ss AM/PM:" to a notes field.
+  const stampNote = useCallback((fk) => {
+    let user = 'admin';
+    try { user = sessionStorage.getItem('fmp_user_name') || 'admin'; } catch { /* unavailable */ }
+    const now = new Date();
+    const stamp = `${user} ${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()} ${now.toLocaleTimeString('en-US')}:`;
+    setEdits(p => {
+      const cur = fk in p ? p[fk] : (selected?.fieldData?.[fk] || '');
+      const curText = typeof cur === 'string' ? cur.replace(/\r/g, '\n') : (cur ?? '');
+      return { ...p, [fk]: `${stamp}\n${curText ? '\n' + curText : ''}` };
+    });
+  }, [selected]);
+
   async function handleSave() {
     const dirtyCount = Object.keys(edits).length;
     if (!dirtyCount) { return; }
@@ -233,7 +297,6 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
   const status = f ? (val(f, edits, 'Status') || '') : '';
   const statusColor = STATUS_COLOR[status] || STATUS_COLOR.default;
 
-  const costRows = f ? COST_LINES.filter(c => num(f[c.prop]) || (c.act && num(f[c.act]))) : [];
 
   return (
     <div className="trn-container">
@@ -299,7 +362,14 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
               </div>
             </div>
 
+            <div className="trn-tabs">
+              {[['info', 'Training Info'], ['costs', 'Costs / Expenses'], ['logistics', 'Logistics'], ['attachments', 'Attachments'], ['extra', 'Extra']].map(([id, label]) => (
+                <button key={id} className={`trn-tab${tab === id ? ' on' : ''}`} onClick={() => setTab(id)}>{label}</button>
+              ))}
+            </div>
+
             <div className="trn-content">
+              {tab === 'info' && (<>
               <Section title="Program" icon="◈">
                 <div className="trn-field-grid">
                   <TextField label="Organization" fieldKey="zz__Display_Organization__ct" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} />
@@ -316,8 +386,8 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
                   <CheckField label="Inspection required" fieldKey="Inspection Required" f={f} edits={edits} onChange={handleFieldChange} />
                   <TextField label="Report printed" fieldKey="Report Printed" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
                   <TextField label="Location address" fieldKey="Location Address" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable wide />
-                  <TextField label="Description of training" fieldKey="Description of Training" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable wide />
-                  <TextField label="Notes" fieldKey="Notes" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable wide />
+                  <TextAreaField label="Description of training" fieldKey="Description of Training" f={f} edits={edits} onChange={handleFieldChange} rows={3} />
+                  <TextAreaField label="Notes" fieldKey="Notes" f={f} edits={edits} onChange={handleFieldChange} onStamp={stampNote} rows={7} />
                 </div>
               </Section>
 
@@ -336,53 +406,58 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
                   <TextField label="Phone" fieldKey="trnpp_cntct_PHONE::Number" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} mono />
                   <TextField label="Mobile" fieldKey="trnpp_cntct_PHONE_mobile::Number" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} mono />
                   <TextField label="Email" fieldKey="trnpp_cntct_INADR__email::zz__Address__ct" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} />
-                  <TextField label="Site number" fieldKey="trnpp_CNTCT__site::Site Number" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} mono />
                   <TextField label="Billing address" fieldKey="Address_Block_Billing" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} wide />
                 </div>
               </Section>
+              </>)}
 
-              <Section title="Financials" icon="≡">
-                <div className="trn-table-wrap">
-                  <table className="trn-table">
-                    <thead>
-                      <tr><th>Line item</th><th className="num">Proposed</th><th className="num">Actual</th></tr>
-                    </thead>
-                    <tbody>
-                      {costRows.length === 0 && <tr><td colSpan={3} className="trn-empty-cell">No cost lines recorded</td></tr>}
-                      {costRows.map(c => (
-                        <tr key={c.label}>
-                          <td>{c.label}</td>
-                          <td className="num">{num(f[c.prop]) ? money(f[c.prop]) : '—'}</td>
-                          <td className="num">{c.act && num(f[c.act]) ? money(f[c.act]) : '—'}</td>
-                        </tr>
-                      ))}
-                      <tr className="total">
-                        <td>Total</td>
-                        <td className="num">{money(f['TOTAL COSTS'])}</td>
-                        <td className="num">{money(f['Act ProgTotal'])}</td>
-                      </tr>
-                    </tbody>
-                  </table>
+              {tab === 'costs' && (<>
+              <div className="trn-cost-cols">
+                <CostTable title="Program costs" lines={PROGRAM_COSTS} f={f} edits={edits} onChange={handleFieldChange} />
+                <div>
+                  <CostTable title="Trainer costs" lines={TRAINER_COSTS} f={f} edits={edits} onChange={handleFieldChange}
+                    totals={{ est: 'TOTAL COSTS', act: 'Act ProgTotal' }} />
+                  <Section title="Travel" icon="➤">
+                    <div className="trn-field-grid">
+                      <TextField label="Distance to High 5" fieldKey="Distance To High5" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
+                      <TextField label="Drive time" fieldKey="Drive Time" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
+                      <TextField label="Mileage" fieldKey="Mileage" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
+                      <TextField label="Mileage quantity" fieldKey="mileage_quantity" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
+                      <TextField label="Mileage price" fieldKey="mileage_price" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
+                    </div>
+                  </Section>
                 </div>
-              </Section>
+              </div>
+              </>)}
 
-              <Section title="Travel" icon="➤">
-                <div className="trn-field-grid">
-                  <TextField label="Distance to High 5" fieldKey="Distance To High5" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="Drive time" fieldKey="Drive Time" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="# of miles" fieldKey="No of Miles" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="Mileage" fieldKey="Mileage" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="Mileage quantity" fieldKey="mileage_quantity" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="Mileage price" fieldKey="mileage_price" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                </div>
-              </Section>
-
-              <Section title="Logistics" icon="⚐">
+              {tab === 'logistics' && (<>
+              <Section title="Program logistics" icon="⚐">
                 <div className="trn-field-grid">
                   {LOGISTICS_FIELDS.map(l => (
                     <TextField key={l.key} label={l.label} fieldKey={l.key} f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
                   ))}
-                  <TextField label="Logistics notes" fieldKey="Logistics Notes" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable wide />
+                  <TextField label="Logistics sent" fieldKey="sent in-house" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
+                  <CheckField label="In-house received" fieldKey="in_house_recvd" f={f} edits={edits} onChange={handleFieldChange} />
+                  <TextAreaField label="Logistics notes" fieldKey="Logistics Notes" f={f} edits={edits} onChange={handleFieldChange} onStamp={stampNote} rows={6} />
+                </div>
+              </Section>
+              </>)}
+
+              {tab === 'attachments' && (
+              <div className="trn-section trn-section-att">
+                <AttachmentsPanel parentId={f._kpt__TrainingProposal_ID} api={trainingAttachments} title="Photos" invoiceDocNumber={f._kat__QuickBooks_Invoice_ID} />
+              </div>
+              )}
+
+              {tab === 'extra' && (<>
+              <Section title="Record" icon="⚙">
+                <div className="trn-field-grid">
+                  <TextField label="Trainings #" fieldKey="_kpt__TrainingProposal_ID" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} mono />
+                  <TextField label="QB invoice #" fieldKey="_kat__QuickBooks_Invoice_ID" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable mono />
+                  <TextField label="QB deposit/estimate #" fieldKey="_kat__QuickBooks_Estimate_ID" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable mono />
+                  <TextField label="Site number" fieldKey="trnpp_CNTCT__site::Site Number" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} mono />
+                  <div className="trn-field"><label>Created</label><span className="trn-value">{f.zz__Created_On || '—'} by {f.zz__Created_By || '—'}</span></div>
+                  <div className="trn-field"><label>Modified</label><span className="trn-value">{f.zz__Modified_On || '—'} by {f.zz__Modified_By || '—'}</span></div>
                 </div>
               </Section>
 
@@ -392,20 +467,13 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
                   <CheckField label="Proposed received" fieldKey="proposed_recvd" f={f} edits={edits} onChange={handleFieldChange} />
                   <TextField label="Confirmed" fieldKey="Confirmed" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
                   <CheckField label="Confirmed received" fieldKey="confirmed_recvd" f={f} edits={edits} onChange={handleFieldChange} />
-                  <TextField label="Sent in-house" fieldKey="sent in-house" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <CheckField label="In-house received" fieldKey="in_house_recvd" f={f} edits={edits} onChange={handleFieldChange} />
                   <TextField label="Final sent" fieldKey="Final Sent" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
                   <TextField label="Email sent" fieldKey="email_sent_date" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
                   <TextField label="Deposit #" fieldKey="deposit_number" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
                   <CheckField label="PO received" fieldKey="po_received" f={f} edits={edits} onChange={handleFieldChange} />
-                  <TextField label="QB estimate ID" fieldKey="_kat__QuickBooks_Estimate_ID" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} mono />
-                  <TextField label="QB invoice ID" fieldKey="_kat__QuickBooks_Invoice_ID" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} mono />
                 </div>
               </Section>
-
-              <div className="trn-section trn-section-att">
-                <AttachmentsPanel parentId={f._kpt__TrainingProposal_ID} api={trainingAttachments} title="Photos" invoiceDocNumber={f._kat__QuickBooks_Invoice_ID} />
-              </div>
+              </>)}
 
               <div className="trn-record-footer">
                 ID {f._kpt__TrainingProposal_ID} · Record {selected.recordId} · Created {f.zz__Created_On?.split(' ')[0]} by {f.zz__Created_By} · Modified {f.zz__Modified_On?.split(' ')[0] || '—'} by {f.zz__Modified_By}
