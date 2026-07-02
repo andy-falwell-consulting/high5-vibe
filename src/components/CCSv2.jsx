@@ -171,6 +171,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   const [navWidth, setNavWidth] = useState(300);
   const [edits, setEdits]       = useState({});
   const [saving, setSaving]     = useState(false);
+  const [addingToBoard, setAddingToBoard] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
   const [expanded, setExpanded] = useState({});
   const [finTab, setFinTab]     = useState('estimates');
@@ -343,7 +344,18 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
               <div className="cv2-crumb">
                 <span className="cv2-crumb-dim">CCS v2</span><span className="cv2-crumb-sep">/</span><span>{org}</span>
                 <span className="cv2-crumb-spacer" />
-                {val('kanban_status') && <button className="cv2-ghost-btn" onClick={() => onNavigateTo?.('ccs-kanban', selected.recordId)}>⊞ Board</button>}
+                {val('kanban_status')
+                  ? <button className="cv2-ghost-btn" onClick={() => onNavigateTo?.('ccs-kanban', selected.recordId)}>⊞ Board</button>
+                  : <button className="cv2-ghost-btn cv2-add-board" disabled={addingToBoard} onClick={async () => {
+                      // One-click: put this project on the Kanban board (first stage), saved immediately.
+                      setAddingToBoard(true);
+                      try {
+                        await updateRecord(LAYOUT, selected.recordId, { kanban_status: PIPELINE[0] });
+                        patchCachedRecord(RCD_LAYOUT, RCD_CACHE_VERSION, selected.recordId, { kanban_status: PIPELINE[0] });
+                        setSelected(s => ({ ...s, fieldData: { ...s.fieldData, kanban_status: PIPELINE[0] } }));
+                      } catch { window.alert('Could not add to the board.'); }
+                      finally { setAddingToBoard(false); }
+                    }}>{addingToBoard ? 'Adding…' : '⊞ Add to board'}</button>}
                 <span className="cv2-crumb-id">#{f._kpt__RCD_ID || selected.recordId}</span>
               </div>
 
