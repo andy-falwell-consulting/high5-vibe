@@ -1,6 +1,9 @@
 .ciq-trigger { background: #2ca01c; color: #fff; border: none; border-radius: 7px; padding: 7px 14px; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
 .ciq-trigger:hover:not(:disabled) { background: #26861a; }
 .ciq-trigger:disabled { background: #1e2130; color: #7bd08a; cursor: default; border: 1px solid #2a2f45; }
+.ciq-trigger-linked { display: inline-flex; align-items: center; background: #1e2130; color: #7bd08a; border: 1px solid #2a2f45; text-decoration: none; }
+.ciq-trigger-linked:hover { border-color: #7bd08a; background: #1e2130; }
+[data-theme="light"] .ciq-trigger-linked { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
 
 .ciq-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: flex; align-items: center; justify-content: center; z-index: 1000; }
 .ciq-modal { width: 1040px; max-width: 94vw; max-height: 88vh; display: flex; flex-direction: column; background: #13151c; border: 1px solid #2a2f45; border-radius: 12px; overflow: hidden; color: #e2e8f0; }
