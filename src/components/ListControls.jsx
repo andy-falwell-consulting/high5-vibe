@@ -138,15 +138,47 @@ export default function ListToolbar({ c, unit = 'items' }) {
   )
 }
 
+// Walk up from a node to the nearest actually-scrollable ancestor.
+function scrollParent(node) {
+  let el = node?.parentElement
+  while (el) {
+    const oy = getComputedStyle(el).overflowY
+    if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight) return el
+    el = el.parentElement
+  }
+  return null
+}
+
 // Helper: render a flat list or A–Z sections with sticky letter headers.
 // Letters and items are emitted as siblings, so the parent should be a
 // scrolling <div> (sticky headers work; items are plain <div>s).
-export function ListBody({ c, renderItem }) {
-  if (c.sections) {
-    return c.sections.flatMap(sec => [
-      <div className="lc-letter" key={`L:${sec.letter}`}>{sec.letter}</div>,
-      ...sec.items.map(renderItem),
-    ])
-  }
-  return c.processed.map(renderItem)
+//
+// `activeId` (optional): when the selected record changes — e.g. a deep-link or
+// global-search jump — bring its row into view so the user can see where the
+// record sits in the list. Only scrolls when the row is offscreen, and only
+// once per selection, so it never fights manual scrolling.
+export function ListBody({ c, renderItem, activeId }) {
+  const anchorRef = useRef(null)
+  const scrolledFor = useRef(null)
+  useEffect(() => {
+    if (activeId == null) { scrolledFor.current = null; return }
+    if (scrolledFor.current === activeId) return
+    const root = anchorRef.current?.parentElement
+    const el = root?.querySelector('.active')
+    if (!root || !el) return // not rendered yet (loading/filtered) — retry on next processed change
+    scrolledFor.current = activeId
+    const scroller = scrollParent(el) || root
+    const sr = scroller.getBoundingClientRect(), er = el.getBoundingClientRect()
+    if (er.top < sr.top || er.bottom > sr.bottom) {
+      scroller.scrollTop += (er.top - sr.top) - (scroller.clientHeight - er.height) / 2
+    }
+  }, [activeId, c.processed])
+
+  const items = c.sections
+    ? c.sections.flatMap(sec => [
+        <div className="lc-letter" key={`L:${sec.letter}`}>{sec.letter}</div>,
+        ...sec.items.map(renderItem),
+      ])
+    : c.processed.map(renderItem)
+  return [<span key="__lc_anchor" ref={anchorRef} aria-hidden="true" style={{ display: 'none' }} />, ...items]
 }

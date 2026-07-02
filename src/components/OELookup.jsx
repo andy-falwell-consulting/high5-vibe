@@ -116,7 +116,7 @@ export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {})
         ) : error ? (
           <div className="oe-empty-state"><p>Failed to load records.</p></div>
         ) : (
-          <ListBody c={controls} renderItem={r => (
+          <ListBody c={controls} activeId={selected?.recordId} renderItem={r => (
             <div key={r.recordId}
               className={`oe-list-item ${selected?.recordId === r.recordId ? 'active' : ''}`}
               onClick={() => { handleSelect(r); onRecordSelect?.(r.recordId, r.fieldData?.['Program Type']); }}>

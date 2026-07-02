@@ -223,7 +223,7 @@ export default function EOL({ navTarget, onClearNav, onRecordSelect } = {}) {
           <div className="eol-loading">{[...Array(8)].map((_, i) => <div key={i} className="eol-skeleton" />)}</div>
         ) : (
           <div className="eol-list">
-            <ListBody c={list} renderItem={r => {
+            <ListBody c={list} activeId={selected?.recordId} renderItem={r => {
               const color = STATUS_COLOR[r.fieldData.Status] || STATUS_COLOR.default;
               return (
                 <div key={r.recordId}
