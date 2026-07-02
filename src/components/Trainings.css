@@ -167,6 +167,46 @@
 .trn-input:focus { border-color: #e87722; box-shadow: 0 0 0 2px #e8772222; }
 .trn-select { cursor: pointer; }
 .trn-check { width: 17px; height: 17px; accent-color: #e87722; cursor: pointer; margin-top: 5px; }
+.trn-textarea { resize: vertical; line-height: 1.5; font-family: inherit; }
+
+/* ── Detail tabs (mirrors the FMP layout tabs) ── */
+.trn-tabs { display: flex; gap: 2px; padding: 0 24px; border-bottom: 1px solid #1e2130; flex-shrink: 0; }
+.trn-tab {
+  background: none; border: none; cursor: pointer; font-family: inherit;
+  font-size: 15px; color: #8b97aa; padding: 9px 13px; border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.trn-tab:hover { color: #cbd5e1; }
+.trn-tab.on { color: #e87722; border-bottom-color: #e87722; font-weight: 600; }
+
+/* ── Cost grids ── */
+.trn-cost-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+@media (max-width: 1200px) { .trn-cost-cols { grid-template-columns: 1fr; } }
+.trn-cost-card { background: #111827; border: 1px solid #1e2130; border-radius: 10px; padding: 14px 16px; }
+.trn-cost-title { font-weight: 600; font-size: 15px; margin-bottom: 8px; color: #e2e8f0; }
+.trn-cost-table td { padding: 4px 8px; }
+.trn-cost-input {
+  width: 110px; text-align: right; box-sizing: border-box;
+  background: #0f172a; border: 1px solid #334155; border-radius: 5px; color: #e2e8f0;
+  font-size: 14px; padding: 4px 8px; outline: none; font-family: inherit; font-variant-numeric: tabular-nums;
+}
+.trn-cost-input:focus { border-color: #e87722; }
+.trn-cost-input.dirty { border-color: #e87722; }
+.trn-cost-na { color: #475569; }
+
+/* ── Stamp button (FMP-style note stamp) ── */
+.trn-stamp-btn {
+  margin-left: 10px; background: #1e2130; border: 1px solid #334155; color: #cbd5e1;
+  border-radius: 5px; font-size: 12px; padding: 2px 8px; cursor: pointer; font-family: inherit;
+}
+.trn-stamp-btn:hover { border-color: #e87722; color: #e87722; }
+
+[data-theme="light"] .trn-tabs { border-bottom-color: #e2e8f0; }
+[data-theme="light"] .trn-tab { color: #5e6b7c; }
+[data-theme="light"] .trn-tab:hover { color: #0f172a; }
+[data-theme="light"] .trn-cost-card { background: #ffffff; border-color: #e2e8f0; }
+[data-theme="light"] .trn-cost-title { color: #0f172a; }
+[data-theme="light"] .trn-cost-input { background: #f8fafc; border-color: #e2e8f0; color: #0f172a; }
+[data-theme="light"] .trn-stamp-btn { background: #f1f5f9; border-color: #e2e8f0; color: #334155; }
 .trn-dirty-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #e87722; margin-left: 6px; vertical-align: middle; }
 
 /* ── Footer ────────────────────────────────────────────────────── */
