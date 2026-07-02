@@ -69,6 +69,8 @@
 .cv2-crumb-id { font-family: monospace; font-size: 14px; color: var(--cv2-text-4); }
 .cv2-ghost-btn { background: transparent; border: 1px solid var(--cv2-border-2); border-radius: 7px; color: var(--cv2-text-2); font-size: 14px; padding: 4px 10px; cursor: pointer; }
 .cv2-ghost-btn:hover { color: var(--cv2-text); border-color: var(--cv2-text-3); }
+.cv2-add-board { color: #d85a30; border-color: #d85a3055; }
+.cv2-add-board:hover { color: #d85a30; border-color: #d85a30; }
 
 /* ── Hero ──────────────────────────────────────────────────────── */
 .cv2-hero { background: var(--cv2-surface); border: 1px solid var(--cv2-border); border-radius: 14px; padding: 18px 20px; }

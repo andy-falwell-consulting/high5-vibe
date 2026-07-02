@@ -7,6 +7,7 @@ import RecordFormModal from './RecordFormModal';
 import RecordSaveBar from './RecordSaveBar';
 import ComposeEmail from './ComposeEmail';
 import ReminderModal from './ReminderModal';
+import QuickAddFromContact from './QuickAddFromContact';
 import { invoiceRowInfo } from './InvoicePane';
 import './Contacts.css';
 
@@ -516,6 +517,7 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
               <div className="ct-hero-actions">
                 <button className="ct-btn-email" onClick={() => setComposeOpen(true)}>✉ Email</button>
                 <button className="ct-btn-email" onClick={() => setRemindOpen(true)}>⏰ Remind</button>
+                <QuickAddFromContact contact={selected} onNavigateTo={onNavigateTo} />
               </div>
             </div>
 
