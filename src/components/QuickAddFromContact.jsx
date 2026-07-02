@@ -24,6 +24,7 @@ const KANBAN_FIRST_STAGE = 'New Project Inquiry';
 
 const todayFm = () => { const d = new Date(); return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`; };
 const isoToFm = iso => { if (!iso) return ''; const [y, m, d] = iso.split('-'); return `${m}/${d}/${y}`; };
+const fmDateMs = v => { if (!v) return 0; const [m, d, y] = String(v).split(' ')[0].split('/'); return y ? (new Date(`${y}-${m}-${d}T00:00:00`).getTime() || 0) : 0; };
 
 const TYPES = {
   ccs: {
@@ -34,11 +35,15 @@ const TYPES = {
     label: 'Inspection', icon: '⚑', layout: 'Inspections_New', cacheVersion: 1, module: 'inspections',
     build: v => {
       const copied = {};
-      if (v.mode === 'copy' && v.source) {
+      if (v.mode === 'copy' && v.sourceFull) {
         for (const k of INSPECTION_COPY_FIELDS) {
-          const val = v.source.fieldData?.[k];
+          const val = v.sourceFull[k];
           if (val !== undefined && val !== '') copied[k] = val;
         }
+        // Attach the new inspection to the SAME contact/site as its predecessor —
+        // inspections often point at a site contact, not the org contact the
+        // user is viewing (e.g. 4-H Camp Bristol Hills org 72380 vs site 82201).
+        if (v.sourceFull._kft__Contact_ID) copied._kft__Contact_ID = String(v.sourceFull._kft__Contact_ID);
       }
       return { ...copied, Date: v.date ? isoToFm(v.date) : todayFm(), ...(v.inspector ? { 'Inspectors Name': v.inspector } : {}) };
     },
@@ -74,24 +79,40 @@ export default function QuickAddFromContact({ contact, onNavigateTo }) {
     setVals(t === 'ccs' ? { projectType: 'New Construction', addToBoard: true } : t === 'inspection' ? { mode: 'blank' } : {});
     setError(null); setMenuOpen(false);
     if (t === 'inspection') {
-      // Load this site's previous inspections so "copy" can default to the latest.
+      // The site's previous inspections = the contact's own Inspections portal
+      // (exactly what the Contacts page shows). The portal relationship is wider
+      // than _kft__Contact_ID == this contact (inspections often point at a
+      // related site contact), so don't re-query by FK — reuse the portal rows.
       setPrevInspections(null);
-      findInLayout('Inspections_New', [{ _kft__Contact_ID: `==${contactId}` }], { sort: [{ fieldName: 'Date', sortOrder: 'descend' }], limit: 30 })
-        .then(j => setPrevInspections(j?.response?.data || []))
-        .catch(() => setPrevInspections([]));
+      const portalRows = (contact?.portalData?.['Portal__Opportunities'] || []).map(r => ({
+        recordId: String(r.recordId),
+        date: r['cntct_INSPT::Date'] || '',
+        inspector: r['cntct_INSPT::Inspectors Name'] || '',
+      }));
+      if (portalRows.length) {
+        portalRows.sort((a, b) => fmDateMs(b.date) - fmDateMs(a.date));
+        setPrevInspections(portalRows);
+      } else {
+        // Fallback (e.g. list-level record without portalData): direct FK query.
+        findInLayout('Inspections_New', [{ _kft__Contact_ID: `==${contactId}` }], { sort: [{ fieldName: 'Date', sortOrder: 'descend' }], limit: 30 })
+          .then(j => setPrevInspections((j?.response?.data || []).map(r => ({
+            recordId: String(r.recordId), date: r.fieldData?.Date || '', inspector: r.fieldData?.['Inspectors Name'] || '',
+          }))))
+          .catch(() => setPrevInspections([]));
+      }
     }
   };
   const set = (k, v) => setVals(p => ({ ...p, [k]: v }));
 
   // Selecting copy mode (or a different source) defaults the source to the most
   // recent inspection and pre-fills the inspector from it.
-  const pickSource = (rec) => setVals(p => ({ ...p, source: rec, inspector: p.inspectorTyped ? p.inspector : (rec?.fieldData?.['Inspectors Name'] || '') }));
+  const pickSource = (rec) => setVals(p => ({ ...p, source: rec, inspector: p.inspectorTyped ? p.inspector : (rec?.inspector || '') }));
   const setMode = (m) => {
     setVals(p => {
       const next = { ...p, mode: m };
       if (m === 'copy' && !p.source && prevInspections?.length) {
         next.source = prevInspections[0];
-        if (!p.inspectorTyped) next.inspector = prevInspections[0]?.fieldData?.['Inspectors Name'] || '';
+        if (!p.inspectorTyped) next.inspector = prevInspections[0]?.inspector || '';
       }
       return next;
     });
@@ -101,7 +122,16 @@ export default function QuickAddFromContact({ contact, onNavigateTo }) {
     const cfg = TYPES[type];
     setBusy(true); setError(null);
     try {
-      const fieldData = { _kft__Contact_ID: String(contactId), ...cfg.build(vals) };
+      // Copying an inspection needs the source's full fieldData (the portal row
+      // only carries date/inspector) — fetch it now.
+      let v = vals;
+      if (type === 'inspection' && vals.mode === 'copy' && vals.source?.recordId) {
+        const full = await getRecord('Inspections_New', vals.source.recordId);
+        const src = full?.response?.data?.[0]?.fieldData;
+        if (!src) throw new Error('Could not load the inspection to copy.');
+        v = { ...vals, sourceFull: src };
+      }
+      const fieldData = { _kft__Contact_ID: String(contactId), ...cfg.build(v) };
       const res = await createRecord(cfg.layout, fieldData);
       if (res.messages?.[0]?.code !== '0') throw new Error(res.messages?.[0]?.message || 'Create failed');
       const recordId = res.response?.recordId;
@@ -164,7 +194,7 @@ export default function QuickAddFromContact({ contact, onNavigateTo }) {
                       <select value={vals.source?.recordId || ''} onChange={e => pickSource(prevInspections.find(r => r.recordId === e.target.value))}>
                         {prevInspections.map(r => (
                           <option key={r.recordId} value={r.recordId}>
-                            {r.fieldData?.Date || '—'} — {r.fieldData?.['Inspectors Name'] || 'no inspector'}
+                            {r.date || '—'} — {r.inspector || 'no inspector'}
                           </option>
                         ))}
                       </select>
