@@ -71,7 +71,7 @@ export default function App() {
   const [user, setUser] = useState(null)
   const [authChecked, setAuthChecked] = useState(false)
   const [reminderDue, setReminderDue] = useState(0)
-  // Display name of the open record, so the tab reads e.g. "SUNY Potsdam · Belay"
+  // Display name of the open record, so the tab reads e.g. "SUNY Potsdam · Vibe"
   // (set when a record is picked from a list; cleared on any navigation).
   const [recordTitle, setRecordTitle] = useState(null)
 
@@ -81,7 +81,7 @@ export default function App() {
   useEffect(() => {
     const label = MODULES.find(m => m.id === activeModule)?.label
     const base = recordTitle || (activeModule !== 'home' ? label : null)
-    document.title = base ? `${base} · Belay` : 'Belay — High 5 Ops'
+    document.title = base ? `${base} · Vibe` : 'Vibe — High 5 Ops'
   }, [activeModule, recordTitle])
 
   // Auth check — /api/me returns 401 if not logged in, 404 in local dev (pass through)

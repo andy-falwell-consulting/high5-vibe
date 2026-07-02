@@ -173,10 +173,10 @@ export default function NavRail({ modules, activeId, onSelect, theme, onToggleTh
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontFamily: "'Oswald', sans-serif", fontSize: 17, fontWeight: 700,
             border: '1px solid #333', flexShrink: 0,
-          }}>B</span>
+          }}>V</span>
           {showLabels && (
             <div style={{ lineHeight: 1.2, minWidth: 0 }}>
-              <div style={{ fontSize: 17, fontWeight: 600, color: c.textActive }}>Belay</div>
+              <div style={{ fontSize: 17, fontWeight: 600, color: c.textActive }}>Vibe</div>
             </div>
           )}
           {showLabels && (

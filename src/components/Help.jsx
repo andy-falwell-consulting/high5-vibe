@@ -121,7 +121,7 @@ export default function Help() {
               {s.body}
             </section>
           ))}
-          <div className="hlp-footer">Belay — High 5 Adventure Learning Center. Press <kbd>⌘K</kbd> anywhere to search or ask the assistant.</div>
+          <div className="hlp-footer">Vibe — High 5 Adventure Learning Center. Press <kbd>⌘K</kbd> anywhere to search or ask the assistant.</div>
         </div>
       </main>
     </div>
@@ -132,10 +132,10 @@ export default function Help() {
 
 const SECTIONS = [
   {
-    id: 'overview', toc: 'Welcome', title: 'Welcome to Belay',
+    id: 'overview', toc: 'Welcome', title: 'Welcome to Vibe',
     body: (
       <>
-        <p>Belay is High 5's internal hub. It brings your FileMaker records, QuickBooks accounting,
+        <p>Vibe is High 5's internal hub. It brings your FileMaker records, QuickBooks accounting,
           Shopify store, and Google Workspace (Gmail, Calendar, Drive) into one place, organized as a
           set of <strong>pages</strong> in the left nav rail.</p>
         <p>Every page works the same way: a <strong>list</strong> on the left to find a record, and a
@@ -155,7 +155,7 @@ const SECTIONS = [
           <li><strong>The nav rail</strong> (left) lists every page, grouped into Overview, Records,
             Projects, and System. Click a name to open it. Drag the rail's edge to resize it, or collapse
             it to icons.</li>
-          <li><strong>Your edits are attributed to you.</strong> When you save a change, Belay records it
+          <li><strong>Your edits are attributed to you.</strong> When you save a change, Vibe records it
             under your name, not a shared admin account.</li>
         </ul>
       </>
@@ -211,7 +211,7 @@ const SECTIONS = [
     id: 'environments', toc: 'Environments', title: 'Environments (Development / Staging / Production)',
     body: (
       <>
-        <p>The dropdown at the bottom of the nav rail switches which FileMaker database Belay is pointed
+        <p>The dropdown at the bottom of the nav rail switches which FileMaker database Vibe is pointed
           at: <strong>Development</strong>, <strong>Staging</strong>, or <strong>Production</strong>.
           Production is the real, live data — be deliberate about edits there. Development and Staging are
           for testing. The current environment is shown by a colored dot (green / amber / red).</p>

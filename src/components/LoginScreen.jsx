@@ -4,8 +4,8 @@ export default function LoginScreen({ error }) {
   return (
     <div className="ls-root">
       <div className="ls-card">
-        <div className="ls-logo">B</div>
-        <h1 className="ls-title">Belay</h1>
+        <div className="ls-logo">V</div>
+        <h1 className="ls-title">Vibe</h1>
         <p className="ls-sub">High 5 Adventure Learning Center</p>
 
         {error && <div className="ls-error">{error}</div>}
