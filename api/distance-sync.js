@@ -27,7 +27,7 @@ const PAGE = 100;
 const MAX_GOOGLE_CALLS_PER_RUN = 400; // cost guard; cache fills over runs
 
 const TARGETS = {
-  trainings: { layout: 'trainings_New', distField: 'Distance To High5', timeField: 'Drive Time' },
+  trainings: { layout: 'trainings_New', distField: 'Distance To High5', timeField: 'Drive Time', addrFallback: 'Location Address' },
   rcd:       { layout: 'RCD_New',       distField: 'Distance to High5', timeField: 'Drive Time' },
 };
 
@@ -62,15 +62,16 @@ async function lookup(address, counters) {
   return out;
 }
 
-// The record's site address: its contact's Combined Address, else the first
-// address-portal row's single-line display.
+// The record's site address, composed from the contact's address-portal
+// components (Street/City/State/Zip — the display calcs come back empty via
+// the Data API). Requires at least a city or zip to be routable.
 function contactAddress(contact) {
-  const f = contact?.fieldData || {};
-  if (String(f['Combined Address'] || '').trim()) return f['Combined Address'];
   const rows = contact?.portalData?.cntct_ADDR || [];
   for (const r of rows) {
-    const line = r['cntct_ADDR::zz__Display_Single_Line__ct'] || r['cntct_ADDR::zz__Display__ct'];
-    if (String(line || '').trim()) return line;
+    const street = r['cntct_ADDR::Street'], city = r['cntct_ADDR::City'],
+      state = r['cntct_ADDR::State'], zip = r['cntct_ADDR::Zip'];
+    if (!String(city || '').trim() && !String(zip || '').trim()) continue;
+    return [street, city, state, zip].map(s => String(s || '').trim()).filter(Boolean).join(', ');
   }
   return null;
 }
@@ -119,14 +120,21 @@ export default async function handler(req, res) {
         if (Date.now() - started >= 250000 || scanned >= maxRecords) break;
         scanned++;
         const cid = rec.fieldData?._kft__Contact_ID;
-        if (!cid) { noContact++; offset++; continue; }
-        let addr = contactCache.get(String(cid));
-        if (addr === undefined) {
-          const c = (await fmFind(db, 'Contacts_New', [{ _kpt__Contact_ID: `==${cid}` }], token, 1))[0];
-          addr = c ? contactAddress(c) : null;
-          contactCache.set(String(cid), addr);
+        let addr = null;
+        if (cid) {
+          addr = contactCache.get(String(cid));
+          if (addr === undefined) {
+            const c = (await fmFind(db, 'Contacts_New', [{ _kpt__Contact_ID: `==${cid}` }], token, 1))[0];
+            addr = c ? contactAddress(c) : null;
+            contactCache.set(String(cid), addr);
+          }
         }
-        if (!addr) { noAddress++; offset++; continue; }
+        // Fallback: the record's own location-address field (trainings).
+        if (!addr && cfg.addrFallback) {
+          const own = String(rec.fieldData?.[cfg.addrFallback] || '').trim();
+          if (own.length > 8) addr = own;
+        }
+        if (!addr) { if (!cid) noContact++; else noAddress++; offset++; continue; }
         const hit = await lookup(addr, counters);
         if (!hit || !hit.d) { noRoute++; offset++; continue; }
         if (!dry) {
