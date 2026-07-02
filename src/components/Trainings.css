@@ -165,6 +165,8 @@
   font-size: 17px; padding: 5px 8px; outline: none; font-family: inherit;
 }
 .trn-input:focus { border-color: #e87722; box-shadow: 0 0 0 2px #e8772222; }
+.trn-select { cursor: pointer; }
+.trn-check { width: 17px; height: 17px; accent-color: #e87722; cursor: pointer; margin-top: 5px; }
 .trn-dirty-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #e87722; margin-left: 6px; vertical-align: middle; }
 
 /* ── Footer ────────────────────────────────────────────────────── */

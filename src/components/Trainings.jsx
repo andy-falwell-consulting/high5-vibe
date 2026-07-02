@@ -40,7 +40,7 @@ const COST_LINES = [
   { label: 'Rental — tables/chairs', prop: 'Prog Rental Fee Tables Chairs', act: null },
   { label: 'Rental — porta-potty', prop: 'Prog Rental Fee PortaPotty',   act: null },
   { label: 'Rental — other',      prop: 'Prog Rental Fee Other',         act: null },
-  { label: 'NY state surcharge',  prop: 'ny_state_surcharge',            act: null },
+  { label: 'NY state surcharge',  prop: 'ny_state_surcharge',            act: 'act_ny_state_surchage' },
 ];
 
 const LOGISTICS_FIELDS = [
@@ -53,6 +53,13 @@ const LOGISTICS_FIELDS = [
   { key: 'Logistics: Release Forms',             label: 'Release forms' },
   { key: 'Logistics: Other tents cabins facilities', label: 'Other (tents/cabins/facilities)' },
 ];
+
+// Dropdown options mirrored from the trainings_New layout's FileMaker value lists.
+const STATUS_OPTIONS = ['Inquiry', 'Follow-up Needed', 'Proposed', 'Approved/Needs to be D-Invoiced & TC', 'Waiting on $ & Signed TC', 'Confirmed/Scheduled', 'Completed', 'Final Invoiced', 'No Go', 'Keene EOL/C&S', 'Out Reach', 'Other'];
+const AUDIENCE_OPTIONS = ['Corporate', 'Adult', 'College', 'Youth Public', 'Youth Private', 'EOL'];
+const PROGRAM_TYPES = ['Adventure Basics: Level 1 Training', 'Adventure Facilitaton Training', 'Beyond Basics: Level 2 Training', 'CATSEL - custom', 'Certification Exam - custom', 'CIT Training', 'Climbing Wall/Tower & Belay Skills Training', 'Corporate Program', 'Curriculum Writing', 'Consultation', 'Dialogue', 'EOL/SEL', 'EOL Sports', 'Game Bag Training', 'Gathering Again (Games & Lows)', 'Gathering Again 2 (High Elements)', 'High Elements and Belay Skills Training', 'Leadership Development', 'Low Elements Course Training', 'Low Traverse Wall Training', 'Managing an Adventure Program', 'Mastermind/Adventure Circuit', 'New Student Orientation ', 'Portable Adventure', 'Program Review', 'Team-building', 'Team Development', 'Technical Skills Refresher', 'Technical Skills Training', 'Technical Skills Verification', 'Therapeutic', 'Virtual Team-building', 'Virtual Team Development', 'Virtual Training', 'Keynote', 'Playnote', 'Other'];
+const TRAINER_OPTIONS = ['Phil Brown', 'Lisa Hunt', 'Kyra Richardson', 'Elyse Norton', 'Cam Miller', 'Chris Damboise', 'Rich Keegan', 'Joshua Fisher', 'Alison Jackson-Frasier', 'Lisa Howard', 'Sadie Graham', 'Andrew  Wood', 'Olivia Howry', 'Hanne Bailey', 'Sam Copland', 'Stefanie Frazee', 'Jeff Frigon', 'Chris Ortiz', 'Ryan McCormick', 'Anne Louise Wagner', 'Chris Sanchez', 'Ky Schroeher', 'Jim Grout', 'Jiin Cruz', 'Sarah Morse', 'Phoebe Connolly', 'Ana Devlin Gauthier', 'Julia Stifler', 'Becky Proulx', 'Ron Vercellone', 'Amanda Klein', 'Mark Flynn', 'Beth Sayers', 'Nate Folan', 'Hutch Hutchinson', 'Stephanie Globus-Hoenig', 'Emily Kehoe', 'Tim Abraham', 'Ian Doak', 'Todd Brown', 'Jamie Thibodeau', 'Geoff Ward', "Constance O'Brien", 'Morgan Wiseman', 'Other'];
+const TRAINER_SLOTS = ['Trainers', 'trainers2', 'trainers3', 'trainers4', 'trainers5', 'trainers6', 'trainers7', 'trainers8', 'trainers9'];
 
 const num = v => Number(v || 0);
 const money = v => '$' + num(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -81,6 +88,36 @@ function TextField({ label, fieldKey, f, edits, onChange, editing, editable, mon
       ) : (
         <span className={`trn-value${mono ? ' mono' : ''}`}>{fmText(v) || '—'}</span>
       )}
+    </div>
+  );
+}
+
+// Dropdown bound to a FileMaker value list. Keeps an off-list stored value
+// visible/selectable so opening a record never silently changes it.
+function SelectField({ label, fieldKey, f, edits, onChange, options, wide }) {
+  const v = val(f, edits, fieldKey);
+  const dirty = isDirty(f, edits, fieldKey);
+  const opts = v && !options.includes(v) ? [v, ...options] : options;
+  return (
+    <div className={`trn-field${wide ? ' wide' : ''}`}>
+      <label>{label}{dirty && <span className="trn-dirty-dot" />}</label>
+      <select className="trn-input trn-select" value={v || ''} onChange={e => onChange(fieldKey, e.target.value)}>
+        <option value="">—</option>
+        {opts.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </div>
+  );
+}
+
+// FileMaker Boolean checkbox (1 / empty).
+function CheckField({ label, fieldKey, f, edits, onChange }) {
+  const v = val(f, edits, fieldKey);
+  const dirty = isDirty(f, edits, fieldKey);
+  const on = v === 1 || v === '1';
+  return (
+    <div className="trn-field">
+      <label>{label}{dirty && <span className="trn-dirty-dot" />}</label>
+      <input type="checkbox" className="trn-check" checked={on} onChange={e => onChange(fieldKey, e.target.checked ? 1 : '')} />
     </div>
   );
 }
@@ -196,11 +233,6 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
   const status = f ? (val(f, edits, 'Status') || '') : '';
   const statusColor = STATUS_COLOR[status] || STATUS_COLOR.default;
 
-  const otherTrainers = f
-    ? ['Trainers', 'trainers2', 'trainers3', 'trainers4', 'trainers5', 'trainers6', 'trainers7', 'trainers8', 'trainers9']
-        .map(k => f[k]).filter(t => t && String(t).trim()).join(', ')
-    : '';
-
   const costRows = f ? COST_LINES.filter(c => num(f[c.prop]) || (c.act && num(f[c.act]))) : [];
 
   return (
@@ -272,20 +304,29 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
                 <div className="trn-field-grid">
                   <TextField label="Organization" fieldKey="zz__Display_Organization__ct" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} />
                   <TextField label="Contact" fieldKey="zz__Display_Contact__ct" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} />
-                  <TextField label="Type of program" fieldKey="Type of Program" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="Status" fieldKey="Status" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
+                  <SelectField label="Type of program" fieldKey="Type of Program" f={f} edits={edits} onChange={handleFieldChange} options={PROGRAM_TYPES} />
+                  <SelectField label="Status" fieldKey="Status" f={f} edits={edits} onChange={handleFieldChange} options={STATUS_OPTIONS} />
                   <TextField label="Start date" fieldKey="Start Date" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
                   <TextField label="End date" fieldKey="End Date" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
                   <TextField label="# Days" fieldKey="# Days" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
                   <TextField label="# Hours" fieldKey="# Hours" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="Audience" fieldKey="Audience" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
+                  <SelectField label="Audience" fieldKey="Audience" f={f} edits={edits} onChange={handleFieldChange} options={AUDIENCE_OPTIONS} />
                   <TextField label="Group size" fieldKey="Group Size" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="Lead trainer" fieldKey="Lead Trainer" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
                   <TextField label="Workshop location" fieldKey="Workshop Location" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="Inspection required" fieldKey="Inspection Required" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  {otherTrainers && <div className="trn-field wide"><label>Additional trainers</label><span className="trn-value">{otherTrainers}</span></div>}
+                  <CheckField label="Inspection required" fieldKey="Inspection Required" f={f} edits={edits} onChange={handleFieldChange} />
+                  <TextField label="Report printed" fieldKey="Report Printed" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
                   <TextField label="Location address" fieldKey="Location Address" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable wide />
                   <TextField label="Description of training" fieldKey="Description of Training" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable wide />
+                  <TextField label="Notes" fieldKey="Notes" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable wide />
+                </div>
+              </Section>
+
+              <Section title="Trainers" icon="◉">
+                <div className="trn-field-grid">
+                  <SelectField label="Lead trainer" fieldKey="Lead Trainer" f={f} edits={edits} onChange={handleFieldChange} options={TRAINER_OPTIONS} />
+                  {TRAINER_SLOTS.map((fk, i) => (
+                    <SelectField key={fk} label={`Trainer ${i + 1}`} fieldKey={fk} f={f} edits={edits} onChange={handleFieldChange} options={TRAINER_OPTIONS} />
+                  ))}
                 </div>
               </Section>
 
@@ -295,6 +336,7 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
                   <TextField label="Phone" fieldKey="trnpp_cntct_PHONE::Number" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} mono />
                   <TextField label="Mobile" fieldKey="trnpp_cntct_PHONE_mobile::Number" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} mono />
                   <TextField label="Email" fieldKey="trnpp_cntct_INADR__email::zz__Address__ct" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} />
+                  <TextField label="Site number" fieldKey="trnpp_CNTCT__site::Site Number" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} mono />
                   <TextField label="Billing address" fieldKey="Address_Block_Billing" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} wide />
                 </div>
               </Section>
@@ -324,6 +366,17 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
                 </div>
               </Section>
 
+              <Section title="Travel" icon="➤">
+                <div className="trn-field-grid">
+                  <TextField label="Distance to High 5" fieldKey="Distance To High5" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
+                  <TextField label="Drive time" fieldKey="Drive Time" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
+                  <TextField label="# of miles" fieldKey="No of Miles" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
+                  <TextField label="Mileage" fieldKey="Mileage" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
+                  <TextField label="Mileage quantity" fieldKey="mileage_quantity" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
+                  <TextField label="Mileage price" fieldKey="mileage_price" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
+                </div>
+              </Section>
+
               <Section title="Logistics" icon="⚐">
                 <div className="trn-field-grid">
                   {LOGISTICS_FIELDS.map(l => (
@@ -336,11 +389,15 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
               <Section title="Sales / pipeline" icon="◔">
                 <div className="trn-field-grid">
                   <TextField label="Proposed" fieldKey="Proposed" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
+                  <CheckField label="Proposed received" fieldKey="proposed_recvd" f={f} edits={edits} onChange={handleFieldChange} />
                   <TextField label="Confirmed" fieldKey="Confirmed" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="Final sent" fieldKey="Final Sent" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
+                  <CheckField label="Confirmed received" fieldKey="confirmed_recvd" f={f} edits={edits} onChange={handleFieldChange} />
                   <TextField label="Sent in-house" fieldKey="sent in-house" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
+                  <CheckField label="In-house received" fieldKey="in_house_recvd" f={f} edits={edits} onChange={handleFieldChange} />
+                  <TextField label="Final sent" fieldKey="Final Sent" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
                   <TextField label="Email sent" fieldKey="email_sent_date" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
                   <TextField label="Deposit #" fieldKey="deposit_number" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
+                  <CheckField label="PO received" fieldKey="po_received" f={f} edits={edits} onChange={handleFieldChange} />
                   <TextField label="QB estimate ID" fieldKey="_kat__QuickBooks_Estimate_ID" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} mono />
                   <TextField label="QB invoice ID" fieldKey="_kat__QuickBooks_Invoice_ID" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} mono />
                 </div>
