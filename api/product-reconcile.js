@@ -77,7 +77,9 @@ async function loadQboItems() {
     { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } }).then(r => r.json());
   const out = [];
   for (let pos = 1, guard = 0; guard < 40; guard++) {
-    const page = (await q(`SELECT Id, Name, Sku, Type, Active, UnitPrice FROM Item STARTPOSITION ${pos} MAXRESULTS 1000`))?.QueryResponse?.Item || [];
+    // SELECT * — QBO returns Sku with the wildcard but omits it from an explicit
+    // projected column list (a documented quirk), even at minorversion 75.
+    const page = (await q(`SELECT * FROM Item STARTPOSITION ${pos} MAXRESULTS 1000`))?.QueryResponse?.Item || [];
     for (const i of page) out.push({ id: String(i.Id), name: i.Name || '', sku: i.Sku || '', type: i.Type, active: i.Active !== false, price: i.UnitPrice });
     if (page.length < 1000) break;
     pos += page.length;
