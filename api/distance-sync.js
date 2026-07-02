@@ -82,6 +82,16 @@ export default async function handler(req, res) {
   if (!ALLOWED_DBS.has(db)) return res.status(400).json({ error: 'db not allowed' });
   const dry = req.query?.dry === '1';
   const only = req.query?.layout;
+
+  // Probe mode: one Google lookup for a given address, no FMP scanning.
+  // GET ?probe=Brattleboro Union High School, Brattleboro VT
+  if (req.query?.probe) {
+    const counters = { googleCalls: 0, cacheHits: 0, lookupFails: 0, budgetSkips: 0 };
+    const hit = await lookup(String(req.query.probe), counters);
+    return res.status(200).json({ probe: req.query.probe, result: hit, ...counters });
+  }
+
+  const maxRecords = Math.max(1, Number(req.query?.max || 100000));
   const started = Date.now();
   const token = await fmpToken(db);
 
@@ -93,7 +103,7 @@ export default async function handler(req, res) {
     if (only && only !== key) continue;
     let updated = 0, noContact = 0, noAddress = 0, noRoute = 0, scanned = 0, remaining = null;
     let offset = 1;
-    while (Date.now() - started < 250000) {
+    while (Date.now() - started < 250000 && scanned < maxRecords) {
       // records where the distance field is EMPTY (never touch filled ones)
       const r = await fetch(`${FMP_HOST}/fmi/data/v2/databases/${db}/layouts/${encodeURIComponent(cfg.layout)}/_find`, {
         method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -106,7 +116,7 @@ export default async function handler(req, res) {
       if (!rows.length) break;
 
       for (const rec of rows) {
-        if (Date.now() - started >= 250000) break;
+        if (Date.now() - started >= 250000 || scanned >= maxRecords) break;
         scanned++;
         const cid = rec.fieldData?._kft__Contact_ID;
         if (!cid) { noContact++; offset++; continue; }
