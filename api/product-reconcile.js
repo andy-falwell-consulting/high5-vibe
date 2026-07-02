@@ -14,7 +14,7 @@
 // Auth: x-sync-key header/query (QBO_SYNC_KEY) or a Google session.
 import { getGoogleSession } from './_googleSession.js';
 import { fmpToken, ALLOWED_DBS } from './_fmp.js';
-import { qboQuery } from './_qbo.js';
+import { getAccessToken, qboBase } from './_qbo.js';
 
 export const config = { maxDuration: 120 };
 
@@ -69,10 +69,15 @@ async function loadFmProducts(db, token) {
 }
 
 // ── QBO: page every item ────────────────────────────────────────────
+// minorversion 75 is REQUIRED for the Item `Sku` field to be returned (the
+// shared qboQuery helper pins 65, which silently omits it).
 async function loadQboItems() {
+  const token = await getAccessToken('production');
+  const q = sql => fetch(`${qboBase('production')}/query?query=${encodeURIComponent(sql)}&minorversion=75`,
+    { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } }).then(r => r.json());
   const out = [];
   for (let pos = 1, guard = 0; guard < 40; guard++) {
-    const page = (await qboQuery(`SELECT Id, Name, Sku, Type, Active, UnitPrice FROM Item STARTPOSITION ${pos} MAXRESULTS 1000`)).Item || [];
+    const page = (await q(`SELECT Id, Name, Sku, Type, Active, UnitPrice FROM Item STARTPOSITION ${pos} MAXRESULTS 1000`))?.QueryResponse?.Item || [];
     for (const i of page) out.push({ id: String(i.Id), name: i.Name || '', sku: i.Sku || '', type: i.Type, active: i.Active !== false, price: i.UnitPrice });
     if (page.length < 1000) break;
     pos += page.length;
