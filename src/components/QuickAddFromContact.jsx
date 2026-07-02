@@ -1,7 +1,19 @@
 import { useState, useRef, useEffect } from 'react';
-import { createRecord, getRecord, addCachedRecord } from '../api/filemaker';
+import { createRecord, getRecord, addCachedRecord, findInLayout } from '../api/filemaker';
 import { RCD_LAYOUT, RCD_CACHE_VERSION } from '../config/ccsCache';
 import './QuickAddFromContact.css';
+
+// Fields carried over when copying a previous inspection: the site's course
+// profile (course types + equipment) and address — NOT the old inspection's
+// findings/status (Report Ready, needs_repair) or its QBO invoice/estimate
+// links, which belong to that year's inspection.
+const INSPECTION_COPY_FIELDS = [
+  'Address_Block_Billing', 'ALF', 'Organization',
+  'fa_Leads_and_Y_Lanyards', 'fa_Rope_Grabs', 'fa_Cable_Grab', 'fa_Prusik',
+  'fa_Belay_Extra_P_Cord', 'fa_Stairs_Ladder', 'fa_other',
+  'ct_Low', 'ct_High', 'ct_Trees', 'ct_Poles', 'ct_Indoors', 'ct_Dynamic',
+  'ct_Static_Voyageur_Style', 'ct_Auto_Belay', 'ct_Other',
+];
 
 // Shared "+ New" button for a contact: create a CCS project, Inspection, or
 // Estimate pre-linked to that contact (_kft__Contact_ID), then jump straight
@@ -20,7 +32,16 @@ const TYPES = {
   },
   inspection: {
     label: 'Inspection', icon: '⚑', layout: 'Inspections_New', cacheVersion: 1, module: 'inspections',
-    build: v => ({ Date: v.date ? isoToFm(v.date) : todayFm(), ...(v.inspector ? { 'Inspectors Name': v.inspector } : {}) }),
+    build: v => {
+      const copied = {};
+      if (v.mode === 'copy' && v.source) {
+        for (const k of INSPECTION_COPY_FIELDS) {
+          const val = v.source.fieldData?.[k];
+          if (val !== undefined && val !== '') copied[k] = val;
+        }
+      }
+      return { ...copied, Date: v.date ? isoToFm(v.date) : todayFm(), ...(v.inspector ? { 'Inspectors Name': v.inspector } : {}) };
+    },
   },
   estimate: {
     label: 'Estimate', icon: '◧', layout: 'Estimates_New', cacheVersion: 1, module: 'estimates',
@@ -34,6 +55,7 @@ export default function QuickAddFromContact({ contact, onNavigateTo }) {
   const [vals, setVals] = useState({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [prevInspections, setPrevInspections] = useState(null); // null = loading
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -47,8 +69,33 @@ export default function QuickAddFromContact({ contact, onNavigateTo }) {
   const contactName = contact?.fieldData?.zz__Display__ct || contact?.fieldData?.Name_Organization || '—';
   if (!contactId) return null;
 
-  const openForm = t => { setType(t); setVals(t === 'ccs' ? { projectType: 'New Construction', addToBoard: true } : {}); setError(null); setMenuOpen(false); };
+  const openForm = t => {
+    setType(t);
+    setVals(t === 'ccs' ? { projectType: 'New Construction', addToBoard: true } : t === 'inspection' ? { mode: 'blank' } : {});
+    setError(null); setMenuOpen(false);
+    if (t === 'inspection') {
+      // Load this site's previous inspections so "copy" can default to the latest.
+      setPrevInspections(null);
+      findInLayout('Inspections_New', [{ _kft__Contact_ID: `==${contactId}` }], { sort: [{ fieldName: 'Date', sortOrder: 'descend' }], limit: 30 })
+        .then(j => setPrevInspections(j?.response?.data || []))
+        .catch(() => setPrevInspections([]));
+    }
+  };
   const set = (k, v) => setVals(p => ({ ...p, [k]: v }));
+
+  // Selecting copy mode (or a different source) defaults the source to the most
+  // recent inspection and pre-fills the inspector from it.
+  const pickSource = (rec) => setVals(p => ({ ...p, source: rec, inspector: p.inspectorTyped ? p.inspector : (rec?.fieldData?.['Inspectors Name'] || '') }));
+  const setMode = (m) => {
+    setVals(p => {
+      const next = { ...p, mode: m };
+      if (m === 'copy' && !p.source && prevInspections?.length) {
+        next.source = prevInspections[0];
+        if (!p.inspectorTyped) next.inspector = prevInspections[0]?.fieldData?.['Inspectors Name'] || '';
+      }
+      return next;
+    });
+  };
 
   const doCreate = async () => {
     const cfg = TYPES[type];
@@ -103,8 +150,29 @@ export default function QuickAddFromContact({ contact, onNavigateTo }) {
               )}
               {type === 'inspection' && (
                 <>
+                  <div className="qa-row"><label>Start from</label>
+                    <div className="qa-modes">
+                      <label className="qa-mode"><input type="radio" name="qa-insp-mode" checked={vals.mode !== 'copy'} onChange={() => setMode('blank')} /> Blank</label>
+                      <label className={`qa-mode${prevInspections?.length === 0 ? ' qa-mode-off' : ''}`}>
+                        <input type="radio" name="qa-insp-mode" checked={vals.mode === 'copy'} disabled={prevInspections?.length === 0} onChange={() => setMode('copy')} />
+                        {' '}Copy previous{prevInspections == null ? '…' : prevInspections.length === 0 ? ' (none for this site)' : ''}
+                      </label>
+                    </div>
+                  </div>
+                  {vals.mode === 'copy' && prevInspections?.length > 0 && (
+                    <div className="qa-row"><label>Copy from</label>
+                      <select value={vals.source?.recordId || ''} onChange={e => pickSource(prevInspections.find(r => r.recordId === e.target.value))}>
+                        {prevInspections.map(r => (
+                          <option key={r.recordId} value={r.recordId}>
+                            {r.fieldData?.Date || '—'} — {r.fieldData?.['Inspectors Name'] || 'no inspector'}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <div className="qa-row"><label>Date</label><input type="date" value={vals.date || ''} onChange={e => set('date', e.target.value)} /></div>
-                  <div className="qa-row"><label>Inspector</label><input type="text" value={vals.inspector || ''} placeholder="Optional" onChange={e => set('inspector', e.target.value)} /></div>
+                  <div className="qa-row"><label>Inspector</label><input type="text" value={vals.inspector || ''} placeholder="Optional" onChange={e => setVals(p => ({ ...p, inspector: e.target.value, inspectorTyped: true }))} /></div>
+                  {vals.mode === 'copy' && vals.source && <p className="qa-note">Copies the site's course profile (course types + equipment) from the selected inspection. Findings, report status, and QBO links start fresh.</p>}
                 </>
               )}
               {type === 'estimate' && (
