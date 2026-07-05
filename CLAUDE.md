@@ -39,8 +39,10 @@ Per change:
 5. Merge to `main` deploys production. The auto-tag workflow tags `v1.0.X`
    (`.github/workflows/auto-tag.yml`) — no manual `git tag` needed.
 
-Note: the old `high5-new-ui.vercel.app` URL is an orphan not attached to this
-project — it never updates. Production is `db-livid.vercel.app`.
+Note: the GitHub repo was renamed `high5-new-ui` → `high5-vibe` (2026-07-05);
+GitHub redirects the old paths, and Vercel follows the rename. The old
+`high5-new-ui.vercel.app` URL is an orphan not attached to this project — it
+never updates. Production is `db-livid.vercel.app`.
 
 ---
 
@@ -68,11 +70,13 @@ shared to a preview host — ruling out "just always use the prod callback."
 
 Fix: one stable preview host via a rolling `preview` branch. Vercel gives any
 branch a stable alias, so `preview` always deploys to
-`high5-new-ui-git-preview-andy-falwell-s-projects.vercel.app`. Register its
+`high5-vibe-git-preview-andy-falwell-s-projects.vercel.app`. Register its
 callback **once** in Google (Credentials → the `GOOGLE_CLIENT_ID` client →
 Authorized redirect URIs →
-`https://high5-new-ui-git-preview-andy-falwell-s-projects.vercel.app/api/google-callback`;
-no JS-origin entry needed — server-side redirect flow).
+`https://high5-vibe-git-preview-andy-falwell-s-projects.vercel.app/api/google-callback`;
+no JS-origin entry needed — server-side redirect flow). NOTE: the repo rename
+changed this host from the old `high5-new-ui-git-preview-…` — the old callback
+must be **replaced** with this one in Google, or preview sign-in breaks.
 
 To test any branch with sign-in (one branch at a time):
 
