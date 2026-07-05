@@ -40,9 +40,12 @@ Per change:
    (`.github/workflows/auto-tag.yml`) — no manual `git tag` needed.
 
 Note: the GitHub repo was renamed `high5-new-ui` → `high5-vibe` (2026-07-05);
-GitHub redirects the old paths, and Vercel follows the rename. The old
-`high5-new-ui.vercel.app` URL is an orphan not attached to this project — it
-never updates. Production is `db-livid.vercel.app`.
+GitHub redirects the old paths. **Vercel URLs are NOT affected by this** — they
+derive from the Vercel *project* name (still `high5-new-ui`), not the repo — so
+every `*.vercel.app` host stays `high5-new-ui-…` until the Vercel project itself
+is renamed (a separate dashboard action). Production is `db-livid.vercel.app`, a
+pinned domain that survives project renames (it persisted through the earlier
+`db` → `high5-new-ui` project rename).
 
 ---
 
@@ -69,14 +72,17 @@ can't sign in (its derived `…/api/google-callback` isn't registered). And
 shared to a preview host — ruling out "just always use the prod callback."
 
 Fix: one stable preview host via a rolling `preview` branch. Vercel gives any
-branch a stable alias, so `preview` always deploys to
-`high5-vibe-git-preview-andy-falwell-s-projects.vercel.app`. Register its
+branch a stable alias derived from the **Vercel project name** (currently
+`high5-new-ui`), so `preview` always deploys to
+`high5-new-ui-git-preview-andy-falwell-s-projects.vercel.app`. Register its
 callback **once** in Google (Credentials → the `GOOGLE_CLIENT_ID` client →
 Authorized redirect URIs →
-`https://high5-vibe-git-preview-andy-falwell-s-projects.vercel.app/api/google-callback`;
-no JS-origin entry needed — server-side redirect flow). NOTE: the repo rename
-changed this host from the old `high5-new-ui-git-preview-…` — the old callback
-must be **replaced** with this one in Google, or preview sign-in breaks.
+`https://high5-new-ui-git-preview-andy-falwell-s-projects.vercel.app/api/google-callback`;
+no JS-origin entry needed — server-side redirect flow). NOTE: the GitHub repo
+rename (→ `high5-vibe`) did **not** change this host — Vercel aliases follow the
+*project* name, not the repo. If the Vercel project is later renamed to
+`high5-vibe`, this host becomes `high5-vibe-git-preview-…` and the Google
+callback must be re-registered to match (until then, sign-in keeps working).
 
 To test any branch with sign-in (one branch at a time):
 
