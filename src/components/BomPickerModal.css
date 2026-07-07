@@ -345,3 +345,48 @@
 }
 .bom-add-btn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
 .bom-add-btn:disabled { opacity: 0.4; cursor: default; transform: none; }
+
+/* ── Light Theme ─────────────────────────────────────────────────── */
+[data-theme="light"] .bom-modal { background: #ffffff; border-color: #e2e8f0; box-shadow: 0 24px 64px rgba(15, 23, 42, 0.18); }
+[data-theme="light"] .bom-header { border-bottom-color: #e2e8f0; }
+[data-theme="light"] .bom-header h2 { color: #0f172a; }
+[data-theme="light"] .bom-close { color: #5e6b7c; }
+[data-theme="light"] .bom-close:hover { color: #0f172a; background: #f1f5f9; }
+
+[data-theme="light"] .bom-search-wrap { border-bottom-color: #e2e8f0; }
+[data-theme="light"] .bom-search-icon,
+[data-theme="light"] .bom-clear { color: #5e6b7c; }
+[data-theme="light"] .bom-clear:hover { color: #334155; }
+[data-theme="light"] .bom-search { background: #f8fafc; border-color: #cbd5e1; color: #0f172a; }
+[data-theme="light"] .bom-search::placeholder { color: #5e6b7c; }
+
+[data-theme="light"] .bom-results { border-right-color: #e2e8f0; }
+[data-theme="light"] .bom-results::-webkit-scrollbar-thumb { background: #cbd5e1; }
+[data-theme="light"] .bom-hint { color: #5e6b7c; }
+[data-theme="light"] .bom-result-item { border-bottom-color: #f1f5f9; }
+[data-theme="light"] .bom-result-item:hover { background: #f1f5f9; }
+[data-theme="light"] .bom-result-item.selected { background: #fff1f0; }
+[data-theme="light"] .bom-result-name { color: #334155; }
+[data-theme="light"] .bom-result-item.selected .bom-result-name { color: #0f172a; }
+[data-theme="light"] .bom-result-sku,
+[data-theme="light"] .bom-result-type { color: #5e6b7c; }
+[data-theme="light"] .bom-result-cat { background: #e2e8f0; color: #5e6b7c; }
+[data-theme="light"] .bom-result-price { color: #16a34a; }
+
+[data-theme="light"] .bom-sidebar-empty { color: #cbd5e1; }
+[data-theme="light"] .bom-sidebar-empty p { color: #5e6b7c; }
+[data-theme="light"] .bom-selected-header,
+[data-theme="light"] .bom-selected-sku,
+[data-theme="light"] .bom-selected-desc { color: #5e6b7c; }
+[data-theme="light"] .bom-selected-name { color: #0f172a; }
+[data-theme="light"] .bom-selected-desc { border-top-color: #e2e8f0; }
+[data-theme="light"] .bom-selected-prices { background: #f8fafc; border-color: #e2e8f0; }
+[data-theme="light"] .bom-price-row { color: #5e6b7c; }
+[data-theme="light"] .bom-price-row strong,
+[data-theme="light"] .bom-qty-total { color: #16a34a; }
+
+[data-theme="light"] .bom-qty-wrap { border-top-color: #e2e8f0; }
+[data-theme="light"] .bom-qty-wrap label { color: #5e6b7c; }
+[data-theme="light"] .bom-qty-control { background: #f8fafc; border-color: #cbd5e1; }
+[data-theme="light"] .bom-qty-control button:hover { background: #eef2f7; }
+[data-theme="light"] .bom-qty-control input { color: #0f172a; }
