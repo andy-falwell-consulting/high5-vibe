@@ -4,59 +4,91 @@
   justify-content: center;
   width: 100vw;
   height: 100vh;
-  background: #0b0d14;
+  padding: 24px;
+  box-sizing: border-box;
+  background: radial-gradient(120% 90% at 50% -10%, #fff5ea 0%, #f4f7fb 48%, #eef2ff 100%);
   font-family: 'Source Sans 3', 'Myriad Pro', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .ls-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 48px 40px 36px;
-  background: #13151c;
-  border: 1px solid #1e2130;
-  border-radius: 16px;
-  width: 340px;
+  position: relative;
+  width: 380px;
+  max-width: 100%;
+  background: #ffffff;
+  border: 1px solid #eef1f6;
+  border-radius: 22px;
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.16), 0 3px 10px rgba(15, 23, 42, 0.05);
   text-align: center;
 }
 
+/* Outdoor scene banner */
+.ls-scene {
+  height: 150px;
+  width: 100%;
+  line-height: 0;
+}
+.ls-scene svg { display: block; width: 100%; height: 100%; }
+
+/* Logo — straddles the scene and the card body */
 .ls-logo {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+  position: absolute;
+  top: 118px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 62px;
+  height: 62px;
+  border-radius: 17px;
   background: #1a1a1a;
   color: #e8322a;
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: 'Oswald', sans-serif;
-  font-size: 24px;
+  font-size: 30px;
   font-weight: 700;
-  border: 1px solid #333;
-  margin-bottom: 4px;
+  border: 3px solid #ffffff;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.22);
+  z-index: 2;
+}
+
+.ls-body {
+  padding: 46px 38px 34px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
 }
 
 .ls-title {
   margin: 0;
   font-family: 'Oswald', sans-serif;
-  font-size: 31px;
+  font-size: 30px;
   font-weight: 600;
-  color: #f1f5f9;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  color: #0f172a;
+  letter-spacing: 0.02em;
 }
 
 .ls-sub {
   margin: 0;
   font-size: 15px;
-  color: #79859a;
+  font-weight: 600;
+  color: #e8322a;
+  letter-spacing: 0.01em;
+}
+
+.ls-hello {
+  margin: 6px 0 4px;
+  font-size: 15.5px;
+  line-height: 1.45;
+  color: #64748b;
+  max-width: 260px;
 }
 
 .ls-error {
-  background: #2d1a1a;
-  border: 1px solid #7f1d1d;
-  color: #fca5a5;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
   font-size: 14px;
   padding: 8px 12px;
   border-radius: 8px;
@@ -68,41 +100,51 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-top: 8px;
-  padding: 10px 20px;
+  margin-top: 10px;
+  padding: 12px 20px;
   background: #ffffff;
   color: #3c4043;
   border: 1px solid #dadce0;
-  border-radius: 8px;
-  font-size: 17px;
-  font-weight: 500;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 600;
   font-family: inherit;
   cursor: pointer;
   text-decoration: none;
-  transition: background 0.15s, box-shadow 0.15s;
+  transition: background 0.15s, box-shadow 0.15s, transform 0.15s, border-color 0.15s;
   width: 100%;
   justify-content: center;
 }
-
 .ls-google-btn:hover {
-  background: #f8f9fa;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  background: #f8fafc;
+  border-color: #c9ced6;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
+  transform: translateY(-1px);
 }
 
-.ls-google-icon {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-}
+.ls-google-icon { width: 20px; height: 20px; flex-shrink: 0; }
 
 .ls-note {
-  margin: 4px 0 0;
+  margin: 12px 0 0;
   font-size: 13px;
-  color: #4a5568;
+  color: #94a3b8;
 }
 
-/* Light theme */
-[data-theme="light"] .ls-root { background: #f1f5f9; }
-[data-theme="light"] .ls-card { background: #ffffff; border-color: #e2e8f0; }
-[data-theme="light"] .ls-title { color: #0f172a; }
-[data-theme="light"] .ls-sub { color: #5e6b7c; }
+/* ── Dark theme ─────────────────────────────────────────────────── */
+[data-theme="dark"] .ls-root {
+  background: radial-gradient(120% 90% at 50% -10%, #171a24 0%, #0e1017 55%, #0b0d14 100%);
+}
+[data-theme="dark"] .ls-card {
+  background: #13151c;
+  border-color: #1e2130;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 3px 10px rgba(0, 0, 0, 0.4);
+}
+/* dusk-ify the scene so it reads as evening rather than midday */
+[data-theme="dark"] .ls-scene svg { filter: brightness(0.72) saturate(0.92); }
+[data-theme="dark"] .ls-logo { border-color: #13151c; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5); }
+[data-theme="dark"] .ls-title { color: #f1f5f9; }
+[data-theme="dark"] .ls-hello { color: #9aa3b2; }
+[data-theme="dark"] .ls-error { background: #2d1a1a; border-color: #7f1d1d; color: #fca5a5; }
+[data-theme="dark"] .ls-google-btn { background: #ffffff; color: #3c4043; border-color: #dadce0; }
+[data-theme="dark"] .ls-google-btn:hover { background: #f1f5f9; }
+[data-theme="dark"] .ls-note { color: #64748b; }

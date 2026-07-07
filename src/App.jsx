@@ -53,7 +53,9 @@ function parseHash() {
 }
 
 function getInitialTheme() {
-  return localStorage.getItem('theme') ?? 'dark'
+  // Light is the default for anyone who hasn't explicitly chosen; users who
+  // previously toggled to dark keep their stored preference.
+  return localStorage.getItem('theme') ?? 'light'
 }
 
 export default function App() {
