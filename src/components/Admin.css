@@ -4,10 +4,26 @@
 }
 [data-theme="light"] .admin-main { background: #f8fafc; color: #0f172a; }
 
-.admin-head { margin-bottom: 24px; }
+.admin-head { margin-bottom: 20px; }
 .admin-head h1 { margin: 0; font-size: 29px; font-weight: 700; letter-spacing: -0.01em; }
 .admin-sub { margin: 4px 0 0; font-size: 15px; color: #9aa3b2; }
 [data-theme="light"] .admin-sub { color: #5e6b7c; }
+
+.admin-tabs {
+  display: inline-flex; gap: 2px; margin-bottom: 24px;
+  background: #0f1117; border: 1px solid #1e2130; border-radius: 8px; padding: 2px;
+}
+.admin-tab {
+  font-size: 15px; padding: 6px 16px; border-radius: 6px;
+  border: none; background: transparent; color: #94a3b8; cursor: pointer; font-family: inherit;
+  transition: background 0.12s, color 0.12s;
+}
+.admin-tab:hover { color: #e2e8f0; }
+.admin-tab.active { background: #1e2236; color: #e2e8f0; }
+[data-theme="light"] .admin-tabs { background: #f1f5f9; border-color: #e2e8f0; }
+[data-theme="light"] .admin-tab { color: #4f5a69; }
+[data-theme="light"] .admin-tab:hover { color: #0f172a; }
+[data-theme="light"] .admin-tab.active { background: #ffffff; color: #0f172a; }
 
 .admin-section { margin-bottom: 28px; }
 .admin-section-title {
@@ -33,3 +49,38 @@
 .admin-card-title { font-size: 17px; font-weight: 600; }
 .admin-card-desc { font-size: 14px; color: #9aa3b2; margin-top: 2px; }
 [data-theme="light"] .admin-card-desc { color: #5e6b7c; }
+
+.admin-email-add { display: flex; gap: 8px; max-width: 420px; }
+.admin-email-add input {
+  flex: 1; padding: 9px 12px; border-radius: 8px;
+  background: #12151f; border: 1px solid #1e2130; color: #e6e8ec; font-size: 15px; font-family: inherit;
+}
+.admin-email-add input:focus { outline: none; border-color: #e87722; }
+.admin-email-add button {
+  padding: 9px 18px; border-radius: 8px; border: none;
+  background: #e87722; color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.admin-email-add button:disabled { opacity: 0.5; cursor: default; }
+[data-theme="light"] .admin-email-add input { background: #ffffff; border-color: #e2e8f0; color: #0f172a; }
+
+.admin-email-error { color: #f87171; font-size: 14px; margin-top: 8px; }
+
+.admin-email-list { list-style: none; margin: 16px 0 0; padding: 0; max-width: 420px; }
+.admin-email-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 4px; border-bottom: 1px solid #1e2130;
+}
+[data-theme="light"] .admin-email-row { border-bottom-color: #e2e8f0; }
+.admin-email-addr { flex: 1; font-size: 15px; color: #e6e8ec; }
+[data-theme="light"] .admin-email-addr { color: #0f172a; }
+.admin-email-tag {
+  font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  color: #79859a; background: #1a1e2b; padding: 2px 8px; border-radius: 5px;
+}
+[data-theme="light"] .admin-email-tag { background: #f1f5f9; }
+.admin-email-remove {
+  background: none; border: none; color: #f87171; font-size: 14px; cursor: pointer; font-family: inherit; padding: 4px 8px;
+}
+.admin-email-remove:hover:not(:disabled) { text-decoration: underline; }
+.admin-email-remove:disabled { opacity: 0.5; cursor: default; }
+.admin-email-empty { font-size: 14px; color: #79859a; font-style: italic; padding: 9px 4px; }
