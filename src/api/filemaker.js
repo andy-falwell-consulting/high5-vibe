@@ -100,18 +100,49 @@ export async function ensureFmpUserSession() {
   try { return await _userMintPromise; } finally { _userMintPromise = null; }
 }
 
-// Clear write auth after a 401 so the next attempt falls back to admin.
+// Clear write auth after a 401 so the next attempt tries to remint it.
 function invalidateWriteAuth() {
   if (_userToken) setFmpUserSession(null);
   sessionToken = null;
 }
 
+// Thrown when a mutating call has no valid per-user FileMaker session and
+// can't get one — writes require a real connected FileMaker account; there is
+// no shared/admin fallback (see getToken).
+export class FmpWriteAuthError extends Error {
+  constructor(message = 'Your FileMaker account isn’t connected — open the user menu and connect it before saving.') {
+    super(message);
+    this.name = 'FmpWriteAuthError';
+  }
+}
+
+const isLocalDev = () => typeof window !== 'undefined' && window.location.hostname === 'localhost';
+
 async function getToken({ write = false } = {}) {
-  // Mutating calls prefer the user-bound token (correct attribution); reads and
-  // any fallback use the shared admin token.
+  // Mutating calls REQUIRE the user-bound token — no admin fallback. This is
+  // the single chokepoint every write function (createRecord, updateRecord,
+  // deleteRecord, portal row ops, uploadContainer) routes through, so gating
+  // here locks down all of them at once.
   if (write) {
-    const ut = activeUserToken();
+    let ut = activeUserToken();
+    if (!ut) {
+      // Cheap to retry: covers first-write-of-session and a token that expired
+      // mid-session (invalidateWriteAuth cleared it after a 401). No-op if the
+      // user has no matching FileMaker account.
+      await ensureFmpUserSession().catch(() => {});
+      ut = activeUserToken();
+    }
     if (ut) return ut;
+    // Local dev has no serverless functions (see CLAUDE.md), so a per-user
+    // token can never be minted there — fall back to the shared dev session
+    // rather than hard-blocking every write during local development. Every
+    // deployed environment (preview + production) still requires a real
+    // per-user session; this bypass cannot trigger there.
+    if (isLocalDev()) {
+      // falls through to the shared-session logic below
+    } else {
+      throw new FmpWriteAuthError();
+    }
   }
   const env = getCurrentEnv();
   // Invalidate token if the environment changed

@@ -1,7 +1,7 @@
 /* global __APP_VERSION__ */
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { FMP_ENVIRONMENTS, getCurrentEnv, setCurrentEnvId } from '../config/fmpEnvironments'
-import { getFmpUserName, setFmpUserSession, ensureFmpUserSession } from '../api/filemaker'
+import { getFmpUserName, ensureFmpUserSession } from '../api/filemaker'
 
 const MIN_WIDTH = 48
 const COLLAPSED_WIDTH = 56
@@ -21,7 +21,8 @@ export default function NavRail({ modules, activeId, onSelect, theme, onToggleTh
   const dismissSearchHint = useCallback(() => { try { localStorage.setItem('belay_search_hint_v1', '1') } catch { /* ignore */ } setSearchHint(false) }, [])
 
   // Auto-connect the user's FileMaker write identity on mount (server mints a
-  // user-bound token via Basic auth). Silent; falls back to admin if no account.
+  // user-bound token via Basic auth). Silent; if the account doesn't exist,
+  // getToken() blocks writes until the user connects one (no admin fallback).
   useEffect(() => {
     let alive = true
     if (!getFmpUserName()) {
@@ -99,18 +100,12 @@ export default function NavRail({ modules, activeId, onSelect, theme, onToggleTh
     try {
       const name = await ensureFmpUserSession()
       if (name) setFmpName(name)
-      else setFmpError('No FileMaker account for your email')
+      else setFmpError('No FileMaker account for your email — saving is blocked until one is set up.')
     } catch (err) {
       setFmpError(err.message || 'Could not connect')
     } finally {
       setFmpBusy(false)
     }
-  }
-
-  function disconnectFmp() {
-    setFmpUserSession(null)
-    setFmpName(null)
-    setFmpError(null)
   }
 
   const navItem = (mod) => {
@@ -268,13 +263,11 @@ export default function NavRail({ modules, activeId, onSelect, theme, onToggleTh
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#22c55e', flexShrink: 0 }} title="Edits attributed to you" />
                         <span style={{ flex: 1, fontSize: 14, color: c.textActive, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fmpName}</span>
-                        <button onClick={disconnectFmp}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: c.sub }}>Use admin</button>
                       </div>
                     ) : (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#64748b', flexShrink: 0 }} />
-                        <span style={{ flex: 1, fontSize: 14, color: c.sub }}>Saving as admin</span>
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#e8322a', flexShrink: 0 }} title="Not connected — saving is blocked" />
+                        <span style={{ flex: 1, fontSize: 14, color: c.sub }}>Not connected</span>
                         <button onClick={connectFmp} disabled={fmpBusy}
                           style={{ background: 'none', border: 'none', cursor: fmpBusy ? 'default' : 'pointer', fontSize: 13, color: c.text }}>{fmpBusy ? '…' : 'Connect'}</button>
                       </div>
