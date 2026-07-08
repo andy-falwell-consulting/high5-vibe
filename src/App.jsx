@@ -80,6 +80,13 @@ export default function App() {
   // fails. Not checked on localhost (no serverless functions there; the write
   // path itself already bypasses this requirement in dev — see filemaker.js).
   const [fmpConnected, setFmpConnected] = useState(true)
+  // Whether this login is allowed to see the Admin panel (checked once on
+  // login, via /api/me's isAdmin flag — see api/_admin.js). Unlike the FMP
+  // banner above, this is a real access gate, so the default is the SAFE
+  // direction: hidden until proven otherwise. Localhost is the one exception
+  // (no serverless functions there to check against) so Admin stays reachable
+  // for local development.
+  const [isAdmin, setIsAdmin] = useState(() => window.location.hostname === 'localhost')
   // Display name of the open record, so the tab reads e.g. "SUNY Potsdam · Vibe"
   // (set when a record is picked from a list; cleared on any navigation).
   const [recordTitle, setRecordTitle] = useState(null)
@@ -104,6 +111,7 @@ export default function App() {
       .then(u => {
         if (u) {
           setUser(u); setAuthChecked(true)
+          setIsAdmin(!!u.isAdmin)
           // Mint a user-bound FileMaker write token so edits are attributed to
           // this person. If minting fails (no matching FileMaker account),
           // writes are blocked (see getToken in filemaker.js) — surface that
@@ -187,6 +195,17 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPop)
   }, [])
 
+  // Guard against a stale #admin bookmark/deep-link for a non-admin — the nav
+  // item and the render itself are already gated on isAdmin, but without this
+  // they'd land on a blank content pane instead of somewhere useful.
+  useEffect(() => {
+    if (activeModule === 'admin' && !isAdmin) {
+      pushHash('home', null)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- redirect away from a page the user just lost access to
+      setActiveModule('home')
+    }
+  }, [activeModule, isAdmin])
+
   function pushHash(moduleId, recordId) {
     const hash = recordId ? `#${moduleId}/${recordId}` : `#${moduleId}`
     if (window.location.hash !== hash) history.pushState(null, '', hash)
@@ -245,11 +264,17 @@ export default function App() {
   const isLocalDev = window.location.hostname === 'localhost'
   if (!user && !isLocalDev) return <div data-theme={theme}><LoginScreen /></div>
 
+  // Admin is hidden from the nav rail and the command palette's "Go to" list
+  // for anyone who isn't an admin — the actual page render is separately
+  // gated below (isAdmin), which is the real boundary; this just keeps
+  // non-admins from seeing it as an option at all.
+  const visibleModules = isAdmin ? MODULES : MODULES.filter(m => m.id !== 'admin')
+
   return (
     <div data-theme={theme} style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
       {!fmpConnected && <ReadOnlyBanner onRetry={retryFmpConnection} />}
       <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-        <NavRail modules={MODULES} activeId={activeModule} onSelect={handleSelect} theme={theme} onToggleTheme={toggleTheme} onOpenPalette={() => setPaletteOpen(true)} user={user} onLogout={handleLogout} badges={{ reminders: reminderDue }} />
+        <NavRail modules={visibleModules} activeId={activeModule} onSelect={handleSelect} theme={theme} onToggleTheme={toggleTheme} onOpenPalette={() => setPaletteOpen(true)} user={user} onLogout={handleLogout} badges={{ reminders: reminderDue }} />
         {visited.has('home') && <div style={{ display: activeModule === 'home' ? 'contents' : 'none' }}><Home onOpen={handlePalettePick} onGoto={handleSelect} onOpenView={(m, v) => navigateTo(m, null, v)} onOpenPalette={() => setPaletteOpen(true)} /></div>}
         {visited.has('reminders') && <div style={{ display: activeModule === 'reminders' ? 'contents' : 'none' }}><Reminders navTarget={navTarget} onClearNav={clearNavTarget} onNavigateTo={navigateTo} /></div>}
         {visited.has('contacts') && <div style={{ display: activeModule === 'contacts' ? 'contents' : 'none' }}><Contacts navTarget={navTarget} onClearNav={clearNavTarget} onNavigateTo={navigateTo} onRecordSelect={makeRecordSelectHandler('contacts')} /></div>}
@@ -263,9 +288,9 @@ export default function App() {
         {visited.has('products') && <div style={{ display: activeModule === 'products' ? 'contents' : 'none' }}><ProductsAndServicesV2 navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('products')} /></div>}
         {visited.has('transactions') && <div style={{ display: activeModule === 'transactions' ? 'contents' : 'none' }}><Transactions onRecordSelect={makeRecordSelectHandler('transactions')} /></div>}
         {visited.has('projects') && <div style={{ display: activeModule === 'projects' ? 'contents' : 'none' }}><ProjectsWorkspace navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('projects')} /></div>}
-        {visited.has('admin') && <div style={{ display: activeModule === 'admin' ? 'contents' : 'none' }}><Admin /></div>}
+        {isAdmin && visited.has('admin') && <div style={{ display: activeModule === 'admin' ? 'contents' : 'none' }}><Admin /></div>}
         {visited.has('help') && <div style={{ display: activeModule === 'help' ? 'contents' : 'none' }}><Help /></div>}
-        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onPick={handlePalettePick} onAsk={handleAsk} modules={MODULES} theme={theme} onToggleTheme={toggleTheme} />
+        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onPick={handlePalettePick} onAsk={handleAsk} modules={visibleModules} theme={theme} onToggleTheme={toggleTheme} />
         <AgentPanel open={agentOpen} onClose={() => setAgentOpen(false)} onOpenRecord={(m, id) => navigateTo(m, id)} seedQuery={agentSeed} onSeedConsumed={() => setAgentSeed(null)} />
         <ReminderToaster onOpen={r => (r.recordType && r.recordId) ? navigateTo(r.recordType, r.recordId) : handleSelect('reminders')} />
       </div>

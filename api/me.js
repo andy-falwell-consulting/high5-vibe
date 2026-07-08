@@ -1,4 +1,5 @@
 import { getGoogleSession } from './_googleSession.js';
+import { isAdminEmail } from './_admin.js';
 
 // FileMaker per-user write token (Option 1). When called with ?fmpDb=<db>, also
 // mint a Data API token by Basic-authing as the user's internal FileMaker
@@ -18,6 +19,7 @@ export default async function handler(req, res) {
     email: session.email,
     name: session.name,
     picture: session.picture,
+    isAdmin: await isAdminEmail(session.email),
   };
 
   const db = String(req.query.fmpDb || '');
