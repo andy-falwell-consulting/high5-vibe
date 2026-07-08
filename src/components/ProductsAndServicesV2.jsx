@@ -162,6 +162,7 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
   const [edits, setEdits] = useState({});
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
+  const [saveErrorMsg, setSaveErrorMsg] = useState(null);
   const [showBomPicker, setShowBomPicker] = useState(false);
   const [bomOps, setBomOps] = useState([]); // staged BOM edits: {type:'add'|'qty'|'remove', ...}
   const [navWidth, setNavWidth] = useState(300);
@@ -256,14 +257,14 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
     }
     return next;
   }), []);
-  const handleDiscard = () => { setEdits({}); setBomOps([]); setDataEditing(false); setSaveStatus(null); };
+  const handleDiscard = () => { setEdits({}); setBomOps([]); setDataEditing(false); setSaveStatus(null); setSaveErrorMsg(null); };
 
   const handleSave = async () => {
     if (!selected) return;
     const hasFieldEdits = Object.keys(edits).length > 0;
     const hasBomOps = bomOps.length > 0;
     if (!hasFieldEdits && !hasBomOps) { setDataEditing(false); setSaveStatus('saved'); setTimeout(() => setSaveStatus(null), 3000); return; }
-    setSaving(true); setSaveStatus(null);
+    setSaving(true); setSaveStatus(null); setSaveErrorMsg(null);
     try {
       if (hasFieldEdits) {
         const res = await updateRecord(LAYOUT, selected.recordId, edits);
@@ -280,7 +281,7 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
       setEdits({}); setBomOps([]); setDataEditing(false); setSaveStatus('saved');
       setTimeout(() => setSaveStatus(null), 3000);
       if (hasBomOps) await reconcileBom(selected.recordId);
-    } catch { setSaveStatus('error'); }
+    } catch (e) { setSaveStatus('error'); setSaveErrorMsg(e?.message || null); }
     finally { setSaving(false); }
   };
 
@@ -608,7 +609,7 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
               </div>
               <div className="v2-topbar-actions">
                 {saveStatus === 'saved' && <span className="v2-status saved">✓ Saved</span>}
-                {saveStatus === 'error' && <span className="v2-status error">✗ Failed</span>}
+                {saveStatus === 'error' && <span className="v2-status error">✗ {saveErrorMsg || 'Failed'}</span>}
                 {!dataEditing ? (
                   <button className="v2-btn ghost" onClick={() => setDataEditing(true)}>✎ Edit</button>
                 ) : (

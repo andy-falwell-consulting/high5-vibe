@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import NavRail from './components/NavRail'
 import LoginScreen from './components/LoginScreen'
+import ReadOnlyBanner from './components/ReadOnlyBanner'
 import Home from './components/Home'
 import ProductsAndServicesV2 from './components/ProductsAndServicesV2'
 import Contacts from './components/Contacts'
@@ -73,6 +74,12 @@ export default function App() {
   const [user, setUser] = useState(null)
   const [authChecked, setAuthChecked] = useState(false)
   const [reminderDue, setReminderDue] = useState(0)
+  // Whether this login has a valid per-user FileMaker account (checked once on
+  // login). Optimistic default so there's no banner flash before the check
+  // resolves — only flips to false once minting a write session genuinely
+  // fails. Not checked on localhost (no serverless functions there; the write
+  // path itself already bypasses this requirement in dev — see filemaker.js).
+  const [fmpConnected, setFmpConnected] = useState(true)
   // Display name of the open record, so the tab reads e.g. "SUNY Potsdam · Vibe"
   // (set when a record is picked from a list; cleared on any navigation).
   const [recordTitle, setRecordTitle] = useState(null)
@@ -98,8 +105,12 @@ export default function App() {
         if (u) {
           setUser(u); setAuthChecked(true)
           // Mint a user-bound FileMaker write token so edits are attributed to
-          // this person (falls back to admin silently if no FM account).
-          ensureFmpUserSession().catch(() => {})
+          // this person. If minting fails (no matching FileMaker account),
+          // writes are blocked (see getToken in filemaker.js) — surface that
+          // as a persistent read-only banner rather than letting the user
+          // discover it only when a save silently fails.
+          if (window.location.hostname === 'localhost') return // no serverless functions locally
+          ensureFmpUserSession().then(name => setFmpConnected(!!name)).catch(() => setFmpConnected(false))
         }
       })
       .catch(() => setAuthChecked(true)) // network error — allow through
@@ -209,6 +220,14 @@ export default function App() {
     setNavTarget(null)
   }
 
+  // Manual re-check from the read-only banner (e.g. an admin just provisioned
+  // the user's FileMaker account mid-session) — returns whether it succeeded.
+  async function retryFmpConnection() {
+    const name = await ensureFmpUserSession().catch(() => null)
+    setFmpConnected(!!name)
+    return !!name
+  }
+
   function toggleTheme() {
     const next = theme === 'dark' ? 'light' : 'dark'
     setTheme(next)
@@ -227,7 +246,9 @@ export default function App() {
   if (!user && !isLocalDev) return <div data-theme={theme}><LoginScreen /></div>
 
   return (
-    <div data-theme={theme} style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+    <div data-theme={theme} style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+      {!fmpConnected && <ReadOnlyBanner onRetry={retryFmpConnection} />}
+      <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
         <NavRail modules={MODULES} activeId={activeModule} onSelect={handleSelect} theme={theme} onToggleTheme={toggleTheme} onOpenPalette={() => setPaletteOpen(true)} user={user} onLogout={handleLogout} badges={{ reminders: reminderDue }} />
         {visited.has('home') && <div style={{ display: activeModule === 'home' ? 'contents' : 'none' }}><Home onOpen={handlePalettePick} onGoto={handleSelect} onOpenView={(m, v) => navigateTo(m, null, v)} onOpenPalette={() => setPaletteOpen(true)} /></div>}
         {visited.has('reminders') && <div style={{ display: activeModule === 'reminders' ? 'contents' : 'none' }}><Reminders navTarget={navTarget} onClearNav={clearNavTarget} onNavigateTo={navigateTo} /></div>}
@@ -247,6 +268,7 @@ export default function App() {
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onPick={handlePalettePick} onAsk={handleAsk} modules={MODULES} theme={theme} onToggleTheme={toggleTheme} />
         <AgentPanel open={agentOpen} onClose={() => setAgentOpen(false)} onOpenRecord={(m, id) => navigateTo(m, id)} seedQuery={agentSeed} onSeedConsumed={() => setAgentSeed(null)} />
         <ReminderToaster onOpen={r => (r.recordType && r.recordId) ? navigateTo(r.recordType, r.recordId) : handleSelect('reminders')} />
+      </div>
     </div>
   )
 }
