@@ -60,15 +60,6 @@
 .home-badge.urg { color: #b45309; background: #f59e0b22; }
 .home-empty { font-size: 15px; color: #79859a; font-style: italic; padding: 10px 6px; }
 
-.home-quick { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
-.home-quick-btn {
-  display: inline-flex; align-items: center; gap: 8px;
-  background: #13151c; border: 1px solid #1e2130; border-radius: 9px;
-  padding: 9px 14px; color: #cbd5e1; font-size: 15px; cursor: pointer; font-family: inherit;
-}
-.home-quick-btn:hover { border-color: #2a2f45; }
-.home-quick-icon { color: #e8322a; font-size: 18px; }
-
 /* ── Light theme ── */
 [data-theme="light"] .home-root { background: #f6f7f9; color: #0f172a; }
 [data-theme="light"] .home-root::-webkit-scrollbar-thumb { background: #e2e8f0; }
@@ -95,5 +86,3 @@
 [data-theme="light"] .home-row-sub { color: #5e6b7c; }
 [data-theme="light"] .home-row-date { color: #4f5a69; }
 [data-theme="light"] .home-badge { color: #4f5a69; background: #f1f5f9; }
-[data-theme="light"] .home-quick-btn { background: #ffffff; border-color: #e6e8ec; color: #334155; }
-[data-theme="light"] .home-quick-btn:hover { border-color: #cbd5e1; }

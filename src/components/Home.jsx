@@ -166,12 +166,6 @@ export default function Home({ onOpen, onGoto, onOpenView, onOpenPalette }) {
             )}
           </div>
         </div>
-
-        <div className="home-quick">
-          {[['contacts', 'Contacts', '◉'], ['inspections', 'Inspections', '⚑'], ['products', 'Products & Services', '◫'], ['projects', 'CCS', '◈']].map(([id, label, icon]) => (
-            <button key={id} className="home-quick-btn" onClick={() => onGoto(id)}><span className="home-quick-icon">{icon}</span>{label}</button>
-          ))}
-        </div>
       </div>
     </div>
   )
