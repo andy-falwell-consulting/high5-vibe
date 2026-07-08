@@ -301,6 +301,7 @@ export default function CCS({ navTarget, onNavigateTo, onClearNav }) {
   const [edits, setEdits]               = useState({});
   const [saving, setSaving]             = useState(false);
   const [saveStatus, setSaveStatus]     = useState(null);
+  const [saveErrorMsg, setSaveErrorMsg] = useState(null);
   const isResizing = useRef(false);
 
   const primary = useSortableLayout('ccs_layout_primary_v4', DEFAULT_PRIMARY_SECTIONS);
@@ -386,11 +387,11 @@ export default function CCS({ navTarget, onNavigateTo, onClearNav }) {
   const handleFieldChange = useCallback((fk, v) => setEdits(p => ({ ...p, [fk]: v })), []);
   const handleCheckToggle = useCallback((key, on) => handleFieldChange(key, on ? 0 : 1), [handleFieldChange]);
 
-  const handleDiscard = () => { setEdits({}); setDataEditing(false); setSaveStatus(null); };
+  const handleDiscard = () => { setEdits({}); setDataEditing(false); setSaveStatus(null); setSaveErrorMsg(null); };
 
   const handleSave = async () => {
     if (!selected || !Object.keys(edits).length) return;
-    setSaving(true); setSaveStatus(null);
+    setSaving(true); setSaveStatus(null); setSaveErrorMsg(null);
     try {
       const res = await updateRecord(LAYOUT, selected.recordId, edits);
       if (res.messages?.[0]?.code === '0') {
@@ -400,7 +401,7 @@ export default function CCS({ navTarget, onNavigateTo, onClearNav }) {
         setEdits({}); setDataEditing(false); setSaveStatus('saved');
         setTimeout(() => setSaveStatus(null), 3000);
       } else { setSaveStatus('error'); }
-    } catch { setSaveStatus('error'); }
+    } catch (e) { setSaveStatus('error'); setSaveErrorMsg(e?.message || null); }
     finally { setSaving(false); }
   };
 
@@ -464,7 +465,7 @@ export default function CCS({ navTarget, onNavigateTo, onClearNav }) {
               </div>
               <div className="ccs-tabs-actions">
                 {saveStatus === 'saved' && <span className="ccs-status-msg saved">✓ Saved</span>}
-                {saveStatus === 'error' && <span className="ccs-status-msg error">✗ Failed</span>}
+                {saveStatus === 'error' && <span className="ccs-status-msg error">✗ {saveErrorMsg || 'Failed'}</span>}
                 {selected?.fieldData?.kanban_status && !dataEditing && (
                   <button className="ccs-action-btn" onClick={() => onNavigateTo?.('ccs-kanban', selected.recordId)}>View on Board ⊞</button>
                 )}

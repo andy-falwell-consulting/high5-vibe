@@ -108,9 +108,12 @@ function invalidateWriteAuth() {
 
 // Thrown when a mutating call has no valid per-user FileMaker session and
 // can't get one — writes require a real connected FileMaker account; there is
-// no shared/admin fallback (see getToken).
+// no shared/admin fallback (see getToken). Kept short — it renders inline in
+// small save-status badges across many modules, not just the roomier NavRail
+// user menu (which shows the fuller "no FileMaker account for your email"
+// explanation once the user actually clicks Connect).
 export class FmpWriteAuthError extends Error {
-  constructor(message = 'Your FileMaker account isn’t connected — open the user menu and connect it before saving.') {
+  constructor(message = 'FileMaker not connected — see user menu') {
     super(message);
     this.name = 'FmpWriteAuthError';
   }

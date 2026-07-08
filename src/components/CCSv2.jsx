@@ -173,6 +173,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   const [saving, setSaving]     = useState(false);
   const [addingToBoard, setAddingToBoard] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
+  const [saveErrorMsg, setSaveErrorMsg] = useState(null);
   const [expanded, setExpanded] = useState({});
   const [finTab, setFinTab]     = useState('estimates');
   const isResizing = useRef(false);
@@ -248,10 +249,10 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
     return () => { alive = false; };
   }, [navTarget, records]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleDiscard = () => { setEdits({}); setSaveStatus(null); };
+  const handleDiscard = () => { setEdits({}); setSaveStatus(null); setSaveErrorMsg(null); };
   const handleSave = async () => {
     if (!selected || !Object.keys(edits).length) return;
-    setSaving(true); setSaveStatus(null);
+    setSaving(true); setSaveStatus(null); setSaveErrorMsg(null);
     try {
       const res = await updateRecord(LAYOUT, selected.recordId, edits);
       if (res.messages?.[0]?.code === '0') {
@@ -261,7 +262,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
         setEdits({}); setSaveStatus('saved');
         setTimeout(() => setSaveStatus(null), 2500);
       } else setSaveStatus('error');
-    } catch { setSaveStatus('error'); }
+    } catch (e) { setSaveStatus('error'); setSaveErrorMsg(e?.message || null); }
     finally { setSaving(false); }
   };
 
@@ -584,7 +585,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
             {dirtyCount > 0 && (
               <div className="cv2-savebar">
                 <span className="cv2-savebar-count">{dirtyCount} unsaved change{dirtyCount > 1 ? 's' : ''}</span>
-                {saveStatus === 'error' && <span className="cv2-savebar-err">✗ Save failed</span>}
+                {saveStatus === 'error' && <span className="cv2-savebar-err">✗ {saveErrorMsg || 'Save failed'}</span>}
                 <span className="cv2-savebar-spacer" />
                 <button className="cv2-savebar-discard" onClick={handleDiscard} disabled={saving}>Discard</button>
                 <button className="cv2-savebar-save" onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>

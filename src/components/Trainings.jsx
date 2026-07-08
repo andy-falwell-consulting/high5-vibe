@@ -191,6 +191,7 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
   const [edits, setEdits] = useState({});
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
+  const [saveErrorMsg, setSaveErrorMsg] = useState(null);
   const [tab, setTab] = useState('info');
   const isResizing = useRef(false);
 
@@ -240,7 +241,7 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
   }, [navTarget, records]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleFieldChange = useCallback((fk, v) => setEdits(p => ({ ...p, [fk]: v })), []);
-  const handleDiscard = () => { setEdits({}); setSaveStatus(null); };
+  const handleDiscard = () => { setEdits({}); setSaveStatus(null); setSaveErrorMsg(null); };
 
   // FMP-style "Stamp": prepend "user M/D/YYYY h:mm:ss AM/PM:" to a notes field.
   const stampNote = useCallback((fk) => {
@@ -258,7 +259,7 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
   async function handleSave() {
     const dirtyCount = Object.keys(edits).length;
     if (!dirtyCount) { return; }
-    setSaving(true); setSaveStatus(null);
+    setSaving(true); setSaveStatus(null); setSaveErrorMsg(null);
     try {
       await updateRecord(LAYOUT, selected.recordId, edits);
       patchCachedRecord(LAYOUT, CACHE_VERSION, selected.recordId, edits);
@@ -266,7 +267,7 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
       setSelected(prev => ({ ...prev, fieldData: { ...prev.fieldData, ...edits } }));
       setEdits({}); setSaveStatus('saved');
       setTimeout(() => setSaveStatus(null), 2000);
-    } catch { setSaveStatus('error'); }
+    } catch (e) { setSaveStatus('error'); setSaveErrorMsg(e?.message || null); }
     finally { setSaving(false); }
   }
 
@@ -478,7 +479,7 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
               <div className="trn-record-footer">
                 ID {f._kpt__TrainingProposal_ID} · Record {selected.recordId} · Created {f.zz__Created_On?.split(' ')[0]} by {f.zz__Created_By} · Modified {f.zz__Modified_On?.split(' ')[0] || '—'} by {f.zz__Modified_By}
               </div>
-              <RecordSaveBar count={dirtyCount} saving={saving} status={saveStatus} onSave={handleSave} onDiscard={handleDiscard} />
+              <RecordSaveBar count={dirtyCount} saving={saving} status={saveStatus} errorMessage={saveErrorMsg} onSave={handleSave} onDiscard={handleDiscard} />
             </div>
           </>
         )}
