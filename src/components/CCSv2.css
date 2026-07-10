@@ -126,9 +126,15 @@
 .cv2-kpi-sub { font-size: 14px; color: var(--cv2-text-3); }
 .cv2-kpi-sub.urg { color: #b45309; font-weight: 600; }
 
-/* ── Body grid ─────────────────────────────────────────────────── */
-.cv2-body { display: grid; grid-template-columns: 1.55fr 1fr; gap: 12px; margin-top: 12px; align-items: start; }
-@media (max-width: 920px) { .cv2-body { grid-template-columns: 1fr; } .cv2-kpis { grid-template-columns: repeat(2, 1fr); } }
+/* ── Body layout ───────────────────────────────────────────────────
+   Contact + Financials sit in a full-width top row, then Project phases
+   spans the full width below them (previously it was squeezed into the
+   narrower main column), then the remaining cards resume a 2-col layout. */
+.cv2-body { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+.cv2-top-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+@media (max-width: 700px) { .cv2-top-row { grid-template-columns: 1fr; } .cv2-kpis { grid-template-columns: repeat(2, 1fr); } }
+.cv2-cols { display: grid; grid-template-columns: 1.55fr 1fr; gap: 12px; align-items: start; }
+@media (max-width: 920px) { .cv2-cols { grid-template-columns: 1fr; } }
 .cv2-col-main, .cv2-col-rail { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 
 .cv2-card { background: var(--cv2-surface); border: 1px solid var(--cv2-border); border-radius: 12px; padding: 14px 16px; }
@@ -160,6 +166,15 @@
 .cv2-advance { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; padding: 9px 11px; background: #1d9e7515; border-radius: 8px; font-size: 15px; color: #0f6e56; }
 .cv2-advance button { background: transparent; border: 1px solid #0f6e5566; color: #0f6e56; border-radius: 7px; padding: 5px 11px; font-size: 15px; cursor: pointer; font-family: inherit; }
 .cv2-advance button:hover { background: #0f6e5512; }
+
+/* "Job Prep - External" — checklist items grouped by category, each with its
+   own notes field (mirrors the RCD_New FileMaker tab of the same name). */
+.cv2-eprep-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+@media (max-width: 560px) { .cv2-eprep-grid { grid-template-columns: 1fr; } }
+.cv2-eprep-group { background: var(--cv2-surface-2); border: 1px solid var(--cv2-border); border-radius: 9px; padding: 10px 11px; }
+.cv2-eprep-title { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--cv2-text-3); border-bottom: 1px solid var(--cv2-border-2); padding-bottom: 6px; margin-bottom: 6px; }
+.cv2-eprep-group .cv2-checks { grid-template-columns: 1fr; gap: 0; margin-top: 0; }
+.cv2-eprep-group .cv2-inline-area { margin-top: 6px; background: var(--cv2-bg); border-color: var(--cv2-border-2); min-height: 44px; }
 
 /* ── Inline editors ────────────────────────────────────────────── */
 .cv2-inline { width: 100%; box-sizing: border-box; background: transparent; border: 1px solid transparent; border-radius: 6px; color: var(--cv2-text); font-size: 17px; padding: 5px 8px; font-family: inherit; outline: none; }

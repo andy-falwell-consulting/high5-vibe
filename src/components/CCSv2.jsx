@@ -24,9 +24,41 @@ const STATUS_OPTIONS = ['Proposed', 'Confirmed', 'Confirmed/Scheduled', 'In Prog
 const PROJECT_TYPES  = ['Inspection', 'New Construction', 'Renovation', 'Repair', 'Training', 'Other'];
 const BUILDER_OPTIONS = ['', 'Dave Klim', 'Lucas Germano', 'Gary Hillsgrove', 'Todd Brown', 'Ian Doak', 'Kyle Myers', 'Colin Morton'];
 
+// "Job Prep - External" (event_prep phase, below) groups its checklist items
+// by category, each paired with a free-text "Job Sheet <Category>" notes
+// field — mirrors the RCD_New "Job Prep - External" tab exactly (fields
+// verified live against the layout).
+const EVENT_PREP_GROUPS = [
+  { title: 'Poles', notes: 'Job Sheet Poles', items: [
+    ['eprep_Poles Ordered', 'Ordered'], ['eprep_Poles Delivered', 'Delivered'],
+  ]},
+  { title: 'Rental', notes: 'Job Sheet Equipment Rental', items: [
+    ['eprep_Equipment Requested', 'Requested'], ['eprep_Equipment Reserved', 'Reserved'],
+  ]},
+  { title: 'Setting', notes: 'Job Sheet Setting', items: [
+    ['eprep_Setting Scheduled', 'Scheduled'], ['eprep_Setting Complete', 'Complete'],
+    ['eprep_Dig Safe', 'Dig Safe / Notice to Excavate'],
+  ]},
+  { title: 'Climbing Holds', notes: 'Job Sheet Climbing Holds', items: [
+    ['eprep_Climbing Holds Ordered', 'Ordered'], ['eprep_Climbing Holds Delivered', 'Delivered'],
+  ]},
+  { title: 'Mats / Tarps', notes: 'Job Sheet Mats Tarps', items: [
+    ['eprep_Tarps Mats Ordered', 'Ordered'], ['eprep_Tarps Mats Delivered', 'Delivered'],
+  ]},
+  { title: 'Specialty Hardware', notes: 'Job Sheet Specialty Hardware', items: [
+    ['eprep_Specialty Hardware', 'Specialty Hardware'],
+  ]},
+  { title: 'Lumber', notes: 'Job Sheet Lumber Order', items: [
+    ['eprep_Lumber_ordered', 'Ordered'], ['eprep_Lumber_ordered_delivered', 'Delivered'],
+  ]},
+  { title: 'Permits', notes: 'Job Sheet Permits', items: [
+    ['eprep_Permits', 'Permits'],
+  ]},
+];
+
 // Phases → checklist fields (exact FileMaker keys), with labels mirroring the
 // RCD_New "Additional Info" tab (Pre-Proposal / Proposal / Contract and Deposit
-// / Job Prep). Keep this in sync with that tab.
+// / Job Prep / Job Prep - External). Keep this in sync with that tab.
 const PHASES = [
   { id: 'pre_proposal', name: 'Pre-Proposal', items: [
     ['pp_Sent PD Form', 'Sent Program Development Form'],
@@ -55,6 +87,7 @@ const PHASES = [
     ['iprep_Equipment', 'Equipment, Notify Catalog'],
     ['iprep_Need Inspection', 'Inspection Needed?'],
   ]},
+  { id: 'event_prep', name: 'Job Prep - External', items: EVENT_PREP_GROUPS.flatMap(g => g.items) },
 ];
 
 // Contract & financials block — mirrors the RCD_New "Additional Info" form.
@@ -426,50 +459,49 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                 </div>
               </div>
 
-              {/* BODY: phases + rail */}
+              {/* BODY: full-width phases → details → contact/financials/contract/team cluster */}
               <div className="cv2-body">
-                <div className="cv2-col-main">
-                  <div className="cv2-card">
-                    <div className="cv2-card-head"><span>Contract &amp; financials</span></div>
-                    <div className="cv2-fin-grid">
-                      {FIN_ROWS.map(row => (
-                        <div className="cv2-fin-line" key={row.label}>
-                          <span className="cv2-fin-label">{row.label}</span>
-                          <div className="cv2-fin-input">
-                            {row.ref
-                              ? <span className="cv2-fin-ref">{val(row.sent) || '—'}</span>
-                              : row.type === 'date'
-                                ? <InlineDate value={val(row.sent)} onChange={v => stage(row.sent, v)} />
-                                : <InlineText value={val(row.sent)} onChange={v => stage(row.sent, v)} placeholder="—" />}
-                          </div>
-                          {row.rcv
-                            ? <button className={`cv2-fin-rcv${isOn(val(row.rcv)) ? ' on' : ''}`} onClick={() => toggle(row.rcv)}>
-                                <span className="cv2-fin-rcv-box">{isOn(val(row.rcv)) ? '✓' : ''}</span>Received
-                              </button>
-                            : <span className="cv2-fin-rcv-spacer" />}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="cv2-card">
-                    <div className="cv2-card-head"><span>Project phases</span><span className="cv2-card-hint">click to expand · check to update</span></div>
-                    <div className="cv2-phases">
-                      {phaseStats.map(s => {
-                        const phase = PHASES.find(p => p.id === s.id);
-                        const col = phaseColor(s); const open = !!expanded[s.id]; const full = s.pct >= 1;
-                        const nextStageName = pipelineIdx >= 0 && pipelineIdx < PIPELINE.length - 1 ? PIPELINE_SHORT[pipelineIdx + 1] : null;
-                        return (
-                          <div key={s.id} className={`cv2-phase${open ? ' open' : ''}`}>
-                            <button className="cv2-phase-head" onClick={() => setExpanded(p => ({ ...p, [s.id]: !p[s.id] }))}>
-                              <Ring pct={s.pct} color={col} />
-                              <div className="cv2-phase-info">
-                                <div className="cv2-phase-row"><span className="cv2-phase-name">{s.name}</span><span className="cv2-phase-count" style={{ color: full ? '#0f6e56' : 'var(--cv2-text-2)' }}>{s.done}/{s.all}{full ? ' · done' : ''}</span></div>
-                                <div className="cv2-phase-bar"><div style={{ width: `${Math.round(s.pct * 100)}%`, background: col }} /></div>
-                              </div>
-                              <span className="cv2-chev">{open ? '▴' : '▾'}</span>
-                            </button>
-                            {open && (
-                              <div className="cv2-phase-body">
+                {/* project phases — full width */}
+                <div className="cv2-card cv2-phases-card">
+                  <div className="cv2-card-head"><span>Project phases</span><span className="cv2-card-hint">click to expand · check to update</span></div>
+                  <div className="cv2-phases">
+                    {phaseStats.map(s => {
+                      const phase = PHASES.find(p => p.id === s.id);
+                      const col = phaseColor(s); const open = !!expanded[s.id]; const full = s.pct >= 1;
+                      const nextStageName = pipelineIdx >= 0 && pipelineIdx < PIPELINE.length - 1 ? PIPELINE_SHORT[pipelineIdx + 1] : null;
+                      return (
+                        <div key={s.id} className={`cv2-phase${open ? ' open' : ''}`}>
+                          <button className="cv2-phase-head" onClick={() => setExpanded(p => ({ ...p, [s.id]: !p[s.id] }))}>
+                            <Ring pct={s.pct} color={col} />
+                            <div className="cv2-phase-info">
+                              <div className="cv2-phase-row"><span className="cv2-phase-name">{s.name}</span><span className="cv2-phase-count" style={{ color: full ? '#0f6e56' : 'var(--cv2-text-2)' }}>{s.done}/{s.all}{full ? ' · done' : ''}</span></div>
+                              <div className="cv2-phase-bar"><div style={{ width: `${Math.round(s.pct * 100)}%`, background: col }} /></div>
+                            </div>
+                            <span className="cv2-chev">{open ? '▴' : '▾'}</span>
+                          </button>
+                          {open && (
+                            <div className="cv2-phase-body">
+                              {s.id === 'event_prep' ? (
+                                <div className="cv2-eprep-grid">
+                                  {EVENT_PREP_GROUPS.map(g => (
+                                    <div className="cv2-eprep-group" key={g.title}>
+                                      <div className="cv2-eprep-title">{g.title}</div>
+                                      <div className="cv2-checks">
+                                        {g.items.map(([k, label]) => {
+                                          const on = isOn(val(k));
+                                          return (
+                                            <button key={k} className={`cv2-check${on ? ' on' : ''}`} onClick={() => toggle(k)}>
+                                              <span className="cv2-check-box" style={on ? { background: col, borderColor: col } : undefined}>{on ? '✓' : ''}</span>
+                                              <span className="cv2-check-label">{label}</span>
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                      <InlineText value={val(g.notes)} onChange={v => stage(g.notes, v)} placeholder="Notes…" area />
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
                                 <div className="cv2-checks">
                                   {phase.items.map(([k, label]) => {
                                     const on = isOn(val(k));
@@ -481,58 +513,41 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                                     );
                                   })}
                                 </div>
-                                {full && nextStageName && pipelineIdx < PIPELINE.length - 1 && (
-                                  <div className="cv2-advance">
-                                    <span>✓ Phase complete</span>
-                                    <button onClick={() => stage('kanban_status', PIPELINE[pipelineIdx + 1])}>Advance to {nextStageName} →</button>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* details */}
-                  <div className="cv2-card">
-                    <div className="cv2-card-head"><span>Details</span></div>
-                    <div className="cv2-detail-grid">
-                      <label>Project type</label><InlineSelect value={val('Type of Project(1)')} options={PROJECT_TYPES} onChange={v => stage('Type of Project(1)', v)} />
-                      <label>Start date</label><InlineDate value={val('rcd start date')} onChange={v => stage('rcd start date', v)} />
-                      <label>End date</label><InlineDate value={val('rcd end date')} onChange={v => stage('rcd end date', v)} />
-                      <label>Stage</label><InlineSelect value={val('kanban_status')} options={PIPELINE} onChange={v => stage('kanban_status', v)} />
-                    </div>
-                    <div className="cv2-field-block">
-                      <label>Work order</label>
-                      <InlineText value={val('Work Order')} onChange={v => stage('Work Order', v)} placeholder="Add a work order…" area big />
-                    </div>
-                    <div className="cv2-field-block">
-                      <label>Notes</label>
-                      <InlineText value={val('Notes')} onChange={v => stage('Notes', v)} placeholder="Add notes…" area />
-                    </div>
+                              )}
+                              {full && nextStageName && pipelineIdx < PIPELINE.length - 1 && (
+                                <div className="cv2-advance">
+                                  <span>✓ Phase complete</span>
+                                  <button onClick={() => stage('kanban_status', PIPELINE[pipelineIdx + 1])}>Advance to {nextStageName} →</button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
-                <div className="cv2-col-rail">
-                  {/* team */}
-                  <div className="cv2-card">
-                    <div className="cv2-card-head"><span>Team</span></div>
-                    <div className="cv2-team">
-                      <div className="cv2-team-row">
-                        <Avatar name={val('Lead Builder')} lead />
-                        <div className="cv2-team-pick"><label>Lead builder</label><InlineSelect value={val('Lead Builder')} options={BUILDER_OPTIONS} onChange={v => stage('Lead Builder', v)} /></div>
-                      </div>
-                      {['Builder1', 'Builder2', 'Builder3'].map((bk, i) => (
-                        <div className="cv2-team-row" key={bk}>
-                          <Avatar name={val(bk)} />
-                          <div className="cv2-team-pick"><label>Builder {i + 1}</label><InlineSelect value={val(bk)} options={BUILDER_OPTIONS} onChange={v => stage(bk, v)} /></div>
-                        </div>
-                      ))}
-                    </div>
+                {/* details */}
+                <div className="cv2-card">
+                  <div className="cv2-card-head"><span>Details</span></div>
+                  <div className="cv2-detail-grid">
+                    <label>Project type</label><InlineSelect value={val('Type of Project(1)')} options={PROJECT_TYPES} onChange={v => stage('Type of Project(1)', v)} />
+                    <label>Start date</label><InlineDate value={val('rcd start date')} onChange={v => stage('rcd start date', v)} />
+                    <label>End date</label><InlineDate value={val('rcd end date')} onChange={v => stage('rcd end date', v)} />
+                    <label>Stage</label><InlineSelect value={val('kanban_status')} options={PIPELINE} onChange={v => stage('kanban_status', v)} />
                   </div>
+                  <div className="cv2-field-block">
+                    <label>Work order</label>
+                    <InlineText value={val('Work Order')} onChange={v => stage('Work Order', v)} placeholder="Add a work order…" area big />
+                  </div>
+                  <div className="cv2-field-block">
+                    <label>Notes</label>
+                    <InlineText value={val('Notes')} onChange={v => stage('Notes', v)} placeholder="Add notes…" area />
+                  </div>
+                </div>
 
+                <div className="cv2-top-row">
                   {/* contact */}
                   <div className="cv2-card">
                     <div className="cv2-card-head"><span>Contact</span></div>
@@ -563,6 +578,52 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                       {finTab === 'payments' && (payments.length ? payments.map((r, i) => (
                         <div className="cv2-fin-row" key={i}><span className="cv2-fin-main">{fmtDateShort(r['cntct_PMT::Date'])} · {r['cntct_PMT::Method'] || '—'}</span><span className="cv2-fin-amt">{fmtMoneyFull(r['cntct_PMT::Amount'])}</span></div>
                       )) : <div className="cv2-fin-empty">No payments</div>)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="cv2-cols">
+                  <div className="cv2-col-main">
+                    <div className="cv2-card">
+                      <div className="cv2-card-head"><span>Contract &amp; financials</span></div>
+                      <div className="cv2-fin-grid">
+                        {FIN_ROWS.map(row => (
+                          <div className="cv2-fin-line" key={row.label}>
+                            <span className="cv2-fin-label">{row.label}</span>
+                            <div className="cv2-fin-input">
+                              {row.ref
+                                ? <span className="cv2-fin-ref">{val(row.sent) || '—'}</span>
+                                : row.type === 'date'
+                                  ? <InlineDate value={val(row.sent)} onChange={v => stage(row.sent, v)} />
+                                  : <InlineText value={val(row.sent)} onChange={v => stage(row.sent, v)} placeholder="—" />}
+                            </div>
+                            {row.rcv
+                              ? <button className={`cv2-fin-rcv${isOn(val(row.rcv)) ? ' on' : ''}`} onClick={() => toggle(row.rcv)}>
+                                  <span className="cv2-fin-rcv-box">{isOn(val(row.rcv)) ? '✓' : ''}</span>Received
+                                </button>
+                              : <span className="cv2-fin-rcv-spacer" />}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="cv2-col-rail">
+                    {/* team */}
+                    <div className="cv2-card">
+                      <div className="cv2-card-head"><span>Team</span></div>
+                      <div className="cv2-team">
+                        <div className="cv2-team-row">
+                          <Avatar name={val('Lead Builder')} lead />
+                          <div className="cv2-team-pick"><label>Lead builder</label><InlineSelect value={val('Lead Builder')} options={BUILDER_OPTIONS} onChange={v => stage('Lead Builder', v)} /></div>
+                        </div>
+                        {['Builder1', 'Builder2', 'Builder3'].map((bk, i) => (
+                          <div className="cv2-team-row" key={bk}>
+                            <Avatar name={val(bk)} />
+                            <div className="cv2-team-pick"><label>Builder {i + 1}</label><InlineSelect value={val(bk)} options={BUILDER_OPTIONS} onChange={v => stage(bk, v)} /></div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
