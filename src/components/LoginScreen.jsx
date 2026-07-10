@@ -1,3 +1,4 @@
+/* global __APP_VERSION__ */
 import './LoginScreen.css'
 
 export default function LoginScreen({ error }) {
@@ -44,6 +45,7 @@ export default function LoginScreen({ error }) {
           </a>
 
           <p className="ls-note">🔒 Access is limited to authorized High 5 team members.</p>
+          <p className="ls-version">v{__APP_VERSION__}</p>
         </div>
       </div>
     </div>
