@@ -78,6 +78,7 @@ const PHASES = [
     ['cd_Received Contract', 'Received Contract'],
     ['cd_Received Deposit', 'Received Deposit'],
     ['cd_Received PO', 'Received PO'],
+    ['Final_Invoice_Received', 'Final Invoice Received'],
   ]},
   { id: 'job_prep', name: 'Job Prep', items: [
     ['Populate_Work_Order', 'Mark as confirmed/scheduled. Populate work order.'],
