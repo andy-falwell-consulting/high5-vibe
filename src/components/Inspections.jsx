@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { getRecord, prefetchRecord, updateRecord, invalidateRecord, patchCachedRecord, createRecord, addCachedRecord } from '../api/filemaker';
+import { getRecord, getRecordWithPortals, prefetchRecord, updateRecord, invalidateRecord, patchCachedRecord, createRecord, addCachedRecord } from '../api/filemaker';
 import { useAllRecords } from '../hooks/useAllRecords';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
 import RecordSaveBar from './RecordSaveBar';
@@ -170,7 +170,10 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
   async function handleSelect(r) {
     setEdits({}); setSaveStatus(null);
     setSelected(r);
-    getRecord(LAYOUT, r.recordId).then(detail => {
+    // Plain getRecord caps the line-items portal at FileMaker's default of 50
+    // (same issue the PDF report worked around) — elevate it so the on-screen
+    // list matches the report and doesn't silently truncate large inspections.
+    getRecordWithPortals(LAYOUT, r.recordId, { inspt_INSPLI: 2000 }).then(detail => {
       setSelected(prev => prev?.recordId === r.recordId ? detail.response.data[0] : prev);
     }).catch(() => {});
   }
