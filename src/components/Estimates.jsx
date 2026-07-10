@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { getRecord, updateRecord, invalidateRecord, patchCachedRecord } from '../api/filemaker'
+import { getRecord, updateRecord, invalidateRecord, patchCachedRecord, createRecord, addCachedRecord } from '../api/filemaker'
 import { useAllRecords } from '../hooks/useAllRecords'
 import ListToolbar, { useListControls, ListBody } from './ListControls'
 import RecordSaveBar from './RecordSaveBar'
+import RecordFormModal from './RecordFormModal'
 import CreateInQBO from './CreateInQBO'
 import './Estimates.css'
 
@@ -78,6 +79,7 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
   const [saving, setSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState(null)
   const [saveErrorMsg, setSaveErrorMsg] = useState(null)
+  const [showNew, setShowNew] = useState(false)
   const dragging = useRef(false)
 
   const controls = useListControls({
@@ -121,6 +123,25 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
     return () => { alive = false }
   }, [navTarget]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Create a new estimate ──
+  const createFields = [
+    { key: '_kft__Contact_ID', label: 'Contact / Organization', type: 'contact', required: true },
+    { key: 'Title',  label: 'Title', type: 'text' },
+    { key: 'Date',   label: 'Date', type: 'date', default: new Date().toLocaleDateString('en-US') },
+    { key: 'Status', label: 'Status', type: 'select', options: Object.keys(STATUS_COLOR), default: 'Draft' },
+    { key: 'Class',  label: 'Class', type: 'text' },
+  ]
+
+  async function handleCreate(fieldData) {
+    const res = await createRecord(LAYOUT, fieldData)
+    const newId = res?.response?.recordId
+    if (!newId) throw new Error(res?.messages?.[0]?.message || 'Could not create the record')
+    getRecord(LAYOUT, newId).then(d => {
+      const rec = d?.response?.data?.[0]
+      if (rec) { addCachedRecord(LAYOUT, CACHE_VERSION, rec); handleSelect(rec); onRecordSelect?.(rec.recordId, rec.fieldData?.zz__Display_Contact__ct || rec.fieldData?.Title) }
+    }).catch(() => {})
+  }
+
   const onMouseDown = useCallback(e => {
     dragging.current = true
     const startX = e.clientX, startW = sidebarWidth
@@ -161,9 +182,12 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
     <div className="est-container">
       <aside className="est-sidebar" style={{ width: sidebarWidth }}>
         <div className="est-sidebar-header">
-          <div>
-            <div className="est-sidebar-module">Estimates</div>
-            <div className="est-sidebar-count">{loading ? 'Loading…' : `${total.toLocaleString()} estimates`}</div>
+          <div className="est-sidebar-title">
+            <div>
+              <div className="est-sidebar-module">Estimates</div>
+              <div className="est-sidebar-count">{loading ? 'Loading…' : `${total.toLocaleString()} estimates`}</div>
+            </div>
+            <button className="est-new-btn" onClick={() => setShowNew(true)} title="New estimate">＋ New</button>
           </div>
           <ListToolbar c={controls} />
         </div>
@@ -362,6 +386,16 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
           </>
         )}
       </main>
+
+      {showNew && (
+        <RecordFormModal
+          title="New Estimate"
+          fields={createFields}
+          submitLabel="Create estimate"
+          onCreate={handleCreate}
+          onClose={() => setShowNew(false)}
+        />
+      )}
     </div>
   )
 }
