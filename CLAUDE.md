@@ -22,13 +22,39 @@ src/
 
 ## Release workflow
 
-**Trunk-based.** `main` is the only permanent branch and is production
-(`db-livid.vercel.app`). Everything else is a short-lived feature branch that
-gets a Vercel **Preview** URL on push, then is squash-merged to `main` and
-deleted. No permanent staging branch — so there is no squash-divergence to
-realign (the `git reset --hard` dance is gone).
+> **⚠️ PAUSED as of 2026-07-10 — read before merging anything to `main`.**
+> `main` is still wired as Vercel's **Production Branch**, so a merge to
+> `main` auto-deploys to production immediately. The user has asked to
+> **stop that** for now: all work should land on the rolling `preview`
+> branch only, and **production is promoted manually from the Vercel
+> dashboard** (Deployments → pick a `preview` build → Promote to
+> Production) — not by merging to `main`. **Do not merge PRs to `main`
+> or open PRs against it until the user explicitly says to resume normal
+> trunk-based releases.** `main` stays frozen at whatever it was on
+> 2026-07-10 (v1.0.211) until then. The "normal mode" process is described
+> below so it's easy to resume later — it just isn't active right now.
 
-Per change:
+**Current (paused) mode — per change:**
+
+1. `git fetch origin` then `git checkout -B feat/<short-name> origin/preview`
+   — branch off the current tip of `preview` (NOT `main`), so changes stack
+   on top of whatever's already been pushed there.
+2. Bump `package.json` `version`. Commit format: `v1.0.X — short description`.
+3. Build + lint + verify as usual.
+4. Push straight to the rolling `preview` branch (no PR, no merge to `main`):
+   `git push -f origin feat/<short-name>:preview`. Vercel builds it at the
+   fixed alias `high5-new-ui-git-preview-andy-falwell-s-projects.vercel.app`
+   (see the OAuth section below — same host, already registered).
+5. Tell the user it's ready; **they** promote to production from the Vercel
+   dashboard when they're satisfied. Do not push to `main`.
+
+**Normal (trunk-based) mode — resume only when told to:**
+
+`main` is the only permanent branch and is production (`db-livid.vercel.app`
+/ `vibe.high5adventure.org`). Everything else is a short-lived feature branch
+that gets a Vercel **Preview** URL on push, then is squash-merged to `main`
+and deleted. No permanent staging branch — so there is no squash-divergence
+to realign (the `git reset --hard` dance is gone).
 
 1. `git checkout main && git pull` then `git checkout -b feat/<short-name>`.
 2. Bump `package.json` `version`. Commit format: `v1.0.X — short description`.
