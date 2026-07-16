@@ -23,6 +23,16 @@ const STATUS_COLOR = {
   'Recommended': '#06b6d4',
 }
 
+// QBO's own approval status (TxnStatus), synced back one-way by
+// api/qbo-estimate-sync.js — distinct vocabulary from FMP's own `Status`
+// field above, so it's shown as a separate chip, not merged into it.
+const QBO_STATUS_COLOR = {
+  'Pending':  '#f59e0b',
+  'Accepted': '#22c55e',
+  'Closed':   '#64748b',
+  'Rejected': '#e8322a',
+}
+
 const TYPE_COLOR = {
   'New Build': '#c084fc',
   'Repair':    '#fb923c',
@@ -251,6 +261,13 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
                       color: TYPE_COLOR[f.Class] ?? '#94a3b8',
                       borderColor: (TYPE_COLOR[f.Class] ?? '#4a5568') + '44',
                     }}>{f.Class}</span>
+                  )}
+                  {f.qbo_estimate_id && f.qbo_estimate_status && (
+                    <span className="est-chip qbo-status" title="QBO's approval status, synced from QuickBooks" style={{
+                      background: (QBO_STATUS_COLOR[f.qbo_estimate_status] ?? '#64748b') + '22',
+                      color: QBO_STATUS_COLOR[f.qbo_estimate_status] ?? '#94a3b8',
+                      borderColor: (QBO_STATUS_COLOR[f.qbo_estimate_status] ?? '#64748b') + '44',
+                    }}>QBO: {f.qbo_estimate_status}</span>
                   )}
                   {f._kpt__Estimate_ID && <span className="est-chip id">#{f._kpt__Estimate_ID}</span>}
                   {f.Date && <span className="est-chip muted">{fmtDate(f.Date)}</span>}
