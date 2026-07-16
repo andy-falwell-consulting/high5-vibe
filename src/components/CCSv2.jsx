@@ -210,7 +210,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   const [saveStatus, setSaveStatus] = useState(null);
   const [saveErrorMsg, setSaveErrorMsg] = useState(null);
   const [expanded, setExpanded] = useState({});
-  const [finTab, setFinTab]     = useState('estimates');
+  const [finTab, setFinTab]     = useState('invoices');
   // Live QBO estimate(s) for the selected project — resolved from its D# via
   // /api/ccs-estimate (null = not loaded/none; array = fetched).
   const [qboEst, setQboEst]     = useState(null);
@@ -256,7 +256,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
 
   // ── Selection / nav / cache sync ──
   async function handleSelect(r) {
-    setEdits({}); setSaveStatus(null); setFinTab('estimates'); setQboEst(null);
+    setEdits({}); setSaveStatus(null); setFinTab('invoices'); setQboEst(null);
     selectedRef.current = r.recordId;
     setSelected(r);
     // auto-expand the first incomplete phase
@@ -549,6 +549,8 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                     <label>Start date</label><InlineDate value={val('rcd start date')} onChange={v => stage('rcd start date', v)} />
                     <label>End date</label><InlineDate value={val('rcd end date')} onChange={v => stage('rcd end date', v)} />
                     <label>Stage</label><InlineSelect value={val('kanban_status')} options={PIPELINE} onChange={v => stage('kanban_status', v)} />
+                    <label>Distance to HQ</label><InlineText value={val('Distance to High5')} onChange={v => stage('Distance to High5', v)} placeholder="—" />
+                    <label>Drive time</label><InlineText value={val('Drive Time')} onChange={v => stage('Drive Time', v)} placeholder="—" />
                   </div>
                   <div className="cv2-field-block">
                     <label>Work order</label>
@@ -560,45 +562,10 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                   </div>
                 </div>
 
-                <div className="cv2-top-row">
-                  {/* contact */}
-                  <div className="cv2-card">
-                    <div className="cv2-card-head"><span>Contact</span></div>
-                    <div className="cv2-contact">
-                      {f.Address_Block_Billing && <div className="cv2-contact-row"><span className="cv2-ic">⌖</span><span style={{ whiteSpace: 'pre-wrap' }}>{f.Address_Block_Billing.replace(/\r/g, '\n')}</span></div>}
-                      {f['rcd_cntct_INADR__email::zz__Address__ct'] && <div className="cv2-contact-row"><span className="cv2-ic">✉</span><a href={`mailto:${f['rcd_cntct_INADR__email::zz__Address__ct']}`}>{f['rcd_cntct_INADR__email::zz__Address__ct']}</a></div>}
-                      {f['rcd_cntct_PHONE__work::Number'] && <div className="cv2-contact-row"><span className="cv2-ic">✆</span><span>{f['rcd_cntct_PHONE__work::Number']}</span></div>}
-                      {f['rcd_cntct_PHONE__mobile::Number'] && <div className="cv2-contact-row"><span className="cv2-ic">▢</span><span>{f['rcd_cntct_PHONE__mobile::Number']}</span></div>}
-                      {(f['Distance to High5'] || f['Drive Time']) && <div className="cv2-contact-meta">{[f['Distance to High5'] && `${f['Distance to High5']} mi`, f['Drive Time'] && `${f['Drive Time']} drive`].filter(Boolean).join(' · ')}</div>}
-                    </div>
-                  </div>
-
-                  {/* financials */}
-                  <div className="cv2-card">
-                    <div className="cv2-card-head"><span>Financials</span></div>
-                    <div className="cv2-fin-tabs">
-                      {[['estimates', 'Estimates', estimates.length], ['invoices', 'Invoices', invoices.length], ['payments', 'Payments', payments.length]].map(([id, lbl, n]) => (
-                        <button key={id} className={`cv2-fin-tab${finTab === id ? ' active' : ''}`} onClick={() => setFinTab(id)}>{lbl}<span>{n}</span></button>
-                      ))}
-                    </div>
-                    <div className="cv2-fin-list">
-                      {finTab === 'estimates' && (estimates.length ? estimates.map((r, i) => (
-                        <div className="cv2-fin-row" key={i}><span className="cv2-fin-main">{r['cntct_ESTMT::Title'] || fmtDate(r['cntct_ESTMT::Date'])}</span><span className="cv2-fin-amt">{fmtMoneyFull(r['cntct_ESTMT::zz__Total__xn'])}</span></div>
-                      )) : <div className="cv2-fin-empty">No estimates</div>)}
-                      {finTab === 'invoices' && (invoices.length ? invoices.map((r, i) => (
-                        <div className="cv2-fin-row" key={i}><span className="cv2-fin-main">#{r['cntct_INVO::QuickBooks_Reference_Number'] || '—'} · {fmtDateShort(r['cntct_INVO::Date'])}</span><span className="cv2-fin-amt">{fmtMoneyFull(r['cntct_INVO::zz__Total__xn'])}</span></div>
-                      )) : <div className="cv2-fin-empty">No invoices</div>)}
-                      {finTab === 'payments' && (payments.length ? payments.map((r, i) => (
-                        <div className="cv2-fin-row" key={i}><span className="cv2-fin-main">{fmtDateShort(r['cntct_PMT::Date'])} · {r['cntct_PMT::Method'] || '—'}</span><span className="cv2-fin-amt">{fmtMoneyFull(r['cntct_PMT::Amount'])}</span></div>
-                      )) : <div className="cv2-fin-empty">No payments</div>)}
-                    </div>
-                  </div>
-                </div>
-
                 <div className="cv2-cols">
                   <div className="cv2-col-main">
                     <div className="cv2-card">
-                      <div className="cv2-card-head"><span>Contract &amp; financials</span></div>
+                      <div className="cv2-card-head"><span>Contract &amp; Financials</span></div>
                       <div className="cv2-fin-grid">
                         {FIN_ROWS.map(row => (
                           <div className="cv2-fin-line" key={row.label}>
@@ -634,10 +601,38 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                           ))}
                         </div>
                       )}
+                      {/* Invoices / Payments (folded in from the old Financials card;
+                          estimates are covered by the live QBO block above). */}
+                      <div className="cv2-fin-embed">
+                        <div className="cv2-fin-tabs">
+                          {[['invoices', 'Invoices', invoices.length], ['payments', 'Payments', payments.length]].map(([id, lbl, n]) => (
+                            <button key={id} className={`cv2-fin-tab${finTab === id ? ' active' : ''}`} onClick={() => setFinTab(id)}>{lbl}<span>{n}</span></button>
+                          ))}
+                        </div>
+                        <div className="cv2-fin-list">
+                          {finTab === 'invoices' && (invoices.length ? invoices.map((r, i) => (
+                            <div className="cv2-fin-row" key={i}><span className="cv2-fin-main">#{r['cntct_INVO::QuickBooks_Reference_Number'] || '—'} · {fmtDateShort(r['cntct_INVO::Date'])}</span><span className="cv2-fin-amt">{fmtMoneyFull(r['cntct_INVO::zz__Total__xn'])}</span></div>
+                          )) : <div className="cv2-fin-empty">No invoices</div>)}
+                          {finTab === 'payments' && (payments.length ? payments.map((r, i) => (
+                            <div className="cv2-fin-row" key={i}><span className="cv2-fin-main">{fmtDateShort(r['cntct_PMT::Date'])} · {r['cntct_PMT::Method'] || '—'}</span><span className="cv2-fin-amt">{fmtMoneyFull(r['cntct_PMT::Amount'])}</span></div>
+                          )) : <div className="cv2-fin-empty">No payments</div>)}
+                        </div>
+                      </div>
                     </div>
                   </div>
 
                   <div className="cv2-col-rail">
+                    {/* contact */}
+                    <div className="cv2-card">
+                      <div className="cv2-card-head"><span>Contact</span></div>
+                      <div className="cv2-contact">
+                        {f.Address_Block_Billing && <div className="cv2-contact-row"><span className="cv2-ic">⌖</span><span style={{ whiteSpace: 'pre-wrap' }}>{f.Address_Block_Billing.replace(/\r/g, '\n')}</span></div>}
+                        {f['rcd_cntct_INADR__email::zz__Address__ct'] && <div className="cv2-contact-row"><span className="cv2-ic">✉</span><a href={`mailto:${f['rcd_cntct_INADR__email::zz__Address__ct']}`}>{f['rcd_cntct_INADR__email::zz__Address__ct']}</a></div>}
+                        {f['rcd_cntct_PHONE__work::Number'] && <div className="cv2-contact-row"><span className="cv2-ic">✆</span><span>{f['rcd_cntct_PHONE__work::Number']}</span></div>}
+                        {f['rcd_cntct_PHONE__mobile::Number'] && <div className="cv2-contact-row"><span className="cv2-ic">▢</span><span>{f['rcd_cntct_PHONE__mobile::Number']}</span></div>}
+                      </div>
+                    </div>
+
                     {/* team */}
                     <div className="cv2-card">
                       <div className="cv2-card-head"><span>Team</span></div>
