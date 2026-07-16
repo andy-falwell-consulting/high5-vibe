@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useAllRecords } from '../hooks/useAllRecords';
 import { RCD_LAYOUT, RCD_CACHE_VERSION, RCD_FIND_QUERY, RCD_SORT } from '../config/ccsCache';
 import { getRecord, prefetchRecord, updateRecord, patchCachedRecord, invalidateRecord } from '../api/filemaker';
+import { getCurrentEnv } from '../config/fmpEnvironments';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
 import AttachmentsPanel from './AttachmentsPanel';
 import { listCcsAttachments, uploadCcsAttachment, deleteCcsAttachment, ccsAttachmentUrl } from '../api/ccsAttachments';
@@ -95,7 +96,7 @@ const PHASES = [
 // `sent` is a date/text field; `rcv` is the "Received" checkbox (optional).
 // `ref: true` rows are read-only QBO identifiers.
 const FIN_ROWS = [
-  { label: 'Estimate #',        sent: '_kat__QuickBooks_Estimate_ID', type: 'text', ref: true },
+  { label: 'Estimate #',        sent: '_kat__QuickBooks_Estimate_ID(1)', type: 'text', ref: true },
   { label: 'Contract Sent',     sent: 'Contract_Date_Sent',           type: 'date', rcv: 'cd_Received Contract' },
   { label: 'Deposit Inv. Sent', sent: 'Report Date Sent',             type: 'date', rcv: 'cd_Received Deposit' },
   { label: 'PO #',              sent: 'po_number',                    type: 'text', rcv: 'cd_Received PO' },
@@ -210,7 +211,11 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   const [saveErrorMsg, setSaveErrorMsg] = useState(null);
   const [expanded, setExpanded] = useState({});
   const [finTab, setFinTab]     = useState('estimates');
+  // Live QBO estimate(s) for the selected project — resolved from its D# via
+  // /api/ccs-estimate (null = not loaded/none; array = fetched).
+  const [qboEst, setQboEst]     = useState(null);
   const isResizing = useRef(false);
+  const selectedRef = useRef(null); // guards async estimate fetch against stale selections
 
   const f = useMemo(() => selected?.fieldData || EMPTY_FIELDS, [selected]);
   const val = useCallback(fk => (fk in edits ? edits[fk] : f[fk]), [edits, f]);
@@ -251,7 +256,8 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
 
   // ── Selection / nav / cache sync ──
   async function handleSelect(r) {
-    setEdits({}); setSaveStatus(null); setFinTab('estimates');
+    setEdits({}); setSaveStatus(null); setFinTab('estimates'); setQboEst(null);
+    selectedRef.current = r.recordId;
     setSelected(r);
     // auto-expand the first incomplete phase
     const firstOpen = PHASES.find(p => p.items.some(([k]) => !isOn(r.fieldData[k])));
@@ -259,6 +265,12 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
     getRecord(LAYOUT, r.recordId).then(detail => {
       setSelected(prev => prev?.recordId === r.recordId ? detail.response.data[0] : prev);
     }).catch(() => {});
+    // Live QBO estimate lookup (via the project's D#). No-ops on localhost
+    // (no serverless functions); leaves qboEst null so nothing renders.
+    fetch(`/api/ccs-estimate?db=${encodeURIComponent(getCurrentEnv().db)}&recordId=${r.recordId}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(j => { if (j) setQboEst(prev => (selectedRef.current === r.recordId ? (j.estimates || []) : prev)); })
+      .catch(() => {});
   }
 
   useEffect(() => {
@@ -606,6 +618,22 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                           </div>
                         ))}
                       </div>
+                      {qboEst && qboEst.length > 0 && (
+                        <div className="cv2-qboest">
+                          <div className="cv2-qboest-head">QuickBooks estimate{qboEst.length > 1 ? 's' : ''} · live</div>
+                          {qboEst.map(e => (
+                            <div className="cv2-qboest-row" key={e.docNumber}>
+                              <span className="cv2-qboest-doc">{e.docNumber}</span>
+                              {e.missing
+                                ? <span className="cv2-qboest-missing">not found in QBO</span>
+                                : <>
+                                    <span className={`cv2-qboest-status ${String(e.status || '').toLowerCase()}`}>{e.status || '—'}</span>
+                                    <span className="cv2-qboest-total">{fmtMoneyFull(e.total)}</span>
+                                  </>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
 

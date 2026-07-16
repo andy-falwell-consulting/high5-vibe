@@ -249,3 +249,16 @@
 .cv2-fin-rcv.on { color: var(--cv2-text); border-color: #16a34a; }
 .cv2-fin-rcv.on .cv2-fin-rcv-box { background: #16a34a; border-color: #16a34a; }
 .cv2-fin-rcv-spacer { display: inline-block; }
+
+/* Live QBO estimate(s) resolved from the project's D# (api/ccs-estimate). */
+.cv2-qboest { margin-top: 12px; border-top: 1px solid var(--cv2-border); padding-top: 10px; }
+.cv2-qboest-head { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--cv2-text-3); margin-bottom: 6px; }
+.cv2-qboest-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+.cv2-qboest-doc { font-family: ui-monospace, monospace; font-size: 15px; color: var(--cv2-text); min-width: 74px; }
+.cv2-qboest-total { margin-left: auto; font-size: 16px; color: var(--cv2-text); }
+.cv2-qboest-missing { font-size: 14px; color: var(--cv2-text-4); font-style: italic; }
+.cv2-qboest-status { font-size: 13px; font-weight: 600; padding: 2px 9px; border-radius: 999px; text-transform: capitalize; color: #64748b; background: #64748b1f; }
+.cv2-qboest-status.accepted { color: #16a34a; background: #16a34a1f; }
+.cv2-qboest-status.closed   { color: #2563eb; background: #2563eb1f; }
+.cv2-qboest-status.pending  { color: #b45309; background: #f59e0b22; }
+.cv2-qboest-status.rejected { color: #dc2626; background: #dc26261f; }
