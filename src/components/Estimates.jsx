@@ -329,8 +329,6 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
                   <Field label="Status"      fk="Status"            f={f} edits={edits} onChange={handleChange} editing={true} />
                   <Field label="Class"       fk="Class"             f={f} edits={edits} onChange={handleChange} editing={true} />
                   <Field label="Date"        fk="Date"              f={f} edits={edits} onChange={handleChange} editing={true} />
-                  <Field label="Tax Name"    fk="Tax_Name"          f={f} edits={edits} onChange={handleChange} editing={true} />
-                  <Field label="Tax Rate"    fk="Tax_Rate"          f={f} edits={edits} onChange={handleChange} editing={true} />
                   {f.Memo && (
                     <Field label="Memo"      fk="Memo"              f={f} edits={edits} onChange={handleChange} editing={true} wide textarea />
                   )}
