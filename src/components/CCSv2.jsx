@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useAllRecords } from '../hooks/useAllRecords';
+import { useValueLists } from '../hooks/useValueLists';
 import { RCD_LAYOUT, RCD_CACHE_VERSION, RCD_FIND_QUERY, RCD_SORT } from '../config/ccsCache';
 import { getRecord, prefetchRecord, updateRecord, patchCachedRecord, invalidateRecord } from '../api/filemaker';
 import { getCurrentEnv } from '../config/fmpEnvironments';
@@ -22,8 +23,14 @@ const PIPELINE_SHORT = [
 ];
 
 const STATUS_OPTIONS = ['Proposed', 'Confirmed', 'Confirmed/Scheduled', 'In Progress', 'Completed', 'No Go', 'On Hold', 'Cancelled'];
-const PROJECT_TYPES  = ['Inspection', 'New Construction', 'Renovation', 'Repair', 'Training', 'Other'];
-const BUILDER_OPTIONS = ['', 'Dave Klim', 'Lucas Germano', 'Gary Hillsgrove', 'Todd Brown', 'Ian Doak', 'Kyle Myers', 'Colin Morton'];
+
+// Project type and builders come from FileMaker's own value lists at runtime
+// (see useValueLists) — these are only the first-paint fallback for when FMP
+// hasn't answered yet. Don't add names here; edit the value list in FileMaker.
+const VL_PROJECT_TYPE = 'Type of Project';
+const VL_BUILDER = 'Lead Builder';
+const PROJECT_TYPES  = ['New Construction', 'Additions', 'Repairs', 'Site Evaluation', 'Inspection', 'Consulting', 'Equipment', 'Warranty Work', 'Pole Setting'];
+const BUILDER_OPTIONS = ['Krister Raasoch', 'Jamie Thibodeau', 'Kyle Myers', 'Colin Morton', 'Tom Woodbury', 'Jamie Haskell', 'Ian Doak', 'Todd Brown', 'Dylan Gordon', 'Aaron Gingrich', 'Chris Damboise'];
 
 // "Job Prep - External" (event_prep phase, below) groups its checklist items
 // by category, each paired with a free-text "Job Sheet <Category>" notes
@@ -201,6 +208,10 @@ function InlineDate({ value, onChange }) {
 // ── Main ─────────────────────────────────────────────────────────
 export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSelect }) {
   const { records, total } = useAllRecords(LAYOUT, { cacheVersion: RCD_CACHE_VERSION, findQuery: RCD_FIND_QUERY, sort: RCD_SORT });
+  const valueLists = useValueLists(LAYOUT, { [VL_PROJECT_TYPE]: PROJECT_TYPES, [VL_BUILDER]: BUILDER_OPTIONS });
+  const projectTypes = valueLists[VL_PROJECT_TYPE] ?? PROJECT_TYPES;
+  // Builders get a leading blank so a wrongly-assigned builder can be cleared.
+  const builderOptions = useMemo(() => ['', ...(valueLists[VL_BUILDER] ?? BUILDER_OPTIONS)], [valueLists]);
 
   const [selected, setSelected] = useState(null);
   const [navWidth, setNavWidth] = useState(300);
@@ -545,7 +556,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                 <div className="cv2-card">
                   <div className="cv2-card-head"><span>Details</span></div>
                   <div className="cv2-detail-grid">
-                    <label>Project type</label><InlineSelect value={val('Type of Project(1)')} options={PROJECT_TYPES} onChange={v => stage('Type of Project(1)', v)} />
+                    <label>Project type</label><InlineSelect value={val('Type of Project(1)')} options={projectTypes} onChange={v => stage('Type of Project(1)', v)} />
                     <label>Start date</label><InlineDate value={val('rcd start date')} onChange={v => stage('rcd start date', v)} />
                     <label>End date</label><InlineDate value={val('rcd end date')} onChange={v => stage('rcd end date', v)} />
                     <label>Stage</label><InlineSelect value={val('kanban_status')} options={PIPELINE} onChange={v => stage('kanban_status', v)} />
@@ -639,12 +650,12 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                       <div className="cv2-team">
                         <div className="cv2-team-row">
                           <Avatar name={val('Lead Builder')} lead />
-                          <div className="cv2-team-pick"><label>Lead builder</label><InlineSelect value={val('Lead Builder')} options={BUILDER_OPTIONS} onChange={v => stage('Lead Builder', v)} /></div>
+                          <div className="cv2-team-pick"><label>Lead builder</label><InlineSelect value={val('Lead Builder')} options={builderOptions} onChange={v => stage('Lead Builder', v)} /></div>
                         </div>
                         {['Builder1', 'Builder2', 'Builder3'].map((bk, i) => (
                           <div className="cv2-team-row" key={bk}>
                             <Avatar name={val(bk)} />
-                            <div className="cv2-team-pick"><label>Builder {i + 1}</label><InlineSelect value={val(bk)} options={BUILDER_OPTIONS} onChange={v => stage(bk, v)} /></div>
+                            <div className="cv2-team-pick"><label>Builder {i + 1}</label><InlineSelect value={val(bk)} options={builderOptions} onChange={v => stage(bk, v)} /></div>
                           </div>
                         ))}
                       </div>
