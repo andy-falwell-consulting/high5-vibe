@@ -6,17 +6,24 @@
 //
 //   GET  /api/kanban-board?db=High5_Core4            → { ids: [...] }
 //   POST /api/kanban-board?db=High5_Core4  { id, on } → add (on!==false) / remove
-// Auth: a Google session (same as the rest of the app).
+// Auth: a Google session (same as the rest of the app), or x-sync-key for
+// scripts/backfills (matches distance-sync.js / ccs-estimate.js).
 import { Redis } from '@upstash/redis';
 import { getGoogleSession } from './_googleSession.js';
 import { ALLOWED_DBS } from './_fmp.js';
 
 const redis = Redis.fromEnv();
+const SYNC_KEY = process.env.QBO_SYNC_KEY;
 const keyFor = db => `kanban:onboard:${db}`;
 const asList = v => (Array.isArray(v) ? v.map(String) : []);
 
+async function authorized(req) {
+  if (SYNC_KEY && (req.headers['x-sync-key'] === SYNC_KEY || req.query?.key === SYNC_KEY)) return true;
+  return !!(await getGoogleSession(req));
+}
+
 export default async function handler(req, res) {
-  if (!(await getGoogleSession(req))) return res.status(401).json({ error: 'unauthorized' });
+  if (!(await authorized(req))) return res.status(401).json({ error: 'unauthorized' });
   const db = String(req.query?.db || '');
   if (!ALLOWED_DBS.has(db)) return res.status(400).json({ error: 'db not allowed' });
   const key = keyFor(db);
