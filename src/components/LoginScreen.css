@@ -35,10 +35,10 @@
    it needs. */
 .ls-logo {
   position: absolute;
-  top: 92px;
+  top: 78px;
   left: 50%;
   transform: translateX(-50%);
-  width: 78px;
+  width: 76px;
   padding: 9px 11px;
   border-radius: 16px;
   background: #ffffff;
@@ -52,7 +52,7 @@
 .ls-logo img { width: 100%; height: auto; display: block; }
 
 .ls-body {
-  padding: 46px 38px 34px;
+  padding: 64px 38px 34px;
   display: flex;
   flex-direction: column;
   align-items: center;
