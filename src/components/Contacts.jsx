@@ -206,9 +206,14 @@ function PortalTable({ id, rows, onOpenRow, onRemove }) {
   const linkProps = r => (onOpenRow && r.recordId)
     ? { className: 'ct-row-link', onClick: () => onOpenRow(r), title: 'Open' }
     : {};
+  // Title comes from cntct_RLTN::zz__Display__ct — despite the generic-looking
+  // key, this is a per-relationship role/title (e.g. "Athletic Director",
+  // "P.E. Teacher"), not a relationship-kind label. It used to be wrongly used
+  // as a Name fallback (so a blank-named row would show a title where a name
+  // belongs) — fixed to show as its own column instead.
   if (id === 'related') return (
-    <table className="ct-table"><thead><tr><th>Name</th><th>Phone</th><th>Email</th>{onRemove && <th aria-label="Unlink" />}</tr></thead>
-      <tbody>{rows.map((r, i) => <tr key={i} {...linkProps(r)}><td>{r['cntct_rltn_CNTCT::zz__Display__ct'] || r['cntct_RLTN::zz__Display__ct']}</td><td className="mono">{r['cntct_rltn_cntct_PHONE::Number']}</td><td>{r['cntct_rltn_cntct_INADR__email::Address']}</td>{onRemove && <td className="num"><button className="ct-unlink" title="Unlink contact" onClick={(e) => { e.stopPropagation(); onRemove(r); }}>✕</button></td>}</tr>)}</tbody></table>
+    <table className="ct-table"><thead><tr><th>Name</th><th>Title</th><th>Phone</th><th>Email</th>{onRemove && <th aria-label="Unlink" />}</tr></thead>
+      <tbody>{rows.map((r, i) => <tr key={i} {...linkProps(r)}><td>{r['cntct_rltn_CNTCT::zz__Display__ct']}</td><td>{r['cntct_RLTN::zz__Display__ct']}</td><td className="mono">{r['cntct_rltn_cntct_PHONE::Number']}</td><td>{r['cntct_rltn_cntct_INADR__email::Address']}</td>{onRemove && <td className="num"><button className="ct-unlink" title="Unlink contact" onClick={(e) => { e.stopPropagation(); onRemove(r); }}>✕</button></td>}</tr>)}</tbody></table>
   );
   if (id === 'inspections') return (
     <table className="ct-table"><thead><tr><th>Date</th><th>Organization</th><th>Contact</th><th>Inspector</th></tr></thead>
