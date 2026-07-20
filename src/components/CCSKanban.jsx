@@ -14,6 +14,7 @@ import { useAllRecords } from '../hooks/useAllRecords'
 import { updateRecord, bustCache, patchCachedRecord } from '../api/filemaker'
 import { RCD_LAYOUT, RCD_CACHE_VERSION, RCD_FIND_QUERY, RCD_SORT } from '../config/ccsCache'
 import { ACTIVE_STAGES, statusColor, mergedStatus } from '../config/ccsStatus'
+import { useKanbanBoard } from '../hooks/useKanbanBoard'
 import './CCSKanban.css'
 
 const LAYOUT = RCD_LAYOUT
@@ -64,7 +65,7 @@ function KanbanCardView({ record, saving, dimmed }) {
   )
 }
 
-function DraggableCard({ record, saving, onOpen, dimmed }) {
+function DraggableCard({ record, saving, onOpen, dimmed, onRemove }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: record.recordId,
   })
@@ -79,13 +80,18 @@ function DraggableCard({ record, saving, onOpen, dimmed }) {
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      style={{ opacity: isDragging ? 0.25 : 1, cursor: 'grab', touchAction: 'none', userSelect: 'none' }}
+      style={{ position: 'relative', opacity: isDragging ? 0.25 : 1, cursor: 'grab', touchAction: 'none', userSelect: 'none' }}
       onClick={() => {
         if (didDrag.current) { didDrag.current = false; return }
         onOpen(record)
       }}
     >
       <KanbanCardView record={record} saving={saving} dimmed={dimmed} />
+      {onRemove && (
+        <button className="kb-card-remove" title="Remove from board"
+          onPointerDown={e => e.stopPropagation()}
+          onClick={e => { e.stopPropagation(); onRemove(record) }}>✕</button>
+      )}
     </div>
   )
 }
@@ -176,7 +182,7 @@ function KanbanDetail({ record, onClose, currentStatus, onNavigateTo }) {
   )
 }
 
-function KanbanColumn({ column, records, saving, onOpen, collapsed, onToggleCollapse, search }) {
+function KanbanColumn({ column, records, saving, onOpen, collapsed, onToggleCollapse, search, onRemove }) {
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: column.id })
   const { attributes, listeners, setNodeRef: setSortRef, transform, transition, isDragging: isColDragging } = useSortable({
     id: `col::${column.id}`,
@@ -225,6 +231,7 @@ function KanbanColumn({ column, records, saving, onOpen, collapsed, onToggleColl
                 saving={saving[r.recordId]}
                 onOpen={onOpen}
                 dimmed={search && !matches}
+                onRemove={onRemove}
               />
             )
           })}
@@ -233,6 +240,46 @@ function KanbanColumn({ column, records, saving, onOpen, collapsed, onToggleColl
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+// Searchable picker to add active-status projects onto the board. Candidates
+// are active-stage records not already on the board; clicking one adds it (it
+// then drops out of the list). Stays open for bulk adding.
+function AddToBoardPanel({ candidates, onAdd, onClose }) {
+  const [q, setQ] = useState('')
+  const [added, setAdded] = useState(() => new Set())
+  const needle = q.trim().toLowerCase()
+  const list = candidates
+    .filter(r => !added.has(String(r.recordId)))
+    .filter(r => !needle || matchesSearch(r, needle))
+    .sort((a, b) => (a.fieldData.zz__Display_Organization__ct || '').localeCompare(b.fieldData.zz__Display_Organization__ct || ''))
+    .slice(0, 200)
+
+  return (
+    <div className="kb-add-overlay" onClick={onClose}>
+      <div className="kb-add-panel" onClick={e => e.stopPropagation()}>
+        <div className="kb-add-head">
+          <span>Add projects to the board</span>
+          <button className="kb-add-close" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+        <input className="kb-add-search" autoFocus placeholder="Search active projects…" value={q} onChange={e => setQ(e.target.value)} />
+        <div className="kb-add-list">
+          {list.length === 0 && <div className="kb-add-empty">{needle ? 'No matching active projects.' : 'No active projects left to add.'}</div>}
+          {list.map(r => (
+            <button key={r.recordId} className="kb-add-row"
+              onClick={() => { setAdded(p => new Set(p).add(String(r.recordId))); onAdd(r) }}>
+              <span className="kb-add-row-main">
+                <span className="kb-add-row-org">{r.fieldData.zz__Display_Organization__ct || '—'}</span>
+                <span className="kb-add-row-sub">{mergedStatus(r.fieldData)}{r.fieldData['rcd start date'] ? ` · ${r.fieldData['rcd start date']}` : ''}</span>
+              </span>
+              <span className="kb-add-row-plus">＋</span>
+            </button>
+          ))}
+        </div>
+        <div className="kb-add-foot">{added.size > 0 ? `${added.size} added` : `${candidates.length} available`}</div>
+      </div>
     </div>
   )
 }
@@ -259,6 +306,8 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
     sort: RCD_SORT,
     refreshKey,
   })
+  const board = useKanbanBoard()
+  const [showAdd, setShowAdd] = useState(false)
 
   // Stale-while-refreshing: show last complete fetch while a new one is in flight.
   // lastCompleteRef seeds from the cache-hydrated `records` so there is zero flash on load.
@@ -309,10 +358,11 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
     return localStatusRef.current[r.recordId] ?? mergedStatus(r.fieldData)
   }, [])
 
-  // Board membership = any record whose merged status is an active stage.
-  // Completed / No Go / Other records fall off the board (they're done).
+  // Board membership is curated by the team (a shared Redis set), AND the card's
+  // merged status must be an active stage — so a job the team added drops off
+  // once it's Completed / No Go.
   const kanbanRecords = displayRecords
-  const active = kanbanRecords.filter(r => ACTIVE_STATUSES.has(getStatus(r)))
+  const active = kanbanRecords.filter(r => board.ids.has(String(r.recordId)) && ACTIVE_STATUSES.has(getStatus(r)))
 
   const byColumn = {}
   for (const col of COLUMNS) byColumn[col.id] = []
@@ -407,7 +457,15 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
             <button className="kb-search-clear" onClick={() => setSearch('')} aria-label="Clear search">✕</button>
           )}
         </div>
+        <button className="kb-add-btn" onClick={() => setShowAdd(true)} title="Add projects to the board">＋ Add projects</button>
       </div>
+      {showAdd && (
+        <AddToBoardPanel
+          candidates={displayRecords.filter(r => ACTIVE_STATUSES.has(getStatus(r)) && !board.ids.has(String(r.recordId)))}
+          onAdd={r => board.toggle(r.recordId, true)}
+          onClose={() => setShowAdd(false)}
+        />
+      )}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -426,6 +484,7 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
                 collapsed={!!collapsed[col.id]}
                 onToggleCollapse={() => toggleCollapse(col.id)}
                 search={search}
+                onRemove={r => board.toggle(r.recordId, false)}
               />
             ))}
           </div>

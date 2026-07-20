@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useAllRecords } from '../hooks/useAllRecords';
 import { useValueLists } from '../hooks/useValueLists';
 import { MERGED_STATUSES, PIPELINE_STAGES, PIPELINE_SHORT, statusColor, mergedStatus } from '../config/ccsStatus';
+import { useKanbanBoard } from '../hooks/useKanbanBoard';
 import { RCD_LAYOUT, RCD_CACHE_VERSION, RCD_FIND_QUERY, RCD_SORT } from '../config/ccsCache';
 import { getRecord, prefetchRecord, updateRecord, patchCachedRecord, invalidateRecord } from '../api/filemaker';
 import { getCurrentEnv } from '../config/fmpEnvironments';
@@ -206,6 +207,7 @@ function InlineDate({ value, onChange }) {
 export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSelect }) {
   const { records, total } = useAllRecords(LAYOUT, { cacheVersion: RCD_CACHE_VERSION, findQuery: RCD_FIND_QUERY, sort: RCD_SORT });
   const valueLists = useValueLists(LAYOUT, { [VL_PROJECT_TYPE]: PROJECT_TYPES, [VL_BUILDER]: BUILDER_OPTIONS });
+  const board = useKanbanBoard();
   const projectTypes = valueLists[VL_PROJECT_TYPE] ?? PROJECT_TYPES;
   // Builders get a leading blank so a wrongly-assigned builder can be cleared.
   const builderOptions = useMemo(() => ['', ...(valueLists[VL_BUILDER] ?? BUILDER_OPTIONS)], [valueLists]);
@@ -412,7 +414,17 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
               <div className="cv2-crumb">
                 <span className="cv2-crumb-dim">CCS v2</span><span className="cv2-crumb-sep">/</span><span>{org}</span>
                 <span className="cv2-crumb-spacer" />
-                <button className="cv2-ghost-btn" onClick={() => onNavigateTo?.('ccs-kanban', selected.recordId)}>⊞ Board</button>
+                {(() => {
+                  const onBoard = board.ids.has(String(selected.recordId));
+                  return (
+                    <button className={`cv2-ghost-btn${onBoard ? ' cv2-on-board' : ''}`}
+                      onClick={() => board.toggle(selected.recordId, !onBoard)}
+                      title={onBoard ? 'Remove this project from the Kanban board' : 'Add this project to the Kanban board'}>
+                      {onBoard ? '⊞ On board ✓' : '⊞ Add to board'}
+                    </button>
+                  );
+                })()}
+                <button className="cv2-ghost-btn" onClick={() => onNavigateTo?.('ccs-kanban', selected.recordId)}>Board →</button>
                 <span className="cv2-crumb-id">#{f._kpt__RCD_ID || selected.recordId}</span>
               </div>
 

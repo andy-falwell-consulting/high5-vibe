@@ -273,3 +273,6 @@
 .cv2-qboest-status.closed   { color: #2563eb; background: #2563eb1f; }
 .cv2-qboest-status.pending  { color: #b45309; background: #f59e0b22; }
 .cv2-qboest-status.rejected { color: #dc2626; background: #dc26261f; }
+
+/* Board-membership toggle — active ("on board") state */
+.cv2-ghost-btn.cv2-on-board { color: var(--h5-blue); border-color: var(--h5-blue); }
