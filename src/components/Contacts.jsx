@@ -166,9 +166,14 @@ function buildActivity(p) {
   rowsOf(p, 'estimates').forEach(r => items.push({ icon: '≡', date: r['cntct_ESTMT::Date'], title: r['cntct_ESTMT::Title'] || `Estimate ${r['cntct_ESTMT::_kpt__Estimate_ID']}`, sub: money(r['cntct_ESTMT::zz__Total__xn']) }));
   rowsOf(p, 'ccs').forEach(r => items.push({ icon: '◈', date: r['cntct_RCD::rcd start date'], title: `CCS project · ${r['cntct_RCD::Status'] || '—'}`, sub: `RCD #${r['cntct_RCD::_kpt__RCD_ID']}` }));
   rowsOf(p, 'rmi').forEach(r => items.push({ icon: '⚠', date: r['cntct_RMI::Entry_Date'], title: `Risk — ${r['cntct_RMI::Level_of_Risk'] || '—'}`, sub: r['cntct_RMI::Status'] }));
+  // Current year + the 2 prior — per feedback, the overview was reading as
+  // "just CCS" because it wasn't bounded and old rows from every source
+  // crowded out anything recent.
+  const earliestYear = new Date().getFullYear() - 2;
   return items
     .filter(i => i.date)
     .map(i => ({ ...i, ts: parseFmDate(i.date) }))
+    .filter(i => new Date(i.ts).getFullYear() >= earliestYear)
     .sort((a, b) => b.ts - a.ts)
     .slice(0, 12);
 }

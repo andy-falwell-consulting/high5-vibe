@@ -58,6 +58,18 @@ const EVENT_PREP_GROUPS = [
   ]},
 ];
 
+// Post Job checkboxes — literal values per direct instruction (not sourced
+// from FMP's own value list, unlike Project Type/Builder). Stored return-
+// delimited in the single `post_job_phase` field — the same format FMP's own
+// Checkbox Set uses — even though that field is still a single popupList
+// control in FileMaker today, so multiple can be checked at once.
+const POST_JOB_ITEMS = [
+  'Inspection Report Sent',
+  'Commissioning Report Sent',
+  'As Built Drawings Sent',
+  'MA Paper Work Sent',
+];
+
 // Phases → checklist fields (exact FileMaker keys), with labels mirroring the
 // RCD_New "Additional Info" tab (Pre-Proposal / Proposal / Contract and Deposit
 // / Job Prep / Job Prep - External). Keep this in sync with that tab.
@@ -91,6 +103,7 @@ const PHASES = [
     ['iprep_Need Inspection', 'Inspection Needed?'],
   ]},
   { id: 'event_prep', name: 'Job Prep - External', items: EVENT_PREP_GROUPS.flatMap(g => g.items) },
+  { id: 'post_job', name: 'Post Job', items: POST_JOB_ITEMS.map(v => [v, v]) },
 ];
 
 // Contract & financials block — mirrors the RCD_New "Additional Info" form.
@@ -116,6 +129,7 @@ const QUICK_ACTIONS = [
 // ── Helpers ──────────────────────────────────────────────────────
 const EMPTY_FIELDS = {};
 const isOn = v => v === 1 || v === '1';
+const postJobValues = raw => String(raw || '').split(/[\r\n]+/).map(s => s.trim()).filter(Boolean);
 
 
 const num = v => { const n = Number(v); return isNaN(n) ? 0 : n; };
@@ -247,11 +261,37 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
 
   // Phase progress (live, reflects pending edits)
   const phaseStats = useMemo(() => PHASES.map(p => {
+    // Post Job's 4 items share one multi-value field (post_job_phase), so
+    // "done" is membership in that list, not isOn() on a per-item field.
+    if (p.id === 'post_job') {
+      const selected = postJobValues('post_job_phase' in edits ? edits['post_job_phase'] : f['post_job_phase']);
+      const done = p.items.filter(([k]) => selected.includes(k)).length;
+      return { id: p.id, name: p.name, done, all: p.items.length, pct: done / p.items.length };
+    }
     const done = p.items.filter(([k]) => isOn(k in edits ? edits[k] : f[k])).length;
     return { id: p.id, name: p.name, done, all: p.items.length, pct: done / p.items.length };
   }), [edits, f]);
 
   const allPhasesDone = phaseStats.every(s => s.pct >= 1);
+
+  // Type of Project is a 3-rep FMP field (maxRepeat=3) — read/write all three
+  // reps, packed with no gaps, so multi-select works within that ceiling.
+  const projectTypeSelected = [1, 2, 3].map(i => val(`Type of Project(${i})`)).filter(Boolean);
+  const toggleProjectType = t => {
+    const cur = projectTypeSelected;
+    let next;
+    if (cur.includes(t)) next = cur.filter(x => x !== t);
+    else { if (cur.length >= 3) return; next = [...cur, t]; }
+    for (let i = 0; i < 3; i++) stage(`Type of Project(${i + 1})`, next[i] || '');
+  };
+
+  const postJobSelected = postJobValues(val('post_job_phase'));
+  const togglePostJob = v => {
+    const next = postJobSelected.includes(v) ? postJobSelected.filter(x => x !== v) : [...postJobSelected, v];
+    // Write back in canonical order, not click order, so re-reads are stable.
+    stage('post_job_phase', POST_JOB_ITEMS.filter(o => next.includes(o)).join('\r'));
+  };
+
   const merged = mergedStatus({ Status: val('Status') });
   const pipelineIdx = PIPELINE_STAGES.indexOf(merged);
   const startDays = daysUntil(val('rcd start date'));
@@ -432,7 +472,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
               <div className="cv2-hero">
                 <div className="cv2-hero-top">
                   <div className="cv2-hero-id">
-                    <div className="cv2-hero-type">{val('Type of Project(1)') || 'Project'}</div>
+                    <div className="cv2-hero-type">{projectTypeSelected.join(' · ') || 'Project'}</div>
                     <h1 className="cv2-hero-org">{org}</h1>
                     <div className="cv2-hero-contact">
                       {f.zz__Display_Contact__ct && <><span className="cv2-ic">◉</span>{f.zz__Display_Contact__ct}</>}
@@ -535,6 +575,18 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                                     </div>
                                   ))}
                                 </div>
+                              ) : s.id === 'post_job' ? (
+                                <div className="cv2-checks">
+                                  {POST_JOB_ITEMS.map(v => {
+                                    const on = postJobSelected.includes(v);
+                                    return (
+                                      <button key={v} className={`cv2-check${on ? ' on' : ''}`} onClick={() => togglePostJob(v)}>
+                                        <span className="cv2-check-box" style={on ? { background: col, borderColor: col } : undefined}>{on ? '✓' : ''}</span>
+                                        <span className="cv2-check-label">{v}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
                               ) : (
                                 <div className="cv2-checks">
                                   {phase.items.map(([k, label]) => {
@@ -566,7 +618,18 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                 <div className="cv2-card">
                   <div className="cv2-card-head"><span>Details</span></div>
                   <div className="cv2-detail-grid">
-                    <label>Project type</label><InlineSelect value={val('Type of Project(1)')} options={projectTypes} onChange={v => stage('Type of Project(1)', v)} />
+                    <label>Project type <span className="cv2-type-max">(up to 3)</span></label>
+                    <div className="cv2-type-chips">
+                      {projectTypes.map(t => {
+                        const on = projectTypeSelected.includes(t);
+                        const disabled = !on && projectTypeSelected.length >= 3;
+                        return (
+                          <button key={t} type="button" disabled={disabled}
+                            className={`cv2-type-chip${on ? ' on' : ''}`}
+                            onClick={() => toggleProjectType(t)}>{t}</button>
+                        );
+                      })}
+                    </div>
                     <label>Start date</label><InlineDate value={val('rcd start date')} onChange={v => stage('rcd start date', v)} />
                     <label>End date</label><InlineDate value={val('rcd end date')} onChange={v => stage('rcd end date', v)} />
                     <label>Distance to HQ</label><InlineText value={val('Distance to High5')} onChange={v => stage('Distance to High5', v)} placeholder="—" />

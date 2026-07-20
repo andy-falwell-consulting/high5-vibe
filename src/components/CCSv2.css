@@ -276,3 +276,15 @@
 
 /* Board-membership toggle — active ("on board") state */
 .cv2-ghost-btn.cv2-on-board { color: var(--h5-blue); border-color: var(--h5-blue); }
+
+/* Project Type multi-select — FMP field caps at 3 reps (maxRepeat=3). */
+.cv2-type-max { font-size: 11px; text-transform: none; letter-spacing: 0; color: var(--cv2-text-3); opacity: 0.7; }
+.cv2-type-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.cv2-type-chip {
+  padding: 4px 11px; border-radius: 999px; font-size: 13px; cursor: pointer;
+  background: var(--cv2-bg); border: 1px solid var(--cv2-border-2); color: var(--cv2-text-2);
+  transition: all 0.12s;
+}
+.cv2-type-chip:hover:not(:disabled) { border-color: var(--h5-blue); color: var(--cv2-text); }
+.cv2-type-chip.on { background: var(--h5-blue); border-color: var(--h5-blue); color: #fff; }
+.cv2-type-chip:disabled { opacity: 0.4; cursor: not-allowed; }
