@@ -24,14 +24,18 @@ const MODULE_DOCS = [
     <>
       <p>Your directory of organizations and people. The <strong>Type</strong> field (Organization vs
         Individual) reflects the record's organization flag. Filter by status (Active / Inactive /
-        Prospect) or search. Edit fields with Edit → Save.</p>
+        Prospect) or search. Edit fields — including <strong>Title</strong> — with Edit → Save.</p>
+      <p>If a contact is marked <strong>Client Alert</strong>, their name shows in red everywhere it
+        appears — in the list and on their record — with a warning banner on the record itself.</p>
       <p>From a contact you can <strong>compose an email</strong> or <strong>set a reminder</strong>.
         Tabs show related Inspections, Trainings, CCS projects, Estimates, Invoices, Risk items, and
-        related contacts — click a row to open it. Invoices open as the QuickBooks PDF.</p>
+        related contacts (with each person's title, where known) — click a row to open it. Invoices open
+        as the QuickBooks PDF. <strong>Overview</strong> is a merged activity feed scoped to the current
+        year plus the two prior.</p>
     </>
   ) },
   { id: 'estimates', icon: '◧', name: 'Estimates', body: (
-    <p>Client quotes. Edit the title, status, class (New Build / Repair), date, tax, and memo with
+    <p>Client quotes. Edit the title, status, class (New Build / Repair), date, and memo with
       Edit → Save. The line-items table (item, qty, unit price, amount) is read-only; subtotal, tax,
       and total are calculated automatically.</p>
   ) },
@@ -54,13 +58,12 @@ const MODULE_DOCS = [
       attachments panel.</p>
   ) },
   { id: 'eol', icon: '◆', name: 'Edge of Leadership', body: (
-    <p><Tag>View-only</Tag> Leadership-development programs. Same layout as Trainings — program
-      details, Proposed-vs-Actual costs, logistics, and sales pipeline. Currently locked: fields and
-      photos can't be edited.</p>
+    <p><Tag>Not available yet</Tag> No dedicated Edge of Leadership layout exists in FileMaker yet, so
+      there's nothing to show here — this page is a placeholder until one is built.</p>
   ) },
   { id: 'tnd', icon: '✦', name: 'Team Development', body: (
-    <p><Tag>View-only</Tag> Team-building / development programs. Same layout as Trainings. Currently
-      locked: fields and photos can't be edited.</p>
+    <p><Tag>Not available yet</Tag> No dedicated Team Development layout exists in FileMaker yet, so
+      there's nothing to show here — this page is a placeholder until one is built.</p>
   ) },
   { id: 'oe-lookup', icon: '◎', name: 'OE Lookup', body: (
     <p><Tag>Read-only</Tag> A reference of open-enrollment and custom programs — program type and code,
@@ -69,8 +72,8 @@ const MODULE_DOCS = [
   ) },
   { id: 'products', icon: '◫', name: 'Products & Services', body: (
     <>
-      <p>Your internal catalog and Shopify / QuickBooks inventory. Fields include SKU, vendor, type,
-        category, cost, unit price, and descriptions. Edit with Edit → Save.</p>
+      <p>Your internal catalog and Shopify / QuickBooks inventory. Fields include High 5 Sku, vendor,
+        type, category, cost, unit price, and descriptions. Edit with Edit → Save.</p>
       <p>If <strong>Assembly Product</strong> is checked, the item's Price is rolled up from its
         <strong> Bill of Materials</strong> (its components) instead of the unit price — add or change
         components while in Edit mode and they save along with everything else. You can <strong>sync an
@@ -78,11 +81,31 @@ const MODULE_DOCS = [
         category.</p>
     </>
   ) },
+  { id: 'transactions', icon: '⇄', name: 'Transactions', body: (
+    <p><Tag>Read-only</Tag> A live ledger of QuickBooks transactions — invoices, estimates, sales
+      receipts (Shopify orders appear here too), and credit memos. Filter by type or status, search by
+      number / customer, and sort by date, amount, number, or customer. Open a transaction's PDF, or
+      jump straight to it in QuickBooks Online with <strong>Open in QBO</strong>. No editing — this
+      page mirrors QuickBooks, it doesn't write to it.</p>
+  ) },
   { id: 'projects', icon: '◈', name: 'CCS', body: (
-    <p>Challenge-course (CCS) projects, with three views: <strong>Workspace</strong> (full detail),
-      <strong> List</strong> (a sortable table), and <strong>Board</strong> (a kanban by pipeline stage,
-      New inquiry → No Go). Edit project fields in the Workspace view with Edit → Save. You can
-      deep-link to a specific view or project, and search, sort, and filter throughout.</p>
+    <>
+      <p>Challenge-course (CCS) projects, with three views: <strong>Workspace</strong> (full detail),
+        <strong> List</strong> (a sortable table), and <strong>Board</strong> (kanban). Every project has
+        one <strong>status</strong> — Inquiry, In Process, Proposed, Approved, Sent Contract & DI,
+        Confirmed/Scheduled, Completed, No Go, or Other — that drives the record, the pipeline bar, and
+        the board. Edit fields in the Workspace view with Edit → Save. Project Type is
+        multi-select (up to 3), and Lead Builder / Builder options are pulled live from FileMaker, so
+        they're always current.</p>
+      <p><strong>Project phases</strong> are checklists (Pre-Proposal → Post Job). Check an item off as
+        it's done, or mark it <strong>N/A</strong> if it doesn't apply to this project — either way counts
+        it toward the phase reaching 100%. Notes has a <strong>Stamp</strong> button that prepends your
+        name, date, and time.</p>
+      <p>The <strong>Board</strong> only shows jobs the team has put there — it's curated, not automatic.
+        Use <strong>＋ Add projects</strong> to add one; a job drops off on its own once it's Completed or
+        No Go. Within a lane you can drag a card to reorder it — the order is shared, so everyone sees
+        the same arrangement. Dragging a card to a different lane changes its status.</p>
+    </>
   ) },
   { id: 'admin', icon: '⚙', name: 'Admin', body: (
     <p>Settings and integrations. Today it holds the <strong>Shopify connection</strong> (link your
