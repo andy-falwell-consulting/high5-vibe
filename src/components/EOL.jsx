@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { BRAND, UI } from '../config/brandColors'
 import { getRecord, prefetchRecord, updateRecord, invalidateRecord, patchCachedRecord } from '../api/filemaker';
 import { useAllRecords } from '../hooks/useAllRecords';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
@@ -14,10 +15,10 @@ const CACHE_VERSION = 1;
 const RECORDS_LOCKED = true;
 
 const STATUS_COLOR = {
-  'Final Invoiced': '#22c55e',
-  'Ready to Bill':  '#e87722',
-  'No Go':          '#64748b',
-  default:          '#64748b',
+  'Final Invoiced': UI.success,
+  'Ready to Bill':  BRAND.gold,
+  'No Go':          UI.neutral,
+  default:          UI.neutral,
 };
 
 // Proposed vs. actual cost lines. Each row is shown only when at least one side

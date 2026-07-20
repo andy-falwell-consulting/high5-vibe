@@ -5,6 +5,7 @@ import ListToolbar, { useListControls, ListBody } from './ListControls'
 import RecordSaveBar from './RecordSaveBar'
 import RecordFormModal from './RecordFormModal'
 import CreateInQBO from './CreateInQBO'
+import { BRAND, UI } from '../config/brandColors'
 import './Estimates.css'
 
 // FileMaker MM/DD/YYYY → QBO YYYY-MM-DD
@@ -14,28 +15,28 @@ const LAYOUT = 'Estimates_New'
 const CACHE_VERSION = 1
 
 const STATUS_COLOR = {
-  'Draft':       '#64748b',
-  'Sent':        '#3b82f6',
-  'Approved':    '#22c55e',
-  'Declined':    '#ED1C24',
-  'Expired':     '#f59e0b',
-  'Mandatory':   '#c084fc',
-  'Recommended': '#06b6d4',
+  'Draft':       UI.neutral,
+  'Sent':        BRAND.blue,
+  'Approved':    UI.success,
+  'Declined':    BRAND.red,
+  'Expired':     BRAND.gold,
+  'Mandatory':   BRAND.purple,
+  'Recommended': '#4FC3E8',
 }
 
 // QBO's own approval status (TxnStatus), synced back one-way by
 // api/qbo-estimate-sync.js — distinct vocabulary from FMP's own `Status`
 // field above, so it's shown as a separate chip, not merged into it.
 const QBO_STATUS_COLOR = {
-  'Pending':  '#f59e0b',
-  'Accepted': '#22c55e',
-  'Closed':   '#64748b',
-  'Rejected': '#ED1C24',
+  'Pending':  BRAND.gold,
+  'Accepted': UI.success,
+  'Closed':   UI.neutral,
+  'Rejected': BRAND.red,
 }
 
 const TYPE_COLOR = {
-  'New Build': '#c084fc',
-  'Repair':    '#fb923c',
+  'New Build': BRAND.purple,
+  'Repair':    BRAND.gold,
 }
 
 function fmtCurrency(val) {

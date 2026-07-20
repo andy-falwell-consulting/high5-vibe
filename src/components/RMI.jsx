@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { getRecord, updateRecord, invalidateRecord, patchCachedRecord, createRecord, addCachedRecord } from '../api/filemaker'
 import { useAllRecords } from '../hooks/useAllRecords'
+import { BRAND, UI } from '../config/brandColors'
 import ListToolbar, { useListControls, ListBody } from './ListControls'
 import RecordSaveBar from './RecordSaveBar'
 import RecordFormModal from './RecordFormModal'
@@ -10,15 +11,15 @@ const LAYOUT = 'RMI_New'
 const CACHE_VERSION = 1
 
 const STATUS_COLOR = {
-  Active:   '#ED1C24',
-  Resolved: '#22c55e',
-  default:  '#64748b',
+  Active:   UI.danger,
+  Resolved: UI.success,
+  default:  UI.neutral,
 }
 
 const LEVEL_COLOR = {
-  High:   '#ED1C24',
-  Medium: '#f59e0b',
-  Low:    '#22c55e',
+  High:   UI.danger,
+  Medium: BRAND.gold,
+  Low:    UI.success,
 }
 
 // Risk-screening questions. Field keys are Question, Question_2..7.

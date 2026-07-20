@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { BRAND, UI } from '../config/brandColors'
 import { readCacheAsync } from '../api/filemaker'
 import { RCD_CACHE_VERSION } from '../config/ccsCache'
 import './Home.css'
@@ -11,12 +12,12 @@ const PIPELINE_SHORT = ['New inquiry', 'Working', 'Proposals out', 'Contract sen
 
 function statusColor(s) {
   const t = (s || '').toLowerCase()
-  if (t.includes('complet')) return '#22c55e'
-  if (t.includes('no go') || t.includes('cancel')) return '#94a3b8'
-  if (t.includes('progress')) return '#a855f7'
-  if (t.includes('confirm') || t.includes('schedul')) return '#3b82f6'
-  if (t.includes('propos') || t.includes('inquir')) return '#e8a23a'
-  return '#94a3b8'
+  if (t.includes('complet')) return UI.success
+  if (t.includes('no go') || t.includes('cancel')) return UI.muted
+  if (t.includes('progress')) return BRAND.purple
+  if (t.includes('confirm') || t.includes('schedul')) return BRAND.blue
+  if (t.includes('propos') || t.includes('inquir')) return BRAND.gold
+  return UI.muted
 }
 const parseFmDate = v => {
   if (!v) return null

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { BRAND, UI } from '../config/brandColors'
 import { getRecord, prefetchRecord, updateRecord, createRecord, addCachedRecord, addPortalRow, invalidateRecord, deleteRecord, findInLayout } from '../api/filemaker';
 import { useAllRecords } from '../hooks/useAllRecords';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
@@ -54,10 +55,10 @@ const METHOD_CONFIG = {
 };
 
 const STATUS_COLOR = {
-  Active: '#22c55e',
-  Inactive: '#64748b',
-  Prospect: '#e87722',
-  default: '#64748b',
+  Active: UI.success,
+  Inactive: UI.neutral,
+  Prospect: BRAND.gold,
+  default: UI.neutral,
 };
 
 const STATUS_OPTIONS = ['Active', 'Inactive', 'Prospect'];

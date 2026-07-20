@@ -9,6 +9,7 @@ import { pushToShopify, pushToQBO } from '../api/integrations';
 import RichTextEditor, { sanitizeHtml } from './RichTextEditor';
 import { useAllRecords } from '../hooks/useAllRecords';
 import { CATEGORIES, TYPES, VENDORS, QBO_INCOME, QBO_CLASS } from '../config/productOptions';
+import { BRAND } from '../config/brandColors';
 import './ProductsAndServicesV2.css';
 
 const LAYOUT = 'Products & Services_New';
@@ -26,11 +27,13 @@ const FIELD_LABELS = {
   qbo_class: 'QBO Class',
 };
 
+// Categorical distinctions drawn from the brand palette (see brandColors.js).
+// Lumber → khaki is a deliberate wood cue; red is left out (accent-reserved).
 const CATEGORY_COLORS = {
-  Hardware: '#3b82f6', Labor: '#8b5cf6', Lumber: '#f59e0b',
-  Tool: '#10b981', Training: '#ec4899', Catalog: '#6366f1',
-  'Low Element': '#14b8a6', 'High Element': '#f97316',
-  'Typical Component': '#64748b', Repair: '#ef4444',
+  Hardware: BRAND.blue, Labor: BRAND.purple, Lumber: BRAND.khaki,
+  Tool: BRAND.mustard, Training: BRAND.gold, Catalog: '#4FC3E8',
+  'Low Element': '#B968B4', 'High Element': '#C2740C',
+  'Typical Component': '#A98F3E', Repair: '#8A7B4F',
 };
 
 const URL_RE = /https?:\/\/[^\s\r\n]+/g;

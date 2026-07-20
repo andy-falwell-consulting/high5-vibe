@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { BRAND, UI } from '../config/brandColors'
 import { DndContext, closestCenter, DragOverlay } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useAllRecords } from '../hooks/useAllRecords';
@@ -19,10 +20,10 @@ const PROJECT_TYPES   = ['Inspection','New Construction','Renovation','Repair','
 const BUILDER_OPTIONS = ['','Lucas Germano','Ian Doak','Mike Hicks','Sam Bates','Dan Smith','Chris Young'];
 
 const STATUS_COLOR = {
-  'Proposed':    '#e87722', 'Confirmed':   '#3b82f6', 'In Progress': '#a855f7',
-  'Complete':    '#22c55e', 'Cancelled':   '#64748b', 'On Hold':     '#f59e0b',
+  'Proposed':    BRAND.gold, 'Confirmed':   BRAND.blue, 'In Progress': BRAND.purple,
+  'Complete':    UI.success, 'Cancelled':   UI.neutral, 'On Hold':     BRAND.mustard,
 };
-const statusColor = s => STATUS_COLOR[s] || '#64748b';
+const statusColor = s => STATUS_COLOR[s] || UI.neutral;
 
 const fmtDate = val => {
   if (!val) return null;

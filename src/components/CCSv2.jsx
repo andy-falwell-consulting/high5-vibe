@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useAllRecords } from '../hooks/useAllRecords';
 import { useValueLists } from '../hooks/useValueLists';
+import { BRAND, UI } from '../config/brandColors';
 import { RCD_LAYOUT, RCD_CACHE_VERSION, RCD_FIND_QUERY, RCD_SORT } from '../config/ccsCache';
 import { getRecord, prefetchRecord, updateRecord, patchCachedRecord, invalidateRecord } from '../api/filemaker';
 import { getCurrentEnv } from '../config/fmpEnvironments';
@@ -125,13 +126,13 @@ const isOn = v => v === 1 || v === '1';
 
 function statusColor(s) {
   const t = (s || '').toLowerCase();
-  if (t.includes('complet')) return '#22c55e';
-  if (t.includes('no go') || t.includes('cancel')) return '#94a3b8';
-  if (t.includes('progress')) return '#a855f7';
-  if (t.includes('confirm') || t.includes('schedul')) return '#3b82f6';
-  if (t.includes('propos') || t.includes('inquir')) return '#e8a23a';
-  if (t.includes('hold')) return '#f59e0b';
-  return '#94a3b8';
+  if (t.includes('complet')) return UI.success;
+  if (t.includes('no go') || t.includes('cancel')) return UI.muted;
+  if (t.includes('progress')) return BRAND.purple;
+  if (t.includes('confirm') || t.includes('schedul')) return BRAND.blue;
+  if (t.includes('propos') || t.includes('inquir')) return BRAND.gold;
+  if (t.includes('hold')) return BRAND.mustard;
+  return UI.muted;
 }
 
 const num = v => { const n = Number(v); return isNaN(n) ? 0 : n; };
