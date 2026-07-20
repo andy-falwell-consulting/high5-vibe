@@ -93,6 +93,11 @@ export default function RecordFormModal({ title, fields, submitLabel = 'Create',
             const pk = contact.fieldData?.[f.valueField || '_kpt__Contact_ID']
             const label = contact.fieldData?.[f.labelField || 'zz__Display__ct'] || contact.fieldData?.Name_Organization
             set(f.key, pk)
+            // Some layouts resolve their site via a text org field, not the FK
+            // (Inspections' inspt_CNTCT__site keys on Organization). When the
+            // field declares orgField, mirror the picked org name into it so the
+            // site actually shows — otherwise the record looks "unlinked".
+            if (f.orgField) set(f.orgField, contact.fieldData?.Name_Organization || label || '')
             setLabels(l => ({ ...l, [f.key]: label }))
             setPickerField(null)
           }}

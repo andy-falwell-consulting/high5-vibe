@@ -203,8 +203,10 @@ function PortalTable({ id, rows, onOpenRow, onRemove }) {
       <tbody>{rows.map((r, i) => <tr key={i}><td className="mono">{r['cntct_WKSRG::Course Number']}</td><td>{r['cntct_WKSRG::Course Name']}</td><td>{r['cntct_WKSRG::zz__Display_Organization__ct']}</td><td>{r['cntct_WKSRG::Start Date']}</td><td>{r['cntct_WKSRG::End Date']}</td></tr>)}</tbody></table>
   );
   if (id === 'ccs') return (
-    <table className="ct-table"><thead><tr><th>ID</th><th>Status</th><th>Organization</th><th>Type</th><th>Start</th></tr></thead>
-      <tbody>{rows.map((r, i) => <tr key={i} {...linkProps(r)}><td className="mono">{r['cntct_RCD::_kpt__RCD_ID']}</td><td>{r['cntct_RCD::Status']}</td><td>{r['cntct_RCD::zz__Display_Organization__ct']}</td><td>{r['cntct_RCD::zz__TypeOfProjectList__ct']}</td><td>{r['cntct_RCD::rcd start date']}</td></tr>)}</tbody></table>
+    // Columns mirror the Custom Training tab (Organization / Contact / Type /
+    // Start / Status) per Ian's request to match its layout.
+    <table className="ct-table"><thead><tr><th>Organization</th><th>Contact</th><th>Type</th><th>Start</th><th>Status</th></tr></thead>
+      <tbody>{rows.map((r, i) => <tr key={i} {...linkProps(r)}><td>{r['cntct_RCD::zz__Display_Organization__ct']}</td><td>{r['cntct_RCD::zz__Display_Contact__ct']}</td><td>{r['cntct_RCD::zz__TypeOfProjectList__ct']}</td><td>{r['cntct_RCD::rcd start date']}</td><td>{r['cntct_RCD::Status']}</td></tr>)}</tbody></table>
   );
   if (id === 'certifications') return (
     <table className="ct-table"><thead><tr><th>Certificate dates</th></tr></thead>

@@ -213,7 +213,7 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
 
   // ── Create a new inspection ──
   const createFields = [
-    { key: '_kft__Contact_ID', label: 'Site / Contact', type: 'contact', required: true },
+    { key: '_kft__Contact_ID', label: 'Site / Contact', type: 'contact', required: true, orgField: 'Organization' },
     { key: 'Date',            label: 'Date',           type: 'date', default: new Date().toLocaleDateString('en-US') },
     { key: 'Inspectors Name', label: 'Inspector Name', type: 'text' },
   ];

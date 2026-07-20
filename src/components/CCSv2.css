@@ -180,8 +180,16 @@
 .cv2-inline { width: 100%; box-sizing: border-box; background: transparent; border: 1px solid transparent; border-radius: 6px; color: var(--cv2-text); font-size: 17px; padding: 5px 8px; font-family: inherit; outline: none; }
 .cv2-inline:hover { background: var(--cv2-surface-2); }
 .cv2-inline:focus { background: var(--cv2-bg); border-color: var(--cv2-accent); }
-.cv2-inline-area { resize: vertical; min-height: 56px; line-height: 1.5; }
+/* Auto-grown by JS to fit content, so no manual resize and no inner scrollbar. */
+.cv2-inline-area { resize: none; overflow: hidden; min-height: 56px; line-height: 1.5; }
 .cv2-inline-area-lg { min-height: 250px; }
+.cv2-stamp-btn {
+  margin-left: 8px; font-size: 11px; padding: 1px 8px; border-radius: 4px;
+  background: #1a1d27; border: 1px solid var(--cv2-border); color: var(--cv2-muted);
+  cursor: pointer; vertical-align: middle;
+}
+.cv2-stamp-btn:hover { border-color: #e87722; color: #e87722; }
+[data-theme="light"] .cv2-stamp-btn { background: #f1f5f9; border-color: #e2e8f0; color: #334155; }
 .cv2-inline-select { cursor: pointer; appearance: none; }
 .cv2-inline-date { color-scheme: dark; }
 [data-theme="light"] .cv2-inline-date { color-scheme: light; }

@@ -189,8 +189,22 @@ function Avatar({ name, lead }) {
   );
 }
 
+// Textarea that grows to fit its content so no note is ever clipped or hidden
+// behind a scrollbar (per Ian's Job Prep feedback). Height is recomputed on
+// every value change, including when switching records.
+function AutoGrowArea({ value, className, placeholder, onChange }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+  return <textarea ref={ref} className={className} rows={2} value={value || ''} placeholder={placeholder} onChange={e => onChange(e.target.value)} />;
+}
+
 function InlineText({ value, onChange, placeholder, area, big }) {
-  if (area) return <textarea className={`cv2-inline cv2-inline-area${big ? ' cv2-inline-area-lg' : ''}`} rows={3} value={value || ''} placeholder={placeholder} onChange={e => onChange(e.target.value)} />;
+  if (area) return <AutoGrowArea className={`cv2-inline cv2-inline-area${big ? ' cv2-inline-area-lg' : ''}`} value={value} placeholder={placeholder} onChange={onChange} />;
   return <input className="cv2-inline" value={value || ''} placeholder={placeholder} onChange={e => onChange(e.target.value)} />;
 }
 function InlineSelect({ value, options, onChange }) {
@@ -231,6 +245,20 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   const f = useMemo(() => selected?.fieldData || EMPTY_FIELDS, [selected]);
   const val = useCallback(fk => (fk in edits ? edits[fk] : f[fk]), [edits, f]);
   const stage = useCallback((fk, v) => setEdits(p => ({ ...p, [fk]: v })), []);
+
+  // FMP-style "Stamp": prepend "user M/D/YYYY h:mm:ss AM/PM:" to a notes field,
+  // matching the Trainings module so entries read consistently across the app.
+  const stampNote = useCallback((fk) => {
+    let user = 'admin';
+    try { user = sessionStorage.getItem('fmp_user_name') || 'admin'; } catch { /* unavailable */ }
+    const now = new Date();
+    const stamp = `${user} ${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()} ${now.toLocaleTimeString('en-US')}:`;
+    setEdits(p => {
+      const cur = fk in p ? p[fk] : (f[fk] || '');
+      const curText = typeof cur === 'string' ? cur.replace(/\r/g, '\n') : (cur ?? '');
+      return { ...p, [fk]: `${stamp}\n${curText ? `\n${curText}` : ''}` };
+    });
+  }, [f]);
   const toggle = useCallback(fk => setEdits(p => ({ ...p, [fk]: isOn(fk in p ? p[fk] : f[fk]) ? 0 : 1 })), [f]);
 
   // Phase progress (live, reflects pending edits)
@@ -568,7 +596,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                     <InlineText value={val('Work Order')} onChange={v => stage('Work Order', v)} placeholder="Add a work order…" area big />
                   </div>
                   <div className="cv2-field-block">
-                    <label>Notes</label>
+                    <label>Notes <button type="button" className="cv2-stamp-btn" onClick={() => stampNote('Notes')}>⏱ Stamp</button></label>
                     <InlineText value={val('Notes')} onChange={v => stage('Notes', v)} placeholder="Add notes…" area />
                   </div>
                 </div>

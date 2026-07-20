@@ -385,3 +385,40 @@ const onMouseDown = useCallback(e => {
 .xx-resize-handle { width: 4px; background: #1e2130; cursor: col-resize; flex-shrink: 0; transition: background 0.15s; }
 .xx-resize-handle:hover { background: #e8322a; }
 ```
+
+---
+
+## Logging High5 hours to the timesheet
+
+At the end of each real working session on the High5 project, propose a time-log
+entry for Andy to approve before writing anything. The flow is always:
+
+1. **Estimate** the hours for the session, broken out across the categories below.
+2. **Show Andy** the proposed entry (date + category hours + a short note on what
+   was accomplished).
+3. **Only after Andy approves**, write the record to Airtable.
+
+Never write a timesheet entry without Andy's sign-off. If a session ended without
+logging, log it retroactively next time using whatever hours Andy provides.
+
+### Where the timesheet lives (Airtable)
+
+- **Base:** "AF Consulting" — `appJhPgh4DC9vRTvw`
+- **Table:** "Work Log" — `tblqcAgVQ151CwLLb`
+- **Client field** (single-select): set to `High5`
+- **Date field:** the work date for the entry
+- **Category fields** (number fields — enter hours in the relevant ones):
+  Research, Meetings, Strategy, Architecture/Design, Building, Documentation, Training
+- **Total Hours** is a *formula* field — it sums the categories automatically.
+  Do NOT try to set it directly.
+- **Notes:** free-text field for the short summary of what was done.
+
+Entries roll up automatically into the monthly "Time Sheet Roll-Up" table, so a
+correct Work Log entry is all that's needed.
+
+### Capability note
+
+Writing to Airtable requires the Airtable MCP connection to be configured in this
+Claude Code environment. If it isn't connected, prepare the proposed entry as text
+for Andy to enter manually, and let him know the connection needs setting up.
+I
