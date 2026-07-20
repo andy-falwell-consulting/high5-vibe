@@ -630,3 +630,16 @@
 [data-theme="light"] .ct-act-sub, [data-theme="light"] .ct-act-date { color: #5e6b7c; }
 [data-theme="light"] .ct-notes-display, [data-theme="light"] .ct-kv-v.link { color: #334155; }
 [data-theme="light"] .ct-kv-v.link { color: #2563eb; }
+
+/* Client Alert — mirrors FileMaker's behavior of turning a flagged contact's
+   name red everywhere it appears, so it reads at a glance in the list too. */
+.ct-item-name.ct-alert-name,
+.ct-hero-name.ct-alert-name,
+[data-theme="light"] .ct-item-name.ct-alert-name,
+[data-theme="light"] .ct-hero-name.ct-alert-name,
+[data-theme="light"] .ct-list-item.active .ct-item-name.ct-alert-name {
+  color: var(--h5-red);
+}
+.ct-alert-toggle { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; color: #cbd5e1; }
+.ct-alert-toggle input { width: 16px; height: 16px; cursor: pointer; accent-color: var(--h5-red); }
+[data-theme="light"] .ct-alert-toggle { color: #334155; }

@@ -68,6 +68,11 @@ const STATUS_OPTIONS = ['Active', 'Inactive', 'Prospect'];
 // that flag rather than the legacy free-text `Type` field, which isn't used.
 const typeLabel = fd => String(fd?.Organization) === '1' ? 'Organization' : 'Individual';
 
+// Client_Alert is a checkbox field ("1" = flagged). In FileMaker a flagged
+// contact's name renders red on every layout it appears on; mirror that here
+// so the alert is visible at a glance in both the list and the record.
+const hasClientAlert = fd => String(fd?.Client_Alert) === '1';
+
 const FIELD_LABELS = {
   Name_Organization: 'Name / Organization', Organization: 'Type', Status: 'Status',
   Industry: 'Industry', Department: 'Department', Source: 'Source',
@@ -170,6 +175,15 @@ function buildActivity(p) {
 
 function FieldValue({ fieldKey, value, onChange, editing }) {
   const ch = v => onChange(fieldKey, v);
+  if (fieldKey === 'Client_Alert') {
+    const on = String(value) === '1';
+    return (
+      <label className="ct-alert-toggle">
+        <input type="checkbox" checked={on} onChange={e => ch(e.target.checked ? '1' : '')} />
+        <span>{on ? 'Flagged — client alert is active' : 'Not flagged'}</span>
+      </label>
+    );
+  }
   if (!editing) {
     if (fieldKey === 'Notes') return <div className="ct-notes-display">{value || '—'}</div>;
     if (fieldKey === 'Organization') return <span className="ct-value">{String(value) === '1' ? 'Organization' : 'Individual'}</span>;
@@ -466,7 +480,11 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
                 >
                   <span className="ct-item-dot" style={{ background: color }} />
                   <div className="ct-item-text">
-                    <div className="ct-item-name">{r.fieldData.zz__Display__ct || r.fieldData.Name_Organization || '—'}</div>
+                    <div className={`ct-item-name${hasClientAlert(r.fieldData) ? ' ct-alert-name' : ''}`}
+                      title={hasClientAlert(r.fieldData) ? 'Client Alert' : undefined}>
+                      {hasClientAlert(r.fieldData) && <span className="ct-alert-i" aria-hidden="true">⚠ </span>}
+                      {r.fieldData.zz__Display__ct || r.fieldData.Name_Organization || '—'}
+                    </div>
                     <div className="ct-item-sub">{r.fieldData['cntct_ADDR::zz__Display_Single_Line_No_Zip__ct'] || typeLabel(r.fieldData)}</div>
                   </div>
                 </div>
@@ -505,7 +523,7 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
               <div className="ct-avatar">{initialsOf(f.zz__Display__ct || f.Name_Organization)}</div>
               <div className="ct-hero-main">
                 <div className="ct-hero-titlerow">
-                  <h1 className="ct-hero-name">{f.zz__Display__ct || f.Name_Organization || '—'}</h1>
+                  <h1 className={`ct-hero-name${hasClientAlert(f) ? ' ct-alert-name' : ''}`}>{f.zz__Display__ct || f.Name_Organization || '—'}</h1>
                   {f.Status && (
                     <span className="ct-chip status" style={{ background: (STATUS_COLOR[f.Status] || '#64748b') + '22', color: STATUS_COLOR[f.Status] || '#64748b', borderColor: (STATUS_COLOR[f.Status] || '#64748b') + '44' }}>{f.Status}</span>
                   )}
@@ -570,8 +588,8 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
                   )}
                 </div>
 
-                {val('Client_Alert') && (
-                  <div className="ct-alert"><span className="ct-alert-i">⚠</span><span>{val('Client_Alert')}</span></div>
+                {hasClientAlert(f) && (
+                  <div className="ct-alert"><span className="ct-alert-i">⚠</span><span>Client Alert — use caution with this contact.</span></div>
                 )}
               </div>
 
