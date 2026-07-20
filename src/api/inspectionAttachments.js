@@ -1,6 +1,6 @@
 // Attachments for an inspection — stored as files in the related Inspections_Pics
 // container table (FK = ID = the inspection's _kpt__Inspection_ID).
-import { findInLayout, createRecord, deleteRecord, uploadContainer, containerImageUrl, getRecordWithPortals, getRecord, invalidateRecord } from './filemaker';
+import { findInLayout, createRecord, deleteRecord, uploadContainer, containerImageUrl, getRecordWithPortals, getRecord, invalidateRecord, resetFmpSession } from './filemaker';
 import { getCurrentEnv } from '../config/fmpEnvironments';
 import { generateInspectionReport, inspectionMeta } from './inspectionReport';
 
@@ -80,8 +80,11 @@ export async function uploadAttachment(inspectionId, file, filename) {
 // time for a guaranteed-fresh, working URL — keeps attachments openable and
 // downloadable indefinitely. (In prod containerImageUrl resolves to the stable
 // /api/image endpoint, which is already durable; this keeps both envs correct.)
+// Also force a brand-new FMP session: the server can evict sessions under
+// concurrent load, so reusing the current one can mint an already-dead URL.
 export async function getFreshAttachmentUrl(recordId) {
   invalidateRecord(PICS_LAYOUT, recordId); // bypass the detail cache
+  resetFmpSession();
   const res = await getRecord(PICS_LAYOUT, recordId);
   const streaming = res?.response?.data?.[0]?.fieldData?.[CONTAINER];
   if (!streaming) return null;

@@ -36,6 +36,18 @@ let sessionToken = null;
 let _tokenEnvId = null;
 let _tokenPromise = null; // shared in-flight auth, so a burst of calls mints one token
 
+// Force the next getToken() call to mint a brand-new FMP Data API session
+// instead of reusing the current one. Container-streaming URLs embed a token
+// tied to the specific session active when the record was fetched; FMP Server
+// can evict sessions under concurrent load well before our client-side copy
+// would otherwise expire, so a reused session can mint a streaming URL that's
+// already invalid. Called right before minting a fresh attachment/report URL
+// (see recordAttachments.js / inspectionAttachments.js) to shrink that window
+// to a single round-trip instead of "however long since the list last loaded".
+export function resetFmpSession() {
+  sessionToken = null;
+}
+
 // ── Per-user OAuth session (for write attribution) ────────────────
 // The user's FileMaker identity (minted server-side via ensureFmpUserSession →
 // /api/fmp-user-token, Basic auth as their account). We hold this user-bound
