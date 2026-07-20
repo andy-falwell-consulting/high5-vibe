@@ -5,15 +5,6 @@
     { "source": "/oauth/:path*", "destination": "/api/proxy?prefix=oauth&path=:path*" },
     { "source": "/fmws/:path*", "destination": "/api/proxy?prefix=fmws&path=:path*" }
   ],
-  "_crons_note": [
-    "Every cron here spends Upstash Redis commands, and the quota is a hard",
-    "monthly cap — exhausting it takes down anything Redis-backed, including",
-    "/api/google-auth (i.e. nobody can log in). The previous schedule ran ~1,584",
-    "invocations/day against a ~16,700 command/day budget and blew the cap on",
-    "2026-07-19. Dev crons were dropped entirely (sync Dev by hand when needed)",
-    "and the rest were slowed to fit. Before adding or speeding up a cron, work",
-    "out the daily command cost first."
-  ],
   "crons": [
     { "path": "/api/sync?db=High5_Core4", "schedule": "*/5 * * * *" },
     { "path": "/api/qbo-invoice-sync?db=High5_Core4", "schedule": "*/15 * * * *" },

@@ -422,3 +422,21 @@ Writing to Airtable requires the Airtable MCP connection to be configured in thi
 Claude Code environment. If it isn't connected, prepare the proposed entry as text
 for Andy to enter manually, and let him know the connection needs setting up.
 I
+---
+
+## Cron / Redis budget (read before touching `vercel.json` crons)
+
+Every cron in `vercel.json` spends Upstash Redis commands, and the quota is a
+**hard monthly cap**. Exhausting it takes down *everything* Redis-backed —
+including `/api/google-auth`, so **nobody can log in** (prod and preview alike).
+This happened on 2026-07-19: the schedule was running ~1,584 invocations/day
+against a ~16,700 command/day budget and blew the cap.
+
+Rules:
+- **Do NOT add comment keys to `vercel.json`.** Vercel validates it against a
+  strict schema and rejects any unknown top-level property (e.g. `_crons_note`)
+  — the build fails with a schema error and the deploy never ships. JSON has no
+  comments; keep cron rationale here instead.
+- Dev crons were dropped entirely (sync Dev by hand when needed); prod crons
+  were slowed to fit (~530/day now). Before adding or speeding up a cron, work
+  out its daily command cost first.
