@@ -225,7 +225,7 @@ function PortalTable({ id, rows, onOpenRow, onRemove }) {
             <td className="mono">#{r['cntct_INVO::QuickBooks_Reference_Number'] || '—'}</td>
             <td>{r['cntct_INVO::Date']}</td>
             <td className="num">{money(info.total)}</td>
-            <td className="num" style={{ color: info.balance > 0 ? '#e8322a' : 'inherit' }}>{money(info.balance)}</td>
+            <td className="num" style={{ color: info.balance > 0 ? '#ED1C24' : 'inherit' }}>{money(info.balance)}</td>
             <td>{info.status}</td>
           </tr>
         );
@@ -529,7 +529,7 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
               <div className="ct-metric"><div className="ct-metric-v">{metrics.inspections}</div><div className="ct-metric-l">Inspections</div></div>
               <div className="ct-metric"><div className="ct-metric-v">{metrics.ccs}</div><div className="ct-metric-l">CCS projects</div></div>
               <div className="ct-metric"><div className="ct-metric-v">{metrics.invoices}</div><div className="ct-metric-l">Invoices</div></div>
-              <div className="ct-metric"><div className="ct-metric-v" style={{ color: metrics.openBalance > 0 ? '#e8322a' : undefined }}>{money(metrics.openBalance)}</div><div className="ct-metric-l">Open balance</div></div>
+              <div className="ct-metric"><div className="ct-metric-v" style={{ color: metrics.openBalance > 0 ? '#ED1C24' : undefined }}>{money(metrics.openBalance)}</div><div className="ct-metric-l">Open balance</div></div>
             </div>
 
 

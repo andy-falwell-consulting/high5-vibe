@@ -1,4 +1,16 @@
 :root {
+  /* High 5 brand palette — from the official style sheet. Red is sampled from
+     the logo (Pantone Red); the rest are sRGB conversions of the PMS spot
+     colours. Brand constants, so defined once (not per-theme). Red is reserved
+     for accents/"the stripe" and must never sit on a red background. */
+  --h5-red: #ED1C24;       /* Pantone Red — primary accent */
+  --h5-gold: #ED8B00;      /* PMS 144 */
+  --h5-blue: #009CDE;      /* PMS 2925 */
+  --h5-mustard: #DAAA00;   /* PMS 110 */
+  --h5-khaki: #C6B784;     /* PMS 466 */
+  --h5-purple: #92368D;    /* PMS 513 */
+  --h5-black: #000000;
+
   --text: #6b6375;
   --text-h: #08060d;
   --bg: #fff;

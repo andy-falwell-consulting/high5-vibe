@@ -147,7 +147,7 @@
 
 .kb-col--over {
   background: #171a2c;
-  box-shadow: 0 0 0 2px var(--col-color, #e8322a);
+  box-shadow: 0 0 0 2px var(--col-color, var(--h5-red));
 }
 
 .kb-col-header {

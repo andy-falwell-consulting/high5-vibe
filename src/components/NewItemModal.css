@@ -114,7 +114,7 @@
 }
 .nim-grid input:focus, .nim-grid select:focus,
 .nim-wide input:focus, .nim-wide textarea:focus,
-.nim-wide select:focus { border-color: #e8322a; }
+.nim-wide select:focus { border-color: var(--h5-red); }
 
 .nim-wide textarea { resize: vertical; min-height: 72px; }
 
@@ -137,7 +137,7 @@
   font-size: 17px;
   color: #94a3b8;
 }
-.nim-toggle input[type=checkbox] { accent-color: #e8322a; width: 14px; height: 14px; cursor: pointer; }
+.nim-toggle input[type=checkbox] { accent-color: var(--h5-red); width: 14px; height: 14px; cursor: pointer; }
 .nim-toggle strong { color: #e2e8f0; }
 
 .nim-footer {
@@ -155,7 +155,7 @@
 }
 .nim-btn.cancel { background: #1e2130; color: #94a3b8; border: 1px solid #2a2f45; margin-left: auto; }
 .nim-btn.cancel:hover { background: #252a3d; color: #e2e8f0; }
-.nim-btn.save { background: linear-gradient(135deg, #e8322a, #c52020); color: #fff; }
+.nim-btn.save { background: linear-gradient(135deg, var(--h5-red), #c52020); color: #fff; }
 .nim-btn.save:disabled { opacity: 0.5; cursor: not-allowed; }
 .nim-btn.save:not(:disabled):hover { background: linear-gradient(135deg, #ef4444, #dc2626); }
 

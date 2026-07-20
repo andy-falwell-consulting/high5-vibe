@@ -30,27 +30,26 @@
 }
 .ls-scene svg { display: block; width: 100%; height: 100%; }
 
-/* Logo — straddles the scene and the card body */
+/* Logo — official High 5 mark on a white card, straddling scene and body. The
+   logo's lower band is black-on-white, so the card gives it the light backing
+   it needs. */
 .ls-logo {
   position: absolute;
-  top: 118px;
+  top: 92px;
   left: 50%;
   transform: translateX(-50%);
-  width: 62px;
-  height: 62px;
-  border-radius: 17px;
-  background: #1a1a1a;
-  color: #e8322a;
+  width: 78px;
+  padding: 9px 11px;
+  border-radius: 16px;
+  background: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Oswald', sans-serif;
-  font-size: 30px;
-  font-weight: 700;
-  border: 3px solid #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.06);
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.22);
   z-index: 2;
 }
+.ls-logo img { width: 100%; height: auto; display: block; }
 
 .ls-body {
   padding: 46px 38px 34px;
@@ -73,7 +72,7 @@
   margin: 0;
   font-size: 15px;
   font-weight: 600;
-  color: #e8322a;
+  color: var(--h5-red);
   letter-spacing: 0.01em;
 }
 

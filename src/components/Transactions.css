@@ -14,7 +14,7 @@
 .txn-virtual { position: relative; width: 100%; }
 .txn-row { position: absolute; left: 0; right: 0; height: 54px; box-sizing: border-box; display: flex; align-items: center; gap: 10px; padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #171a26; }
 .txn-row:hover { background: #171a26; }
-.txn-row.active { background: #1a1f2e; box-shadow: inset 3px 0 0 #e8322a; }
+.txn-row.active { background: #1a1f2e; box-shadow: inset 3px 0 0 var(--h5-red); }
 .txn-type { flex-shrink: 0; width: 34px; text-align: center; font-size: 11px; font-weight: 700; padding: 3px 0; border-radius: 5px; letter-spacing: 0.03em; }
 .txn-row-main { flex: 1; min-width: 0; }
 .txn-row-top, .txn-row-sub { display: flex; justify-content: space-between; gap: 8px; }
@@ -37,7 +37,7 @@
 [data-theme="light"] .txn-detail-qbo { color: #64748b; background: #f1f5f9; border-color: #e2e8f0; }
 .txn-detail-actions { display: flex; gap: 8px; }
 .txn-pdf-btn { display: inline-flex; align-items: center; background: #1e2130; border: 1px solid #2a2f45; color: #e2e8f0; border-radius: 7px; padding: 7px 14px; cursor: pointer; font-family: inherit; font-size: 14px; text-decoration: none; }
-.txn-pdf-btn:hover:not(:disabled) { border-color: #e8322a; }
+.txn-pdf-btn:hover:not(:disabled) { border-color: var(--h5-red); }
 .txn-pdf-btn:disabled { opacity: 0.5; cursor: default; }
 
 .txn-kpis { flex-shrink: 0; display: flex; gap: 12px; flex-wrap: wrap; }

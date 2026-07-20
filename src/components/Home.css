@@ -30,7 +30,7 @@
 .home-card-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
 .home-card-head > span:first-child { font-size: 17px; font-weight: 600; color: #f1f5f9; }
 .home-link { background: none; border: none; color: #8b97aa; font-size: 15px; cursor: pointer; font-family: inherit; }
-.home-link:hover { color: #e8322a; }
+.home-link:hover { color: var(--h5-red); }
 
 .home-pipe { display: flex; align-items: flex-end; gap: 8px; height: 96px; }
 .home-pipe-stage { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; }

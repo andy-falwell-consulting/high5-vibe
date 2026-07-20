@@ -26,7 +26,7 @@
 .rfm-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .rfm-field.wide { grid-column: 1 / -1; }
 .rfm-label { font-size: 12px; font-weight: 600; letter-spacing: 0.04em; color: #94a3b8; text-transform: uppercase; }
-.rfm-req { color: #e8322a; }
+.rfm-req { color: var(--h5-red); }
 
 .rfm-field input, .rfm-field select, .rfm-field textarea {
   width: 100%; box-sizing: border-box;
@@ -49,11 +49,11 @@
   display: flex; align-items: center; justify-content: flex-end; gap: 10px;
   padding: 14px 20px; border-top: 1px solid #1e2130; flex-shrink: 0;
 }
-.rfm-error { margin-right: auto; color: #e8322a; font-size: 14px; }
+.rfm-error { margin-right: auto; color: var(--h5-red); font-size: 14px; }
 .rfm-btn { padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; border: 1px solid transparent; }
 .rfm-btn.cancel { background: transparent; color: #94a3b8; border-color: #2d3148; }
 .rfm-btn.cancel:hover:not(:disabled) { color: #e2e8f0; border-color: #4a5568; }
-.rfm-btn.save { background: #e8322a; color: #fff; }
+.rfm-btn.save { background: var(--h5-red); color: #fff; }
 .rfm-btn.save:hover:not(:disabled) { background: #c72820; }
 .rfm-btn:disabled { opacity: 0.5; cursor: default; }
 

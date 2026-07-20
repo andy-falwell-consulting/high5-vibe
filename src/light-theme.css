@@ -78,7 +78,7 @@
 [data-theme="light"] .v2-empty-state { color: #cbd5e1; }
 
 /* Spinner */
-[data-theme="light"] .v2-spinner-ring { border-color: #e2e8f0; border-top-color: #e8322a; }
+[data-theme="light"] .v2-spinner-ring { border-color: #e2e8f0; border-top-color: var(--h5-red); }
 
 /* Top bar */
 [data-theme="light"] .v2-topbar {
@@ -110,7 +110,7 @@
 }
 [data-theme="light"] .v2-btn.ghost.active {
   background: #fff1f0;
-  color: #e8322a;
+  color: var(--h5-red);
   border-color: #fca5a5;
 }
 
@@ -173,7 +173,7 @@
 }
 [data-theme="light"] .v2-bom-add-btn:hover {
   background: #fff1f0;
-  border-color: #e8322a;
+  border-color: var(--h5-red);
 }
 [data-theme="light"] .v2-bom-footer { border-top-color: #e2e8f0; }
 

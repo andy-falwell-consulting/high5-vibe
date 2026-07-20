@@ -37,7 +37,7 @@
   border-left: 2px solid transparent;
 }
 .trn-list-item:hover { background: #1a1d2e; }
-.trn-list-item.active { background: #1e2236; border-left-color: #e8322a; }
+.trn-list-item.active { background: #1e2236; border-left-color: var(--h5-red); }
 
 .trn-item-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; opacity: 0.85; }
 .trn-item-text { min-width: 0; }
@@ -64,7 +64,7 @@
 
 /* ── Resize Handle ─────────────────────────────────────────────── */
 .trn-resize-handle { width: 4px; background: #1e2130; cursor: col-resize; flex-shrink: 0; transition: background 0.15s; }
-.trn-resize-handle:hover { background: #e8322a; }
+.trn-resize-handle:hover { background: var(--h5-red); }
 
 /* ── Main ──────────────────────────────────────────────────────── */
 .trn-main { flex: 1; overflow-y: auto; background: #0f1117; display: flex; flex-direction: column; min-width: 0; }
@@ -107,7 +107,7 @@
 .trn-section:hover { border-color: #2a2f45; }
 .trn-section-att { padding: 14px 16px; }
 .trn-section-header { display: flex; align-items: center; gap: 8px; padding: 12px 16px 10px; border-bottom: 1px solid #1e2130; }
-.trn-section-icon { font-size: 18px; color: #e8322a; opacity: 0.8; width: 18px; text-align: center; }
+.trn-section-icon { font-size: 18px; color: var(--h5-red); opacity: 0.8; width: 18px; text-align: center; }
 .trn-section h3 { margin: 0; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #79859a; }
 
 /* ── Field Grid ────────────────────────────────────────────────── */

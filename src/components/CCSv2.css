@@ -11,7 +11,7 @@
   --cv2-text-4: #79859a;
   --cv2-ring-track: #262b3d;
   --cv2-line: #2a2f45;
-  --cv2-accent: #e8322a;
+  --cv2-accent: var(--h5-red);
 
   display: flex; flex: 1; min-height: 0; overflow: hidden;
   background: var(--cv2-bg); color: var(--cv2-text);

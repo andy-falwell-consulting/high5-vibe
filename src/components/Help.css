@@ -14,7 +14,7 @@
   font-size: 15px; padding: 7px 8px; border-radius: 7px; transition: background 0.12s, color 0.12s;
 }
 .hlp-toc-link:hover { background: #1a1d27; color: #fff; }
-.hlp-toc-link.active { background: #e8322a1f; color: #fff; }
+.hlp-toc-link.active { background: var(--h5-red)1f; color: #fff; }
 
 /* Content */
 .hlp-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
@@ -53,7 +53,7 @@
 [data-theme="light"] .hlp-toc { background: #ffffff; border-right-color: #e2e8f0; }
 [data-theme="light"] .hlp-toc-link { color: #475569; }
 [data-theme="light"] .hlp-toc-link:hover { background: #f1f5f9; color: #0f172a; }
-[data-theme="light"] .hlp-toc-link.active { background: #e8322a1a; color: #0f172a; }
+[data-theme="light"] .hlp-toc-link.active { background: var(--h5-red)1a; color: #0f172a; }
 [data-theme="light"] .hlp-h2 { color: #0f172a; }
 [data-theme="light"] .hlp-section strong { color: #1e293b; }
 [data-theme="light"] .hlp-content kbd { background: #f1f5f9; border-color: #cbd5e1; color: #334155; }

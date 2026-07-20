@@ -201,7 +201,7 @@ export default function Transactions({ onRecordSelect } = {}) {
               <div className="txn-kpi"><div className="txn-kpi-l">Date</div><div className="txn-kpi-v">{fmtDate(d.date)}</div></div>
               <div className="txn-kpi"><div className="txn-kpi-l">Total</div><div className="txn-kpi-v">{money(d.total)}</div></div>
               {d.type === 'Invoice' || d.type === 'CreditMemo' ? (
-                <div className="txn-kpi"><div className="txn-kpi-l">Balance</div><div className="txn-kpi-v" style={{ color: d.balance > 0 ? '#e8322a' : 'inherit' }}>{money(d.balance)}</div></div>
+                <div className="txn-kpi"><div className="txn-kpi-l">Balance</div><div className="txn-kpi-v" style={{ color: d.balance > 0 ? '#ED1C24' : 'inherit' }}>{money(d.balance)}</div></div>
               ) : null}
               <div className="txn-kpi"><div className="txn-kpi-l">Status</div><div className="txn-kpi-v" style={{ color: statusColor(d.status) }}>{d.status}</div></div>
             </div>

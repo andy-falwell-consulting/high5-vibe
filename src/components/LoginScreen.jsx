@@ -1,5 +1,6 @@
 /* global __APP_VERSION__ */
 import './LoginScreen.css'
+import high5Logo from '../assets/high5-logo.png'
 
 export default function LoginScreen({ error }) {
   return (
@@ -25,7 +26,7 @@ export default function LoginScreen({ error }) {
           </svg>
         </div>
 
-        <div className="ls-logo">V</div>
+        <div className="ls-logo"><img src={high5Logo} alt="High 5 Adventure Learning Center" /></div>
 
         <div className="ls-body">
           <h1 className="ls-title">Welcome to Vibe</h1>

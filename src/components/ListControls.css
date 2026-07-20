@@ -23,7 +23,7 @@
 }
 .lc-sort-btn:hover { border-color: #3a4158; }
 .lc-sort-ic { font-size: 15px; color: #8b97aa; }
-.lc-sort-dir { color: #e8322a; font-weight: 600; }
+.lc-sort-dir { color: var(--h5-red); font-weight: 600; }
 
 .lc-menu {
   position: absolute; top: calc(100% + 4px); left: 0; z-index: 30;
@@ -38,7 +38,7 @@
 }
 .lc-menu-item:hover { background: #262b3d; }
 .lc-menu-item.active { color: #fff; }
-.lc-menu-item span { color: #e8322a; }
+.lc-menu-item span { color: var(--h5-red); }
 .lc-menu-sep { height: 1px; background: #2a2f45; margin: 4px 2px; }
 
 .lc-right { display: flex; align-items: center; gap: 8px; }
@@ -49,7 +49,7 @@
   cursor: pointer; font-size: 19px; line-height: 1;
 }
 .lc-filter-btn:hover { color: #e2e8f0; border-color: #3a4158; }
-.lc-filter-btn.active { color: #e8322a; border-color: #e8322a55; background: #e8322a14; }
+.lc-filter-btn.active { color: var(--h5-red); border-color: var(--h5-red)55; background: var(--h5-red)14; }
 
 /* ── Type-to-filter bar ── */
 .lc-filter-bar {

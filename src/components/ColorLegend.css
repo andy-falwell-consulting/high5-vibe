@@ -11,7 +11,7 @@
   user-select: none;
   line-height: 1;
 }
-.cl-trigger:hover { color: #e8322a; }
+.cl-trigger:hover { color: var(--h5-red); }
 
 .cl-tooltip {
   position: fixed;
@@ -61,4 +61,4 @@
 }
 [data-theme="light"] .cl-label { color: #334155; }
 [data-theme="light"] .cl-trigger { color: #5e6b7c; }
-[data-theme="light"] .cl-trigger:hover { color: #e8322a; }
+[data-theme="light"] .cl-trigger:hover { color: var(--h5-red); }

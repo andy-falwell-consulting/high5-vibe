@@ -12,7 +12,7 @@ const LAYOUT = 'Inspections_New';
 const CACHE_VERSION = 1;
 
 const STATUS_COLOR = {
-  'Needs Repair': '#e8322a',
+  'Needs Repair': '#ED1C24',
   'Report Ready': '#22c55e',
   Open:           '#64748b',
   default:        '#64748b',

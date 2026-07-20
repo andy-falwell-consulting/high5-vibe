@@ -67,7 +67,7 @@
   border: none; background: color-mix(in srgb, var(--att-surface) 80%, transparent); color: var(--att-text-2);
   font-size: 13px; line-height: 1; cursor: pointer; transition: background 0.15s, color 0.15s;
 }
-.att-del:hover:not(:disabled) { background: #e8322a; color: #fff; }
+.att-del:hover:not(:disabled) { background: var(--h5-red); color: #fff; }
 .att-del:disabled { opacity: 0.5; cursor: default; }
 
 /* ── Light Theme ─────────────────────────────────────────────────── */
@@ -81,4 +81,4 @@
   --att-accent: #c2570f;
 }
 [data-theme="light"] .att-del { background: #ffffffcc; color: #5e6b7c; }
-[data-theme="light"] .att-del:hover:not(:disabled) { background: #e8322a; color: #fff; }
+[data-theme="light"] .att-del:hover:not(:disabled) { background: var(--h5-red); color: #fff; }

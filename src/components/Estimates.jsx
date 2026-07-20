@@ -17,7 +17,7 @@ const STATUS_COLOR = {
   'Draft':       '#64748b',
   'Sent':        '#3b82f6',
   'Approved':    '#22c55e',
-  'Declined':    '#e8322a',
+  'Declined':    '#ED1C24',
   'Expired':     '#f59e0b',
   'Mandatory':   '#c084fc',
   'Recommended': '#06b6d4',
@@ -30,7 +30,7 @@ const QBO_STATUS_COLOR = {
   'Pending':  '#f59e0b',
   'Accepted': '#22c55e',
   'Closed':   '#64748b',
-  'Rejected': '#e8322a',
+  'Rejected': '#ED1C24',
 }
 
 const TYPE_COLOR = {

@@ -32,11 +32,11 @@
 .rmm-field input[type="date"], .rmm-field input[type="time"] { color-scheme: dark; }
 
 .rmm-footer { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 13px 18px; border-top: 1px solid #1e2130; flex-shrink: 0; }
-.rmm-error { margin-right: auto; color: #e8322a; font-size: 14px; }
+.rmm-error { margin-right: auto; color: var(--h5-red); font-size: 14px; }
 .rmm-btn { padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; border: 1px solid transparent; }
 .rmm-btn.cancel { background: transparent; color: #94a3b8; border-color: #2d3148; }
 .rmm-btn.cancel:hover:not(:disabled) { color: #e2e8f0; border-color: #4a5568; }
-.rmm-btn.save { background: #e8322a; color: #fff; }
+.rmm-btn.save { background: var(--h5-red); color: #fff; }
 .rmm-btn.save:hover:not(:disabled) { background: #c72820; }
 .rmm-btn:disabled { opacity: 0.5; cursor: default; }
 

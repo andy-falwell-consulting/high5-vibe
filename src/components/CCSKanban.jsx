@@ -25,7 +25,7 @@ const COLUMNS = [
   { id: 'Sent Contract and DI',         label: 'Sent Contract and DI',         color: '#a855f7' },
   { id: 'Job Prep by Date',             label: 'Job Prep by Date',             color: '#22c55e' },
   { id: 'Done/Ready for Building',      label: 'Done/Ready for Building',      color: '#14b8a6' },
-  { id: 'Commissioning Report Needed',  label: 'Commissioning Report Needed',  color: '#e8322a' },
+  { id: 'Commissioning Report Needed',  label: 'Commissioning Report Needed',  color: '#ED1C24' },
   { id: "No Go's (litter box)",         label: "No Go's",                      color: '#475569' },
 ]
 const ACTIVE_STATUSES = new Set(COLUMNS.map(c => c.id))

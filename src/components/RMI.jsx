@@ -10,13 +10,13 @@ const LAYOUT = 'RMI_New'
 const CACHE_VERSION = 1
 
 const STATUS_COLOR = {
-  Active:   '#e8322a',
+  Active:   '#ED1C24',
   Resolved: '#22c55e',
   default:  '#64748b',
 }
 
 const LEVEL_COLOR = {
-  High:   '#e8322a',
+  High:   '#ED1C24',
   Medium: '#f59e0b',
   Low:    '#22c55e',
 }
