@@ -1,24 +1,8 @@
 import { useState, useEffect } from 'react'
-import { BRAND, UI } from '../config/brandColors'
+import { PIPELINE_STAGES, PIPELINE_SHORT, statusColor, mergedStatus } from '../config/ccsStatus'
 import { readCacheAsync } from '../api/filemaker'
 import { RCD_CACHE_VERSION } from '../config/ccsCache'
 import './Home.css'
-
-const PIPELINE = [
-  'New Project Inquiry', 'Working Proposals', 'Proposals Out', 'Sent Contract and DI',
-  'Job Prep by Date', 'Done/Ready for Building', 'Commissioning Report Needed', "No Go's (litter box)",
-]
-const PIPELINE_SHORT = ['New inquiry', 'Working', 'Proposals out', 'Contract sent', 'Job prep', 'Ready to build', 'Commissioning', 'No go']
-
-function statusColor(s) {
-  const t = (s || '').toLowerCase()
-  if (t.includes('complet')) return UI.success
-  if (t.includes('no go') || t.includes('cancel')) return UI.muted
-  if (t.includes('progress')) return BRAND.purple
-  if (t.includes('confirm') || t.includes('schedul')) return BRAND.blue
-  if (t.includes('propos') || t.includes('inquir')) return BRAND.gold
-  return UI.muted
-}
 const parseFmDate = v => {
   if (!v) return null
   const [date] = String(v).split(' ')
@@ -63,7 +47,7 @@ export default function Home({ onOpen, onGoto, onOpenView, onOpenPalette }) {
   const projects = data?.projects || []
   const isDone = s => (s || '').toLowerCase().includes('complet') || (s || '').toLowerCase().includes('no go')
 
-  const stageCounts = PIPELINE.map(st => projects.filter(p => p.fieldData.kanban_status === st).length)
+  const stageCounts = PIPELINE_STAGES.map(st => projects.filter(p => mergedStatus(p.fieldData) === st).length)
   const maxStage = Math.max(1, ...stageCounts)
 
   const upcoming = projects
@@ -111,7 +95,7 @@ export default function Home({ onOpen, onGoto, onOpenView, onOpenPalette }) {
         <div className="home-card">
           <div className="home-card-head"><span>Pipeline</span><button className="home-link" onClick={() => onOpenView('projects', 'board')}>Open board →</button></div>
           <div className="home-pipe">
-            {PIPELINE.map((st, i) => (
+            {PIPELINE_STAGES.map((st, i) => (
               <div key={st} className="home-pipe-stage" title={`${stageCounts[i]} · ${st}`}>
                 <div className="home-pipe-count">{stageCounts[i]}</div>
                 <div className="home-pipe-bar"><div style={{ height: `${(stageCounts[i] / maxStage) * 100}%` }} /></div>
@@ -127,13 +111,13 @@ export default function Home({ onOpen, onGoto, onOpenView, onOpenPalette }) {
             {upcoming.length === 0 ? <div className="home-empty">{data ? 'Nothing in the next 30 days' : 'Loading…'}</div> : (
               <div className="home-list">
                 {upcoming.map(({ p, d }) => {
-                  const c = statusColor(p.fieldData.Status)
+                  const c = statusColor(mergedStatus(p.fieldData))
                   return (
                     <button key={p.recordId} className="home-row" onClick={() => onOpen('projects', p.recordId)}>
                       <span className="home-dot" style={{ background: c }} />
                       <span className="home-row-main">
                         <span className="home-row-title">{p.fieldData.zz__Display_Organization__ct || '—'}</span>
-                        <span className="home-row-sub">{p.fieldData['Type of Project(1)'] || p.fieldData.kanban_status || ''}</span>
+                        <span className="home-row-sub">{p.fieldData['Type of Project(1)'] || mergedStatus(p.fieldData) || ''}</span>
                       </span>
                       <span className="home-row-meta">
                         <span className="home-row-date">{fmtDate(p.fieldData['rcd start date'])}</span>
@@ -151,7 +135,7 @@ export default function Home({ onOpen, onGoto, onOpenView, onOpenPalette }) {
             {recent.length === 0 ? <div className="home-empty">{data ? 'No projects' : 'Loading…'}</div> : (
               <div className="home-list">
                 {recent.map(p => {
-                  const c = statusColor(p.fieldData.Status)
+                  const c = statusColor(mergedStatus(p.fieldData))
                   return (
                     <button key={p.recordId} className="home-row" onClick={() => onOpen('projects', p.recordId)}>
                       <span className="home-dot" style={{ background: c }} />

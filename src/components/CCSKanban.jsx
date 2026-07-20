@@ -13,22 +13,16 @@ import { CSS } from '@dnd-kit/utilities'
 import { useAllRecords } from '../hooks/useAllRecords'
 import { updateRecord, bustCache, patchCachedRecord } from '../api/filemaker'
 import { RCD_LAYOUT, RCD_CACHE_VERSION, RCD_FIND_QUERY, RCD_SORT } from '../config/ccsCache'
+import { ACTIVE_STAGES, statusColor, mergedStatus } from '../config/ccsStatus'
 import './CCSKanban.css'
 
 const LAYOUT = RCD_LAYOUT
 const CACHE_VERSION = RCD_CACHE_VERSION
 
-const COLUMNS = [
-  { id: 'New Project Inquiry',          label: 'New Project Inquiry',          color: '#3b82f6' },
-  { id: 'Working Proposals',            label: 'Working Proposals',            color: '#e87722' },
-  { id: 'Proposals Out',                label: 'Proposals Out',                color: '#f59e0b' },
-  { id: 'Sent Contract and DI',         label: 'Sent Contract and DI',         color: '#a855f7' },
-  { id: 'Job Prep by Date',             label: 'Job Prep by Date',             color: '#22c55e' },
-  { id: 'Done/Ready for Building',      label: 'Done/Ready for Building',      color: '#14b8a6' },
-  { id: 'Commissioning Report Needed',  label: 'Commissioning Report Needed',  color: '#ED1C24' },
-  { id: "No Go's (litter box)",         label: "No Go's",                      color: '#475569' },
-]
-const ACTIVE_STATUSES = new Set(COLUMNS.map(c => c.id))
+// Board columns = the merged active/in-flight stages (Completed / No Go / Other
+// are valid statuses but not columns — a card set to one leaves the board).
+const COLUMNS = ACTIVE_STAGES.map(id => ({ id, label: id, color: statusColor(id) }))
+const ACTIVE_STATUSES = new Set(ACTIVE_STAGES)
 
 function matchesSearch(r, q) {
   if (!q) return true
@@ -132,8 +126,8 @@ function KanbanDetail({ record, onClose, currentStatus, onNavigateTo }) {
           {f['rcd start date'] && (
             <span className="kb-detail-badge kb-detail-badge--date">{f['rcd start date']}</span>
           )}
-          {f.Status && (
-            <span className="kb-detail-badge kb-detail-badge--status">{f.Status}</span>
+          {mergedStatus(f) && (
+            <span className="kb-detail-badge kb-detail-badge--status">{mergedStatus(f)}</span>
           )}
           {col && (
             <span className="kb-detail-badge kb-detail-badge--kanban" style={{ '--badge-color': col.color }}>
@@ -312,12 +306,12 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
   )
 
   const getStatus = useCallback((r) => {
-    return localStatusRef.current[r.recordId] ?? r.fieldData.kanban_status
+    return localStatusRef.current[r.recordId] ?? mergedStatus(r.fieldData)
   }, [])
 
-  // Filter to only kanban records, then by active status. RCD_New has no
-  // add_to_kanban flag, so board membership = has a kanban_status.
-  const kanbanRecords = displayRecords.filter(r => !!String(r.fieldData.kanban_status || '').trim())
+  // Board membership = any record whose merged status is an active stage.
+  // Completed / No Go / Other records fall off the board (they're done).
+  const kanbanRecords = displayRecords
   const active = kanbanRecords.filter(r => ACTIVE_STATUSES.has(getStatus(r)))
 
   const byColumn = {}
@@ -355,7 +349,7 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
     if (!ACTIVE_STATUSES.has(newStatus)) return
     const record = kanbanRecords.find(r => r.recordId === active.id)
     if (!record) return
-    const oldStatus = localStatusRef.current[active.id] ?? record.fieldData.kanban_status
+    const oldStatus = localStatusRef.current[active.id] ?? mergedStatus(record.fieldData)
     if (oldStatus === newStatus) return
 
     localStatusRef.current[active.id] = newStatus
@@ -363,8 +357,8 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
     setSaving(p => ({ ...p, [active.id]: true }))
 
     try {
-      await updateRecord(LAYOUT, active.id, { kanban_status: newStatus })
-      patchCachedRecord(LAYOUT, CACHE_VERSION, active.id, { kanban_status: newStatus })
+      await updateRecord(LAYOUT, active.id, { Status: newStatus })
+      patchCachedRecord(LAYOUT, CACHE_VERSION, active.id, { Status: newStatus })
     } catch {
       localStatusRef.current[active.id] = oldStatus
       setLocalStatus(p => ({ ...p, [active.id]: oldStatus }))
@@ -443,7 +437,7 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
       {detailRecord && (
         <KanbanDetail
           record={detailRecord}
-          currentStatus={localStatusRef.current[detailRecord.recordId] ?? detailRecord.fieldData.kanban_status}
+          currentStatus={localStatusRef.current[detailRecord.recordId] ?? mergedStatus(detailRecord.fieldData)}
           onClose={() => setDetailRecord(null)}
           onNavigateTo={onNavigateTo}
         />

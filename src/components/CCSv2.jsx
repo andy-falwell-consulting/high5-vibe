@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useAllRecords } from '../hooks/useAllRecords';
 import { useValueLists } from '../hooks/useValueLists';
-import { BRAND, UI } from '../config/brandColors';
+import { MERGED_STATUSES, PIPELINE_STAGES, PIPELINE_SHORT, statusColor, mergedStatus } from '../config/ccsStatus';
 import { RCD_LAYOUT, RCD_CACHE_VERSION, RCD_FIND_QUERY, RCD_SORT } from '../config/ccsCache';
 import { getRecord, prefetchRecord, updateRecord, patchCachedRecord, invalidateRecord } from '../api/filemaker';
 import { getCurrentEnv } from '../config/fmpEnvironments';
@@ -14,16 +14,8 @@ const LAYOUT = RCD_LAYOUT;
 const CCS_ATT_API = { list: listCcsAttachments, upload: uploadCcsAttachment, remove: deleteCcsAttachment, freshUrl: ccsAttachmentUrl };
 
 // ── Vocabularies (grounded in live data) ─────────────────────────
-const PIPELINE = [
-  'New Project Inquiry', 'Working Proposals', 'Proposals Out', 'Sent Contract and DI',
-  'Job Prep by Date', 'Done/Ready for Building', 'Commissioning Report Needed', "No Go's (litter box)",
-];
-const PIPELINE_SHORT = [
-  'New inquiry', 'Working proposals', 'Proposals out', 'Sent contract & DI',
-  'Job prep by date', 'Ready for building', 'Commissioning report', 'No go',
-];
-
-const STATUS_OPTIONS = ['Proposed', 'Confirmed', 'Confirmed/Scheduled', 'In Progress', 'Completed', 'No Go', 'On Hold', 'Cancelled'];
+// CCS status is now the single merged 9-value set — see src/config/ccsStatus.js
+// (MERGED_STATUSES / PIPELINE_STAGES / mergedStatus / statusColor).
 
 // Project type and builders come from FileMaker's own value lists at runtime
 // (see useValueLists) — these are only the first-paint fallback for when FMP
@@ -124,16 +116,6 @@ const QUICK_ACTIONS = [
 const EMPTY_FIELDS = {};
 const isOn = v => v === 1 || v === '1';
 
-function statusColor(s) {
-  const t = (s || '').toLowerCase();
-  if (t.includes('complet')) return UI.success;
-  if (t.includes('no go') || t.includes('cancel')) return UI.muted;
-  if (t.includes('progress')) return BRAND.purple;
-  if (t.includes('confirm') || t.includes('schedul')) return BRAND.blue;
-  if (t.includes('propos') || t.includes('inquir')) return BRAND.gold;
-  if (t.includes('hold')) return BRAND.mustard;
-  return UI.muted;
-}
 
 const num = v => { const n = Number(v); return isNaN(n) ? 0 : n; };
 const fmtMoney = v => { const n = num(v); return n ? `$${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : '—'; };
@@ -232,7 +214,6 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   const [navWidth, setNavWidth] = useState(300);
   const [edits, setEdits]       = useState({});
   const [saving, setSaving]     = useState(false);
-  const [addingToBoard, setAddingToBoard] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
   const [saveErrorMsg, setSaveErrorMsg] = useState(null);
   const [expanded, setExpanded] = useState({});
@@ -269,7 +250,8 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   }), [edits, f]);
 
   const allPhasesDone = phaseStats.every(s => s.pct >= 1);
-  const pipelineIdx = PIPELINE.indexOf(val('kanban_status'));
+  const merged = mergedStatus({ Status: val('Status') });
+  const pipelineIdx = PIPELINE_STAGES.indexOf(merged);
   const startDays = daysUntil(val('rcd start date'));
   const eventStat = phaseStats.find(s => s.id === 'job_prep');
   const eventUrgent = startDays != null && startDays >= 0 && startDays <= 30 && eventStat && eventStat.pct < 1;
@@ -387,8 +369,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   });
 
   const dirtyCount = Object.keys(edits).length;
-  const status = val('Status');
-  const sc = statusColor(status);
+  const sc = statusColor(merged);
   const org = f.zz__Display_Organization__ct || '—';
 
   return (
@@ -400,7 +381,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
         </div>
         <div className="cv2-list">
           <ListBody c={list} activeId={selected?.recordId} renderItem={r => {
-            const rf = r.fieldData; const c = statusColor(rf.Status);
+            const rf = r.fieldData; const c = statusColor(mergedStatus(rf));
             const d = daysUntil(rf['rcd start date']);
             return (
               <div key={r.recordId} className={`cv2-list-item${selected?.recordId === r.recordId ? ' active' : ''}`}
@@ -409,7 +390,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                 <div className="cv2-list-body">
                   <div className="cv2-list-org">{rf.zz__Display_Organization__ct || '—'}</div>
                   <div className="cv2-list-sub">
-                    <span>{rf.zz__Display_Contact__ct || rf.kanban_status || ''}</span>
+                    <span>{rf.zz__Display_Contact__ct || mergedStatus(rf) || ''}</span>
                     {d != null && d >= 0 && d <= 30 && <span className="cv2-list-due">{d}d</span>}
                   </div>
                 </div>
@@ -431,18 +412,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
               <div className="cv2-crumb">
                 <span className="cv2-crumb-dim">CCS v2</span><span className="cv2-crumb-sep">/</span><span>{org}</span>
                 <span className="cv2-crumb-spacer" />
-                {val('kanban_status')
-                  ? <button className="cv2-ghost-btn" onClick={() => onNavigateTo?.('ccs-kanban', selected.recordId)}>⊞ Board</button>
-                  : <button className="cv2-ghost-btn cv2-add-board" disabled={addingToBoard} onClick={async () => {
-                      // One-click: put this project on the Kanban board (first stage), saved immediately.
-                      setAddingToBoard(true);
-                      try {
-                        await updateRecord(LAYOUT, selected.recordId, { kanban_status: PIPELINE[0] });
-                        patchCachedRecord(RCD_LAYOUT, RCD_CACHE_VERSION, selected.recordId, { kanban_status: PIPELINE[0] });
-                        setSelected(s => ({ ...s, fieldData: { ...s.fieldData, kanban_status: PIPELINE[0] } }));
-                      } catch { window.alert('Could not add to the board.'); }
-                      finally { setAddingToBoard(false); }
-                    }}>{addingToBoard ? 'Adding…' : '⊞ Add to board'}</button>}
+                <button className="cv2-ghost-btn" onClick={() => onNavigateTo?.('ccs-kanban', selected.recordId)}>⊞ Board</button>
                 <span className="cv2-crumb-id">#{f._kpt__RCD_ID || selected.recordId}</span>
               </div>
 
@@ -457,10 +427,9 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                     </div>
                   </div>
                   <select className="cv2-status" style={{ color: sc, borderColor: sc + '55', background: sc + '14' }}
-                    value={status || ''} onChange={e => stage('Status', e.target.value)}>
-                    {!STATUS_OPTIONS.includes(status) && status && <option value={status}>{status}</option>}
+                    value={merged} onChange={e => stage('Status', e.target.value)}>
                     <option value="">— status —</option>
-                    {STATUS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                    {MERGED_STATUSES.map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
                 </div>
 
@@ -470,17 +439,17 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                     <span className="cv2-pipe-label">Pipeline</span>
                     <span className="cv2-pipe-stage">
                       {pipelineIdx >= 0
-                        ? <><b style={{ color: '#993c1d' }}>Stage {pipelineIdx + 1} of {PIPELINE.length}</b> · {PIPELINE_SHORT[pipelineIdx]}</>
-                        : <button className="cv2-link-btn" onClick={() => { stage('kanban_status', PIPELINE[0]); }}>+ Add to pipeline</button>}
+                        ? <><b style={{ color: '#993c1d' }}>Stage {pipelineIdx + 1} of {PIPELINE_STAGES.length}</b> · {PIPELINE_SHORT[pipelineIdx]}</>
+                        : <b style={{ color: statusColor(merged) }}>{merged || '—'}</b>}
                     </span>
                   </div>
                   <div className="cv2-pipe">
-                    {PIPELINE.map((s, i) => (
+                    {PIPELINE_STAGES.map((s, i) => (
                       <div key={s} className="cv2-pipe-seg">
                         {i > 0 && <span className="cv2-pipe-line" style={{ background: i <= pipelineIdx ? '#d85a30' : 'var(--cv2-line)' }} />}
                         <button className={`cv2-pipe-dot${i < pipelineIdx ? ' done' : i === pipelineIdx ? ' cur' : ''}`}
                           title={PIPELINE_SHORT[i]} aria-label={PIPELINE_SHORT[i]}
-                          onClick={() => stage('kanban_status', s)} />
+                          onClick={() => stage('Status', s)} />
                       </div>
                     ))}
                   </div>
@@ -521,7 +490,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                     {phaseStats.map(s => {
                       const phase = PHASES.find(p => p.id === s.id);
                       const col = phaseColor(s); const open = !!expanded[s.id]; const full = s.pct >= 1;
-                      const nextStageName = pipelineIdx >= 0 && pipelineIdx < PIPELINE.length - 1 ? PIPELINE_SHORT[pipelineIdx + 1] : null;
+                      const nextStageName = pipelineIdx >= 0 && pipelineIdx < PIPELINE_STAGES.length - 1 ? PIPELINE_SHORT[pipelineIdx + 1] : null;
                       return (
                         <div key={s.id} className={`cv2-phase${open ? ' open' : ''}`}>
                           <button className="cv2-phase-head" onClick={() => setExpanded(p => ({ ...p, [s.id]: !p[s.id] }))}>
@@ -567,10 +536,10 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                                   })}
                                 </div>
                               )}
-                              {full && nextStageName && pipelineIdx < PIPELINE.length - 1 && (
+                              {full && nextStageName && pipelineIdx < PIPELINE_STAGES.length - 1 && (
                                 <div className="cv2-advance">
                                   <span>✓ Phase complete</span>
-                                  <button onClick={() => stage('kanban_status', PIPELINE[pipelineIdx + 1])}>Advance to {nextStageName} →</button>
+                                  <button onClick={() => stage('Status', PIPELINE_STAGES[pipelineIdx + 1])}>Advance to {nextStageName} →</button>
                                 </div>
                               )}
                             </div>
@@ -588,7 +557,6 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                     <label>Project type</label><InlineSelect value={val('Type of Project(1)')} options={projectTypes} onChange={v => stage('Type of Project(1)', v)} />
                     <label>Start date</label><InlineDate value={val('rcd start date')} onChange={v => stage('rcd start date', v)} />
                     <label>End date</label><InlineDate value={val('rcd end date')} onChange={v => stage('rcd end date', v)} />
-                    <label>Stage</label><InlineSelect value={val('kanban_status')} options={PIPELINE} onChange={v => stage('kanban_status', v)} />
                     <label>Distance to HQ</label><InlineText value={val('Distance to High5')} onChange={v => stage('Distance to High5', v)} placeholder="—" />
                     <label>Drive time</label><InlineText value={val('Drive Time')} onChange={v => stage('Drive Time', v)} placeholder="—" />
                   </div>
