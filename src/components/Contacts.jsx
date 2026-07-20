@@ -74,13 +74,13 @@ const typeLabel = fd => String(fd?.Organization) === '1' ? 'Organization' : 'Ind
 const hasClientAlert = fd => String(fd?.Client_Alert) === '1';
 
 const FIELD_LABELS = {
-  Name_Organization: 'Name / Organization', Organization: 'Type', Status: 'Status',
+  Name_Organization: 'Name / Organization', Organization: 'Type', Title: 'Title', Status: 'Status',
   Industry: 'Industry', Department: 'Department', Source: 'Source',
   Spouse: 'Spouse', Birthdate: 'Birthdate',
   Client_Alert: 'Client alert', Keywords: 'Keywords', Notes: 'Notes',
 };
 
-const ABOUT_FIELDS = ['Name_Organization', 'Organization', 'Status', 'Industry', 'Department', 'Source', 'Spouse', 'Birthdate'];
+const ABOUT_FIELDS = ['Name_Organization', 'Title', 'Organization', 'Status', 'Industry', 'Department', 'Source', 'Spouse', 'Birthdate'];
 const NOTE_FIELDS  = ['Client_Alert', 'Keywords', 'Notes'];
 
 // FileMaker portal occurrence names, keyed by our logical id.
