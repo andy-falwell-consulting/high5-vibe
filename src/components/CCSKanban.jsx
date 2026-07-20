@@ -7,14 +7,15 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core'
-import { useDraggable, useDroppable } from '@dnd-kit/core'
-import { SortableContext, horizontalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable'
+import { useDroppable } from '@dnd-kit/core'
+import { SortableContext, horizontalListSortingStrategy, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useAllRecords } from '../hooks/useAllRecords'
 import { updateRecord, bustCache, patchCachedRecord } from '../api/filemaker'
 import { RCD_LAYOUT, RCD_CACHE_VERSION, RCD_FIND_QUERY, RCD_SORT } from '../config/ccsCache'
 import { ACTIVE_STAGES, statusColor, mergedStatus } from '../config/ccsStatus'
 import { useKanbanBoard } from '../hooks/useKanbanBoard'
+import { useKanbanOrder } from '../hooks/useKanbanOrder'
 import './CCSKanban.css'
 
 const LAYOUT = RCD_LAYOUT
@@ -65,8 +66,12 @@ function KanbanCardView({ record, saving, dimmed }) {
   )
 }
 
+// Sortable, not just draggable: within a lane, dropping a card ON another
+// card reorders between them (over.id resolves to that specific card's id,
+// not just "somewhere in this column") — see handleDragEnd for how that's
+// distinguished from a cross-lane move.
 function DraggableCard({ record, saving, onOpen, dimmed, onRemove }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: record.recordId,
   })
   const didDrag = useRef(false)
@@ -80,7 +85,10 @@ function DraggableCard({ record, saving, onOpen, dimmed, onRemove }) {
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      style={{ position: 'relative', opacity: isDragging ? 0.25 : 1, cursor: 'grab', touchAction: 'none', userSelect: 'none' }}
+      style={{
+        position: 'relative', opacity: isDragging ? 0.25 : 1, cursor: 'grab', touchAction: 'none', userSelect: 'none',
+        transform: CSS.Transform.toString(transform), transition,
+      }}
       onClick={() => {
         if (didDrag.current) { didDrag.current = false; return }
         onOpen(record)
@@ -222,19 +230,21 @@ function KanbanColumn({ column, records, saving, onOpen, collapsed, onToggleColl
       </div>
       {!collapsed && (
         <div className="kb-col-body" ref={setDropRef}>
-          {records.map(r => {
-            const matches = matchesSearch(r, search)
-            return (
-              <DraggableCard
-                key={r.recordId}
-                record={r}
-                saving={saving[r.recordId]}
-                onOpen={onOpen}
-                dimmed={search && !matches}
-                onRemove={onRemove}
-              />
-            )
-          })}
+          <SortableContext items={records.map(r => r.recordId)} strategy={verticalListSortingStrategy}>
+            {records.map(r => {
+              const matches = matchesSearch(r, search)
+              return (
+                <DraggableCard
+                  key={r.recordId}
+                  record={r}
+                  saving={saving[r.recordId]}
+                  onOpen={onOpen}
+                  dimmed={search && !matches}
+                  onRemove={onRemove}
+                />
+              )
+            })}
+          </SortableContext>
           {records.length === 0 && (
             <div className="kb-col-empty">Drop here</div>
           )}
@@ -307,6 +317,7 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
     refreshKey,
   })
   const board = useKanbanBoard()
+  const order = useKanbanOrder()
   const [showAdd, setShowAdd] = useState(false)
 
   // Stale-while-refreshing: show last complete fetch while a new one is in flight.
@@ -370,6 +381,19 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
     const s = getStatus(r)
     if (byColumn[s]) byColumn[s].push(r)
   }
+  // Apply the team's manual order (Redis, shared): stored recordIds sort
+  // first in their saved sequence; anything not yet placed (new to the
+  // board, never manually dragged) falls back to the default order at the end.
+  for (const col of COLUMNS) {
+    const savedOrder = order.orders[col.id]
+    if (!savedOrder?.length) continue
+    const idx = new Map(savedOrder.map((id, i) => [id, i]))
+    const known = byColumn[col.id].filter(r => idx.has(r.recordId)).sort((a, b) => idx.get(a.recordId) - idx.get(b.recordId))
+    const unknown = byColumn[col.id].filter(r => !idx.has(r.recordId))
+    byColumn[col.id] = [...known, ...unknown]
+  }
+  const cardColumnOf = {}
+  for (const col of COLUMNS) for (const r of byColumn[col.id]) cardColumnOf[r.recordId] = col.id
 
   const activeRecord = activeId ? kanbanRecords.find(r => r.recordId === activeId) : null
 
@@ -394,28 +418,52 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
       return
     }
 
-    // Card move
-    const newStatus = String(over.id).startsWith('col::') ? String(over.id).slice(5) : over.id
-    if (!ACTIVE_STATUSES.has(newStatus)) return
+    // Card move / reorder. `over.id` is either a column (dropped on empty
+    // space — via the column's own useDroppable) or another card (dropped
+    // directly on it — via that card's useSortable), which is how we tell a
+    // same-lane reorder from a cross-lane status change.
+    const overIsColumn = String(over.id).startsWith('col::') || ACTIVE_STATUSES.has(String(over.id))
+    const targetColumn = overIsColumn
+      ? (String(over.id).startsWith('col::') ? String(over.id).slice(5) : String(over.id))
+      : cardColumnOf[over.id]
+    if (!targetColumn || !ACTIVE_STATUSES.has(targetColumn)) return
+
     const record = kanbanRecords.find(r => r.recordId === active.id)
     if (!record) return
-    const oldStatus = localStatusRef.current[active.id] ?? mergedStatus(record.fieldData)
-    if (oldStatus === newStatus) return
+    const sourceColumn = cardColumnOf[active.id] ?? mergedStatus(record.fieldData)
 
-    localStatusRef.current[active.id] = newStatus
-    setLocalStatus(p => ({ ...p, [active.id]: newStatus }))
+    // Compute + persist the target lane's new order (shared, Redis).
+    const targetIds = (byColumn[targetColumn] || []).map(r => r.recordId)
+    let newTargetOrder
+    if (sourceColumn === targetColumn) {
+      const oldIdx = targetIds.indexOf(active.id)
+      const newIdx = overIsColumn ? targetIds.length - 1 : targetIds.indexOf(String(over.id))
+      if (oldIdx === -1 || newIdx === -1 || oldIdx === newIdx) return
+      newTargetOrder = arrayMove(targetIds, oldIdx, newIdx)
+    } else {
+      const insertAt = overIsColumn ? targetIds.length : targetIds.indexOf(String(over.id))
+      newTargetOrder = [...targetIds]
+      newTargetOrder.splice(insertAt === -1 ? newTargetOrder.length : insertAt, 0, active.id)
+    }
+    order.setColumnOrder(targetColumn, newTargetOrder)
+
+    if (sourceColumn === targetColumn) return // pure reorder — no status change
+
+    const oldStatus = localStatusRef.current[active.id] ?? mergedStatus(record.fieldData)
+    localStatusRef.current[active.id] = targetColumn
+    setLocalStatus(p => ({ ...p, [active.id]: targetColumn }))
     setSaving(p => ({ ...p, [active.id]: true }))
 
     try {
-      await updateRecord(LAYOUT, active.id, { Status: newStatus })
-      patchCachedRecord(LAYOUT, CACHE_VERSION, active.id, { Status: newStatus })
+      await updateRecord(LAYOUT, active.id, { Status: targetColumn })
+      patchCachedRecord(LAYOUT, CACHE_VERSION, active.id, { Status: targetColumn })
     } catch {
       localStatusRef.current[active.id] = oldStatus
       setLocalStatus(p => ({ ...p, [active.id]: oldStatus }))
     } finally {
       setSaving(p => { const n = { ...p }; delete n[active.id]; return n })
     }
-  }, [kanbanRecords])
+  }, [kanbanRecords, byColumn, cardColumnOf, order])
 
   const totalActive = active.length
   const searchMatchCount = search ? active.filter(r => matchesSearch(r, search)).length : totalActive
