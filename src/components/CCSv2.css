@@ -288,3 +288,19 @@
 .cv2-type-chip:hover:not(:disabled) { border-color: var(--h5-blue); color: var(--cv2-text); }
 .cv2-type-chip.on { background: var(--h5-blue); border-color: var(--h5-blue); color: #fff; }
 .cv2-type-chip:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* N/A toggle — an item that doesn't apply to this project still counts
+   toward phase completion (see phaseStats in CCSv2.jsx) without needing a
+   real checkbox. */
+.cv2-check-row { display: flex; align-items: center; gap: 4px; }
+.cv2-check-row .cv2-check { flex: 1; min-width: 0; }
+.cv2-check.na .cv2-check-label { opacity: 0.55; font-style: italic; text-decoration: none; }
+.cv2-check.na .cv2-check-box { color: var(--cv2-text-3); border-color: var(--cv2-border-2) !important; background: transparent !important; }
+.cv2-na-toggle {
+  flex-shrink: 0; font-size: 10px; font-weight: 700; letter-spacing: 0.03em;
+  padding: 3px 7px; border-radius: 5px; cursor: pointer; line-height: 1;
+  background: transparent; border: 1px solid var(--cv2-border-2); color: var(--cv2-text-3);
+  opacity: 0.45; transition: all 0.12s;
+}
+.cv2-check-row:hover .cv2-na-toggle { opacity: 1; }
+.cv2-na-toggle.on { opacity: 1; background: var(--cv2-text-3); color: var(--cv2-bg); border-color: var(--cv2-text-3); }

@@ -3,6 +3,7 @@ import { useAllRecords } from '../hooks/useAllRecords';
 import { useValueLists } from '../hooks/useValueLists';
 import { MERGED_STATUSES, PIPELINE_STAGES, PIPELINE_SHORT, statusColor, mergedStatus } from '../config/ccsStatus';
 import { useKanbanBoard } from '../hooks/useKanbanBoard';
+import { useNaFlags } from '../hooks/useNaFlags';
 import { RCD_LAYOUT, RCD_CACHE_VERSION, RCD_FIND_QUERY, RCD_SORT } from '../config/ccsCache';
 import { getRecord, prefetchRecord, updateRecord, patchCachedRecord, invalidateRecord } from '../api/filemaker';
 import { getCurrentEnv } from '../config/fmpEnvironments';
@@ -227,6 +228,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   const builderOptions = useMemo(() => ['', ...(valueLists[VL_BUILDER] ?? BUILDER_OPTIONS)], [valueLists]);
 
   const [selected, setSelected] = useState(null);
+  const naFlags = useNaFlags(selected?.recordId);
   const [navWidth, setNavWidth] = useState(300);
   const [edits, setEdits]       = useState({});
   const [saving, setSaving]     = useState(false);
@@ -260,17 +262,21 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   const toggle = useCallback(fk => setEdits(p => ({ ...p, [fk]: isOn(fk in p ? p[fk] : f[fk]) ? 0 : 1 })), [f]);
 
   // Phase progress (live, reflects pending edits)
+  // An item marked N/A counts toward completion without requiring its own
+  // checkbox — some checklist items don't apply to every project (not every
+  // job needs every step), and a permanently-unchecked N/A item shouldn't
+  // block a phase from ever reaching 100%.
   const phaseStats = useMemo(() => PHASES.map(p => {
     // Post Job's 4 items share one multi-value field (post_job_phase), so
     // "done" is membership in that list, not isOn() on a per-item field.
     if (p.id === 'post_job') {
-      const selected = postJobValues('post_job_phase' in edits ? edits['post_job_phase'] : f['post_job_phase']);
-      const done = p.items.filter(([k]) => selected.includes(k)).length;
+      const postJobSel = postJobValues('post_job_phase' in edits ? edits['post_job_phase'] : f['post_job_phase']);
+      const done = p.items.filter(([k]) => postJobSel.includes(k) || naFlags.keys.has(`${p.id}::${k}`)).length;
       return { id: p.id, name: p.name, done, all: p.items.length, pct: done / p.items.length };
     }
-    const done = p.items.filter(([k]) => isOn(k in edits ? edits[k] : f[k])).length;
+    const done = p.items.filter(([k]) => isOn(k in edits ? edits[k] : f[k]) || naFlags.keys.has(`${p.id}::${k}`)).length;
     return { id: p.id, name: p.name, done, all: p.items.length, pct: done / p.items.length };
-  }), [edits, f]);
+  }), [edits, f, naFlags.keys]);
 
   const allPhasesDone = phaseStats.every(s => s.pct >= 1);
 
@@ -543,6 +549,24 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                       const phase = PHASES.find(p => p.id === s.id);
                       const col = phaseColor(s); const open = !!expanded[s.id]; const full = s.pct >= 1;
                       const nextStageName = pipelineIdx >= 0 && pipelineIdx < PIPELINE_STAGES.length - 1 ? PIPELINE_SHORT[pipelineIdx + 1] : null;
+                      // One checklist row: the item's own toggle + a small N/A
+                      // toggle beside it. N/A'd items count toward the phase's
+                      // completion (see phaseStats) without needing a real check —
+                      // not every item applies to every project.
+                      const renderCheckItem = (k, label, on, onToggle) => {
+                        const naKey = `${s.id}::${k}`;
+                        const isNA = naFlags.keys.has(naKey);
+                        return (
+                          <div className="cv2-check-row" key={k}>
+                            <button className={`cv2-check${on ? ' on' : ''}${isNA ? ' na' : ''}`} onClick={onToggle}>
+                              <span className="cv2-check-box" style={on && !isNA ? { background: col, borderColor: col } : undefined}>{isNA ? '—' : (on ? '✓' : '')}</span>
+                              <span className="cv2-check-label">{label}</span>
+                            </button>
+                            <button className={`cv2-na-toggle${isNA ? ' on' : ''}`} title="Doesn't apply to this project"
+                              onClick={() => naFlags.toggle(naKey, !isNA)}>N/A</button>
+                          </div>
+                        );
+                      };
                       return (
                         <div key={s.id} className={`cv2-phase${open ? ' open' : ''}`}>
                           <button className="cv2-phase-head" onClick={() => setExpanded(p => ({ ...p, [s.id]: !p[s.id] }))}>
@@ -561,15 +585,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                                     <div className="cv2-eprep-group" key={g.title}>
                                       <div className="cv2-eprep-title">{g.title}</div>
                                       <div className="cv2-checks">
-                                        {g.items.map(([k, label]) => {
-                                          const on = isOn(val(k));
-                                          return (
-                                            <button key={k} className={`cv2-check${on ? ' on' : ''}`} onClick={() => toggle(k)}>
-                                              <span className="cv2-check-box" style={on ? { background: col, borderColor: col } : undefined}>{on ? '✓' : ''}</span>
-                                              <span className="cv2-check-label">{label}</span>
-                                            </button>
-                                          );
-                                        })}
+                                        {g.items.map(([k, label]) => renderCheckItem(k, label, isOn(val(k)), () => toggle(k)))}
                                       </div>
                                       <InlineText value={val(g.notes)} onChange={v => stage(g.notes, v)} placeholder="Notes…" area />
                                     </div>
@@ -577,27 +593,11 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                                 </div>
                               ) : s.id === 'post_job' ? (
                                 <div className="cv2-checks">
-                                  {POST_JOB_ITEMS.map(v => {
-                                    const on = postJobSelected.includes(v);
-                                    return (
-                                      <button key={v} className={`cv2-check${on ? ' on' : ''}`} onClick={() => togglePostJob(v)}>
-                                        <span className="cv2-check-box" style={on ? { background: col, borderColor: col } : undefined}>{on ? '✓' : ''}</span>
-                                        <span className="cv2-check-label">{v}</span>
-                                      </button>
-                                    );
-                                  })}
+                                  {POST_JOB_ITEMS.map(v => renderCheckItem(v, v, postJobSelected.includes(v), () => togglePostJob(v)))}
                                 </div>
                               ) : (
                                 <div className="cv2-checks">
-                                  {phase.items.map(([k, label]) => {
-                                    const on = isOn(val(k));
-                                    return (
-                                      <button key={k} className={`cv2-check${on ? ' on' : ''}`} onClick={() => toggle(k)}>
-                                        <span className="cv2-check-box" style={on ? { background: col, borderColor: col } : undefined}>{on ? '✓' : ''}</span>
-                                        <span className="cv2-check-label">{label}</span>
-                                      </button>
-                                    );
-                                  })}
+                                  {phase.items.map(([k, label]) => renderCheckItem(k, label, isOn(val(k)), () => toggle(k)))}
                                 </div>
                               )}
                               {full && nextStageName && pipelineIdx < PIPELINE_STAGES.length - 1 && (
