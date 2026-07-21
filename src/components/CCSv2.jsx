@@ -10,6 +10,7 @@ import { getCurrentEnv } from '../config/fmpEnvironments';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
 import AttachmentsPanel from './AttachmentsPanel';
 import { listCcsAttachments, uploadCcsAttachment, deleteCcsAttachment, ccsAttachmentUrl } from '../api/ccsAttachments';
+import { generateAndAttachWorkOrder, downloadWorkOrder } from '../api/ccsWorkOrder';
 import './CCSv2.css';
 
 const LAYOUT = RCD_LAYOUT;
@@ -239,6 +240,10 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   // Live QBO estimate(s) for the selected project — resolved from its D# via
   // /api/ccs-estimate (null = not loaded/none; array = fetched).
   const [qboEst, setQboEst]     = useState(null);
+  const [woBusy, setWoBusy]     = useState(null); // 'attach' | 'download' | null
+  const [woStage, setWoStage]   = useState(null);
+  const [woError, setWoError]   = useState(null);
+  const [attReload, setAttReload] = useState(0); // bump to make AttachmentsPanel re-list
   const isResizing = useRef(false);
   const selectedRef = useRef(null); // guards async estimate fetch against stale selections
 
@@ -260,6 +265,23 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
     });
   }, [f]);
   const toggle = useCallback(fk => setEdits(p => ({ ...p, [fk]: isOn(fk in p ? p[fk] : f[fk]) ? 0 : 1 })), [f]);
+
+  // Work order PDF for the builder crew — client-side render, attached (or
+  // downloaded) via the same pipeline CCS photos already use.
+  async function handleGenerateWorkOrder(attach) {
+    if (!selected) return;
+    setWoBusy(attach ? 'attach' : 'download');
+    setWoStage('Building PDF…'); setWoError(null);
+    try {
+      if (attach) {
+        await generateAndAttachWorkOrder(selected, setWoStage);
+        setAttReload(n => n + 1); // tell the attachments panel to re-list
+      } else {
+        await downloadWorkOrder(selected, setWoStage);
+      }
+    } catch (e) { setWoError(e.message || 'Work order failed'); }
+    finally { setWoBusy(null); setWoStage(null); }
+  }
 
   // Phase progress (live, reflects pending edits)
   // An item marked N/A counts toward completion without requiring its own
@@ -638,6 +660,15 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                   <div className="cv2-field-block">
                     <label>Work order</label>
                     <InlineText value={val('Work Order')} onChange={v => stage('Work Order', v)} placeholder="Add a work order…" area big />
+                    <div className="cv2-wo-actions">
+                      <button type="button" className="cv2-wo-btn" disabled={!!woBusy} onClick={() => handleGenerateWorkOrder(true)}>
+                        {woBusy === 'attach' ? (woStage || 'Working…') : '＋ Generate work order & attach'}
+                      </button>
+                      <button type="button" className="cv2-wo-btn" disabled={!!woBusy} onClick={() => handleGenerateWorkOrder(false)}>
+                        {woBusy === 'download' ? (woStage || 'Working…') : '⤓ Download work order'}
+                      </button>
+                    </div>
+                    {woError && <p className="cv2-wo-error">{woError}</p>}
                   </div>
                   <div className="cv2-field-block">
                     <label>Notes <button type="button" className="cv2-stamp-btn" onClick={() => stampNote('Notes')}>⏱ Stamp</button></label>
@@ -743,7 +774,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                 </div>
               )}
 
-              <AttachmentsPanel parentId={f._kpt__RCD_ID} api={CCS_ATT_API} invoiceDocNumber={f['_kat__QuickBooks_Invoice_ID(1)']} />
+              <AttachmentsPanel parentId={f._kpt__RCD_ID} api={CCS_ATT_API} invoiceDocNumber={f['_kat__QuickBooks_Invoice_ID(1)']} reloadSignal={attReload} />
 
               <div className="cv2-meta">
                 ID {f._kpt__RCD_ID} · Record {selected.recordId} · Created {f.zz__Created_On?.split(' ')[0] || '—'} by {f.zz__Created_By} · Modified {f.zz__Modified_On?.split(' ')[0] || '—'} by {f.zz__Modified_By}

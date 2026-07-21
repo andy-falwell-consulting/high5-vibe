@@ -199,6 +199,16 @@
 .cv2-field-block { margin-top: 12px; }
 .cv2-field-block > label { display: block; font-size: 14px; color: var(--cv2-text-3); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 3px; }
 
+.cv2-wo-actions { display: flex; gap: 8px; margin-top: 8px; }
+.cv2-wo-btn {
+  font-size: 13px; padding: 7px 12px; border-radius: 6px; font-family: inherit;
+  background: #1a1d27; border: 1px solid var(--cv2-border); color: var(--cv2-muted); cursor: pointer;
+}
+.cv2-wo-btn:hover:not(:disabled) { border-color: #e87722; color: #e87722; }
+.cv2-wo-btn:disabled { opacity: 0.6; cursor: default; }
+[data-theme="light"] .cv2-wo-btn { background: #f1f5f9; border-color: #e2e8f0; color: #334155; }
+.cv2-wo-error { color: #ef4444; font-size: 12px; margin: 6px 0 0; }
+
 /* ── Team ──────────────────────────────────────────────────────── */
 .cv2-team { display: flex; flex-direction: column; gap: 8px; }
 .cv2-team-row { display: flex; align-items: center; gap: 11px; }
