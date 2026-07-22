@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import NavRail from './components/NavRail'
 import LoginScreen from './components/LoginScreen'
 import ReadOnlyBanner from './components/ReadOnlyBanner'
+import PreviewBypassBanner from './components/PreviewBypassBanner'
 import Home from './components/Home'
 import ProductsAndServicesV2 from './components/ProductsAndServicesV2'
 import Contacts from './components/Contacts'
@@ -272,6 +273,7 @@ export default function App() {
 
   return (
     <div data-theme={theme} style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+      {user?.isFallback && <PreviewBypassBanner />}
       {!fmpConnected && <ReadOnlyBanner onRetry={retryFmpConnection} />}
       <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
         <NavRail modules={visibleModules} activeId={activeModule} onSelect={handleSelect} theme={theme} onToggleTheme={toggleTheme} onOpenPalette={() => setPaletteOpen(true)} user={user} onLogout={handleLogout} badges={{ reminders: reminderDue }} />

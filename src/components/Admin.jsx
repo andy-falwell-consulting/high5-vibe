@@ -4,6 +4,7 @@ import './Admin.css';
 
 const TABS = [
   { id: 'integrations', label: 'Integrations' },
+  { id: 'preview', label: 'Preview access' },
   { id: 'fmp', label: 'FMP' },
 ];
 
@@ -21,6 +22,82 @@ function IntegrationsTab() {
             </div>
           </div>
           <ShopifyConnect />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// Captures the current admin's own login as the shared fallback session that
+// the preview deployment falls back to when a visitor has no login of their
+// own (see api/_googleSession.js / api/admin-set-fallback-session.js).
+// Google expires refresh tokens for this unverified (Testing mode) OAuth app
+// after 7 days, so this needs re-running roughly weekly, not just once.
+function PreviewAccessTab() {
+  const [meta, setMeta] = useState(undefined); // undefined = loading
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [justCaptured, setJustCaptured] = useState(false);
+  const [now] = useState(() => Date.now()); // captured once — fine for a coarse "Nd ago" display
+
+  const load = useCallback(() => {
+    fetch('/api/admin-set-fallback-session')
+      .then(r => r.json())
+      .then(d => setMeta(d.meta || null))
+      .catch(() => setMeta(null));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function capture() {
+    setBusy(true); setError(null); setJustCaptured(false);
+    try {
+      const res = await fetch('/api/admin-set-fallback-session', { method: 'POST' });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Could not capture session');
+      setMeta(body.meta);
+      setJustCaptured(true);
+      setTimeout(() => setJustCaptured(false), 3000);
+    } catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+
+  const capturedDate = meta?.capturedAt ? new Date(meta.capturedAt) : null;
+  const daysAgo = capturedDate ? Math.floor((now - capturedDate.getTime()) / 86400000) : null;
+  const stale = daysAgo != null && daysAgo >= 6;
+
+  return (
+    <section className="admin-section">
+      <h2 className="admin-section-title">Preview access</h2>
+      <p className="admin-sub" style={{ marginBottom: 16, maxWidth: 560 }}>
+        The rolling <code>preview</code> deployment can let anyone with the link in without signing
+        in, using a stored copy of your own login. Click below (while signed in normally) to
+        capture — or refresh — that stored session. Google expires it after about a week, so this
+        needs redoing periodically, not just once.
+      </p>
+
+      <div className="admin-cards">
+        <div className="admin-card">
+          <div className="admin-card-head">
+            <span className="admin-card-icon">🔓</span>
+            <div className="admin-card-meta">
+              <div className="admin-card-title">Fallback session</div>
+              <div className="admin-card-desc">
+                {meta === undefined ? 'Loading…' : !meta
+                  ? 'Not set up yet — preview requires a real login until this is captured.'
+                  : <>Captured {daysAgo === 0 ? 'today' : `${daysAgo}d ago`} by {meta.capturedBy}
+                      {stale && <span style={{ color: '#f59e0b' }}> — likely expired, recapture it</span>}</>}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={capture}
+            disabled={busy}
+            style={{ padding: '9px 18px', borderRadius: 8, border: 'none', background: '#e87722', color: '#fff', fontSize: 15, fontWeight: 600, cursor: busy ? 'default' : 'pointer', fontFamily: 'inherit', opacity: busy ? 0.6 : 1 }}
+          >
+            {busy ? 'Capturing…' : justCaptured ? '✓ Captured' : meta ? 'Recapture my session' : 'Capture my session'}
+          </button>
+          {error && <div className="admin-email-error">{error}</div>}
         </div>
       </div>
     </section>
@@ -139,6 +216,7 @@ export default function Admin() {
       </div>
 
       {tab === 'integrations' && <IntegrationsTab />}
+      {tab === 'preview' && <PreviewAccessTab />}
       {tab === 'fmp' && <FmpTab />}
     </main>
   );

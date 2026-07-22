@@ -132,6 +132,41 @@ the disposable-branch model — `preview` is just a rolling deploy target.
 
 **Adding test users:** Google Cloud Console → OAuth consent screen → Test users. Required for unverified apps with sensitive scopes.
 
+**Preview auth bypass (v1.0.243+).** The `preview` deployment — and only that
+deployment — can let a visitor in with no Google login at all, using a stored
+copy of an admin's own session as a shared fallback identity. This exists so
+the preview link can be opened cold (for a demo, a screen recording, etc.)
+without every visitor needing to sign in and without hitting Google's
+"unverified app" warning screen.
+
+- `api/_googleSession.js` — `getGoogleSession(req)` first tries the request's
+  own `h5_session` cookie as always; only if that's missing/invalid does it
+  fall back to a fixed Redis key (`fallback_session`). The fallback is gated
+  on `process.env.VERCEL_ENV === 'preview' && process.env.VERCEL_GIT_COMMIT_REF
+  === 'preview'` — both are Vercel's own system env vars, set automatically
+  per-deployment, never hand-configured — so this can never activate on
+  production even by mistake. A real login, whenever present, always wins.
+- **Capturing the fallback session:** Admin → Preview access → "Capture my
+  session" (`api/admin-set-fallback-session.js`, admin-only, requires the
+  caller to be genuinely logged in — not already riding the fallback). Copies
+  the admin's current session into the shared key.
+- **This is not "set once."** The OAuth app is still unverified (Testing
+  mode — see "Adding test users" above), and Google expires Testing-mode
+  refresh tokens after **7 days**. The stored fallback session will quietly
+  stop working about once a week; re-run the capture step to refresh it. The
+  Admin tab shows how many days old the current capture is and flags it once
+  it's ≥6 days.
+- **Attribution:** every write made by a visitor riding the fallback —
+  FileMaker edits, Reminders (Calendar events), emails sent via the
+  assistant — is attributed to whoever last captured the session, not to the
+  actual visitor. A persistent banner (`PreviewBypassBanner.jsx`) says so
+  on every page while it's active, and offers a "Sign in as yourself" link
+  that hands control back to a real login the moment someone completes it.
+- **Blast radius:** anyone who has the `preview` link can act as that admin
+  with zero login — don't let the link travel further than a small trusted
+  circle while this is active. Real production is completely unaffected;
+  the bypass has no code path that can reach it.
+
 ## Adding a new module
 
 ### 1. FileMaker layout name
