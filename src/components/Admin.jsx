@@ -63,7 +63,10 @@ function PreviewAccessTab() {
   }
 
   const capturedDate = meta?.capturedAt ? new Date(meta.capturedAt) : null;
-  const daysAgo = capturedDate ? Math.floor((now - capturedDate.getTime()) / 86400000) : null;
+  // Clamp to 0: right after a fresh capture, `now` (captured once at mount)
+  // can be a hair earlier than the server's capturedAt timestamp, which
+  // would otherwise floor to -1 rather than "today".
+  const daysAgo = capturedDate ? Math.max(0, Math.floor((now - capturedDate.getTime()) / 86400000)) : null;
   const stale = daysAgo != null && daysAgo >= 6;
 
   return (
