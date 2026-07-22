@@ -21,7 +21,11 @@ export default async function handler(req, res) {
   try {
     const url = `https://www.googleapis.com/drive/v3/files/${HELP_DOC_ID}/export?mimeType=${encodeURIComponent('text/html')}`;
     const r = await fetch(url, { headers: { Authorization: `Bearer ${session.accessToken}` } });
-    if (!r.ok) return res.status(502).json({ error: `Could not fetch Help doc (${r.status})` });
+    if (!r.ok) {
+      const body = await r.text().catch(() => '');
+      console.error(`help-content: Drive export ${r.status}`, body.slice(0, 1000));
+      return res.status(502).json({ error: `Could not fetch Help doc (${r.status})`, detail: body.slice(0, 500) });
+    }
     const html = await r.text();
     await redis.set(CACHE_KEY, html, { ex: CACHE_TTL }).catch(() => {});
     return res.json({ html, cached: false });
