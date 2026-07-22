@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { listReminders, bucketReminders, completeReminder, snoozeReminder, deleteReminder, subscribeReminders } from '../api/reminders'
 import { isReminderSoundOn, setReminderSoundOn, playReminderChime } from '../utils/chime'
+import { recordSourceFor } from '../config/recordSources'
 import ReminderModal from './ReminderModal'
 import './Reminders.css'
 
@@ -128,12 +129,17 @@ export default function Reminders({ navTarget, onClearNav, onNavigateTo } = {}) 
                     <div className="rm-body" onClick={() => setEditing(r)}>
                       <div className="rm-row-title">{r.title}</div>
                       <div className="rm-meta">
-                        {r.recordLabel && (
-                          <button className="rm-chip" title="Open linked record"
-                            onClick={e => { e.stopPropagation(); if (r.recordType && r.recordId) onNavigateTo?.(r.recordType, r.recordId) }}>
-                            ◉ {r.recordLabel}
-                          </button>
-                        )}
+                        {r.recordLabel && (() => {
+                          const src = recordSourceFor(r.recordType)
+                          const color = src?.color || '#3b82f6'
+                          return (
+                            <button className="rm-chip" title="Open linked record"
+                              style={{ color, background: color + '1f' }}
+                              onClick={e => { e.stopPropagation(); if (r.recordType && r.recordId) onNavigateTo?.(r.recordType, r.recordId) }}>
+                              {src?.icon || '◉'} {r.recordLabel}
+                            </button>
+                          )
+                        })()}
                         <span className={`rm-when tone-${g.tone}`}>{fmtWhen(r.start)}</span>
                       </div>
                     </div>

@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { createReminder, updateReminder } from '../api/reminders'
+import { recordSourceFor } from '../config/recordSources'
+import RecordPicker from './RecordPicker'
 import './ReminderModal.css'
 
 // Create or edit a reminder (a Google Calendar event). Open for create with
@@ -37,8 +39,13 @@ export default function ReminderModal({ reminder, initial = {}, onClose, onSaved
   const [notes, setNotes] = useState(reminder?.notes || '')
   const [status, setStatus] = useState(null) // null | 'saving' | 'error'
   const [error, setError] = useState('')
-
-  const recordLabel = reminder?.recordLabel || initial.recordLabel || ''
+  const [link, setLink] = useState(() => ({
+    recordType: reminder?.recordType || initial.recordType || '',
+    recordId: reminder?.recordId || initial.recordId || '',
+    recordLabel: reminder?.recordLabel || initial.recordLabel || '',
+  }))
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const linkSource = recordSourceFor(link.recordType)
 
   useEffect(() => {
     const onKey = e => { if (e.key === 'Escape' && status !== 'saving') onClose() }
@@ -53,10 +60,16 @@ export default function ReminderModal({ reminder, initial = {}, onClose, onSaved
     const overrides = REMIND_OPTIONS.find(o => o.id === remindId)?.overrides
     setStatus('saving'); setError('')
     try {
+      const linkChanged = editing && (
+        link.recordType !== (reminder.recordType || '') ||
+        link.recordId !== (reminder.recordId || '') ||
+        link.recordLabel !== (reminder.recordLabel || '')
+      )
       const saved = editing
-        ? await updateReminder(reminder.id, { title: title.trim(), notes, startISO, durationMin: Number(duration), overrides })
+        ? await updateReminder(reminder.id, { title: title.trim(), notes, startISO, durationMin: Number(duration), overrides,
+            recordLink: linkChanged ? link : undefined })
         : await createReminder({ title: title.trim(), notes, startISO, durationMin: Number(duration), overrides,
-            recordType: initial.recordType, recordId: initial.recordId, recordLabel })
+            recordType: link.recordType, recordId: link.recordId, recordLabel: link.recordLabel })
       onSaved?.(saved)
       onClose()
     } catch (e) {
@@ -68,13 +81,28 @@ export default function ReminderModal({ reminder, initial = {}, onClose, onSaved
     <div className="rmm-backdrop" onClick={e => e.target === e.currentTarget && status !== 'saving' && onClose()}>
       <div className="rmm-panel">
         <div className="rmm-header">
-          <h3>{editing ? 'Edit reminder' : 'New reminder'}{recordLabel ? <span className="rmm-sub"> · {recordLabel}</span> : null}</h3>
+          <h3>{editing ? 'Edit reminder' : 'New reminder'}</h3>
           <button className="rmm-close" onClick={onClose} disabled={status === 'saving'}>✕</button>
         </div>
         <div className="rmm-body">
           <label className="rmm-field"><span>Title</span>
             <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Follow up with…" autoFocus />
           </label>
+          <div className="rmm-field">
+            <span>Linked record</span>
+            {link.recordId ? (
+              <div className="rmm-link">
+                <span className="rmm-link-tag" style={{ color: linkSource?.color || '#94a3b8', background: (linkSource?.color || '#94a3b8') + '1f' }}>
+                  {linkSource?.type || link.recordType}
+                </span>
+                <span className="rmm-link-name">{link.recordLabel}</span>
+                <button type="button" className="rmm-link-change" onClick={() => setPickerOpen(true)}>Change</button>
+                <button type="button" className="rmm-link-remove" title="Remove link" onClick={() => setLink({ recordType: '', recordId: '', recordLabel: '' })}>✕</button>
+              </div>
+            ) : (
+              <button type="button" className="rmm-link-attach" onClick={() => setPickerOpen(true)}>＋ Attach a record</button>
+            )}
+          </div>
           <div className="rmm-row">
             <label className="rmm-field"><span>Date</span>
               <input type="date" value={date} onChange={e => setDate(e.target.value)} />
@@ -105,6 +133,13 @@ export default function ReminderModal({ reminder, initial = {}, onClose, onSaved
           <button className="rmm-btn save" onClick={save} disabled={status === 'saving'}>{status === 'saving' ? 'Saving…' : (editing ? 'Save' : 'Create')}</button>
         </div>
       </div>
+      {pickerOpen && (
+        <RecordPicker
+          title="Attach a record"
+          onClose={() => setPickerOpen(false)}
+          onSelect={r => { setLink({ recordType: r.module, recordId: String(r.recordId), recordLabel: r.title }); setPickerOpen(false) }}
+        />
+      )}
     </div>
   )
 }

@@ -134,7 +134,17 @@ async function calUpdate(session, p) {
   if (p.startISO) patch.start = { dateTime: p.startISO, timeZone: p.timeZone || 'UTC' };
   if (p.endISO) patch.end = { dateTime: p.endISO, timeZone: p.timeZone || 'UTC' };
   if (p.overrides) patch.reminders = { useDefault: false, overrides: p.overrides };
-  if (p.done !== undefined) patch.extendedProperties = { private: { done: p.done ? '1' : '0' } };
+  const priv = {};
+  if (p.done !== undefined) priv.done = p.done ? '1' : '0';
+  if (p.recordLink) {
+    // Calendar deletes a private property when its patched value is null, so an
+    // empty string here (the "remove link" case) clears the field entirely
+    // instead of leaving a stale empty string behind.
+    priv.recordType = p.recordLink.recordType || null;
+    priv.recordId = p.recordLink.recordId || null;
+    priv.recordLabel = p.recordLink.recordLabel || null;
+  }
+  if (Object.keys(priv).length) patch.extendedProperties = { private: priv };
   const r = await fetch(`${CAL}/${encodeURIComponent(p.id)}`, { method: 'PATCH', headers: calHeaders(session), body: JSON.stringify(patch) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) return { status: r.status, body: { error: j.error?.message || 'Update failed' } };
