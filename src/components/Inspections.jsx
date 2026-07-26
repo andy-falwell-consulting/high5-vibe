@@ -247,12 +247,24 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
     { key: 'Inspectors Name', label: 'Inspector Name', type: 'text' },
   ];
 
-  // Prior inspections for the contact picked in the create form — the sites are
+  // Prior inspections for the site picked in the create form — sites are
   // re-inspected yearly, so last year's is almost always the right source.
-  const priorInspections = useCallback((contactId) => {
-    if (!contactId) return [];
+  //
+  // Matched on Organization, NOT the contact FK: the picker hands back the org
+  // contact (e.g. 4-H Camp Bristol Hills = 72380) while its inspections point
+  // at a separate site contact (82201), so an FK match finds nothing. The
+  // Organization text is what the inspt_CNTCT__site relationship keys on
+  // anyway. FK is kept as a fallback for records with no Organization set.
+  const priorInspections = useCallback((contactId, org) => {
+    const orgKey = String(org || '').trim().toLowerCase();
+    if (!orgKey && !contactId) return [];
     return records
-      .filter(r => String(r.fieldData?._kft__Contact_ID || '') === String(contactId))
+      .filter(r => {
+        const fd = r.fieldData || {};
+        const rOrg = String(fd.Organization || fd['inspt_CNTCT__site::Name_Organization'] || '').trim().toLowerCase();
+        if (orgKey && rOrg) return rOrg === orgKey;
+        return contactId && String(fd._kft__Contact_ID || '') === String(contactId);
+      })
       .sort((a, b) => parseFmDate(b.fieldData?.Date) - parseFmDate(a.fieldData?.Date))
       .slice(0, 25);
   }, [records]);
@@ -267,6 +279,11 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
       const src = full?.response?.data?.[0]?.fieldData;
       if (!src) throw new Error('Could not load the inspection to copy.');
       payload = { ...copyProfileFields(src), ...fieldData };
+      // Point the copy at the SAME site contact as its predecessor. The picker
+      // hands back the org contact, but inspections hang off a separate site
+      // contact — inheriting it keeps the new record on the same site record
+      // the previous years used.
+      if (src._kft__Contact_ID) payload._kft__Contact_ID = String(src._kft__Contact_ID);
     }
 
     const res = await createRecord(LAYOUT, payload);
@@ -549,8 +566,8 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
           onClose={() => { copySourceRef.current = null; setCopySource(''); setShowNew(false); }}
         >
           {values => {
-            const prior = priorInspections(values._kft__Contact_ID);
             if (!values._kft__Contact_ID) return null;
+            const prior = priorInspections(values._kft__Contact_ID, values.Organization);
             return (
               <div className="insp-copy-block">
                 <span className="rfm-label">Start from</span>
