@@ -10,7 +10,7 @@
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
   animation: rt-in 0.22s ease-out;
 }
-.rt-toast.now { border-left-color: #e8322a; }
+.rt-toast.now { border-left-color: var(--h5-red); }
 .rt-toast.lead { border-left-color: #f0a93b; }
 @keyframes rt-in { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { BRAND, UI } from '../config/brandColors'
 import { getRecord, prefetchRecord, updateRecord, createRecord, addCachedRecord, addPortalRow, invalidateRecord, deleteRecord, findInLayout } from '../api/filemaker';
 import { useAllRecords } from '../hooks/useAllRecords';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
@@ -54,10 +55,10 @@ const METHOD_CONFIG = {
 };
 
 const STATUS_COLOR = {
-  Active: '#22c55e',
-  Inactive: '#64748b',
-  Prospect: '#e87722',
-  default: '#64748b',
+  Active: UI.success,
+  Inactive: UI.neutral,
+  Prospect: BRAND.gold,
+  default: UI.neutral,
 };
 
 const STATUS_OPTIONS = ['Active', 'Inactive', 'Prospect'];
@@ -67,14 +68,19 @@ const STATUS_OPTIONS = ['Active', 'Inactive', 'Prospect'];
 // that flag rather than the legacy free-text `Type` field, which isn't used.
 const typeLabel = fd => String(fd?.Organization) === '1' ? 'Organization' : 'Individual';
 
+// Client_Alert is a checkbox field ("1" = flagged). In FileMaker a flagged
+// contact's name renders red on every layout it appears on; mirror that here
+// so the alert is visible at a glance in both the list and the record.
+const hasClientAlert = fd => String(fd?.Client_Alert) === '1';
+
 const FIELD_LABELS = {
-  Name_Organization: 'Name / Organization', Organization: 'Type', Status: 'Status',
+  Name_Organization: 'Name / Organization', Organization: 'Type', Title: 'Title', Status: 'Status',
   Industry: 'Industry', Department: 'Department', Source: 'Source',
   Spouse: 'Spouse', Birthdate: 'Birthdate',
   Client_Alert: 'Client alert', Keywords: 'Keywords', Notes: 'Notes',
 };
 
-const ABOUT_FIELDS = ['Name_Organization', 'Organization', 'Status', 'Industry', 'Department', 'Source', 'Spouse', 'Birthdate'];
+const ABOUT_FIELDS = ['Name_Organization', 'Title', 'Organization', 'Status', 'Industry', 'Department', 'Source', 'Spouse', 'Birthdate'];
 const NOTE_FIELDS  = ['Client_Alert', 'Keywords', 'Notes'];
 
 // FileMaker portal occurrence names, keyed by our logical id.
@@ -160,15 +166,29 @@ function buildActivity(p) {
   rowsOf(p, 'estimates').forEach(r => items.push({ icon: '≡', date: r['cntct_ESTMT::Date'], title: r['cntct_ESTMT::Title'] || `Estimate ${r['cntct_ESTMT::_kpt__Estimate_ID']}`, sub: money(r['cntct_ESTMT::zz__Total__xn']) }));
   rowsOf(p, 'ccs').forEach(r => items.push({ icon: '◈', date: r['cntct_RCD::rcd start date'], title: `CCS project · ${r['cntct_RCD::Status'] || '—'}`, sub: `RCD #${r['cntct_RCD::_kpt__RCD_ID']}` }));
   rowsOf(p, 'rmi').forEach(r => items.push({ icon: '⚠', date: r['cntct_RMI::Entry_Date'], title: `Risk — ${r['cntct_RMI::Level_of_Risk'] || '—'}`, sub: r['cntct_RMI::Status'] }));
+  // Current year + the 2 prior — per feedback, the overview was reading as
+  // "just CCS" because it wasn't bounded and old rows from every source
+  // crowded out anything recent.
+  const earliestYear = new Date().getFullYear() - 2;
   return items
     .filter(i => i.date)
     .map(i => ({ ...i, ts: parseFmDate(i.date) }))
+    .filter(i => new Date(i.ts).getFullYear() >= earliestYear)
     .sort((a, b) => b.ts - a.ts)
     .slice(0, 12);
 }
 
 function FieldValue({ fieldKey, value, onChange, editing }) {
   const ch = v => onChange(fieldKey, v);
+  if (fieldKey === 'Client_Alert') {
+    const on = String(value) === '1';
+    return (
+      <label className="ct-alert-toggle">
+        <input type="checkbox" checked={on} onChange={e => ch(e.target.checked ? '1' : '')} />
+        <span>{on ? 'Flagged — client alert is active' : 'Not flagged'}</span>
+      </label>
+    );
+  }
   if (!editing) {
     if (fieldKey === 'Notes') return <div className="ct-notes-display">{value || '—'}</div>;
     if (fieldKey === 'Organization') return <span className="ct-value">{String(value) === '1' ? 'Organization' : 'Individual'}</span>;
@@ -186,9 +206,14 @@ function PortalTable({ id, rows, onOpenRow, onRemove }) {
   const linkProps = r => (onOpenRow && r.recordId)
     ? { className: 'ct-row-link', onClick: () => onOpenRow(r), title: 'Open' }
     : {};
+  // Title comes from cntct_RLTN::zz__Display__ct — despite the generic-looking
+  // key, this is a per-relationship role/title (e.g. "Athletic Director",
+  // "P.E. Teacher"), not a relationship-kind label. It used to be wrongly used
+  // as a Name fallback (so a blank-named row would show a title where a name
+  // belongs) — fixed to show as its own column instead.
   if (id === 'related') return (
-    <table className="ct-table"><thead><tr><th>Name</th><th>Phone</th><th>Email</th>{onRemove && <th aria-label="Unlink" />}</tr></thead>
-      <tbody>{rows.map((r, i) => <tr key={i} {...linkProps(r)}><td>{r['cntct_rltn_CNTCT::zz__Display__ct'] || r['cntct_RLTN::zz__Display__ct']}</td><td className="mono">{r['cntct_rltn_cntct_PHONE::Number']}</td><td>{r['cntct_rltn_cntct_INADR__email::Address']}</td>{onRemove && <td className="num"><button className="ct-unlink" title="Unlink contact" onClick={(e) => { e.stopPropagation(); onRemove(r); }}>✕</button></td>}</tr>)}</tbody></table>
+    <table className="ct-table"><thead><tr><th>Name</th><th>Title</th><th>Phone</th><th>Email</th>{onRemove && <th aria-label="Unlink" />}</tr></thead>
+      <tbody>{rows.map((r, i) => <tr key={i} {...linkProps(r)}><td>{r['cntct_rltn_CNTCT::zz__Display__ct']}</td><td>{r['cntct_RLTN::zz__Display__ct']}</td><td className="mono">{r['cntct_rltn_cntct_PHONE::Number']}</td><td>{r['cntct_rltn_cntct_INADR__email::Address']}</td>{onRemove && <td className="num"><button className="ct-unlink" title="Unlink contact" onClick={(e) => { e.stopPropagation(); onRemove(r); }}>✕</button></td>}</tr>)}</tbody></table>
   );
   if (id === 'inspections') return (
     <table className="ct-table"><thead><tr><th>Date</th><th>Organization</th><th>Contact</th><th>Inspector</th></tr></thead>
@@ -203,8 +228,10 @@ function PortalTable({ id, rows, onOpenRow, onRemove }) {
       <tbody>{rows.map((r, i) => <tr key={i}><td className="mono">{r['cntct_WKSRG::Course Number']}</td><td>{r['cntct_WKSRG::Course Name']}</td><td>{r['cntct_WKSRG::zz__Display_Organization__ct']}</td><td>{r['cntct_WKSRG::Start Date']}</td><td>{r['cntct_WKSRG::End Date']}</td></tr>)}</tbody></table>
   );
   if (id === 'ccs') return (
-    <table className="ct-table"><thead><tr><th>ID</th><th>Status</th><th>Organization</th><th>Type</th><th>Start</th></tr></thead>
-      <tbody>{rows.map((r, i) => <tr key={i} {...linkProps(r)}><td className="mono">{r['cntct_RCD::_kpt__RCD_ID']}</td><td>{r['cntct_RCD::Status']}</td><td>{r['cntct_RCD::zz__Display_Organization__ct']}</td><td>{r['cntct_RCD::zz__TypeOfProjectList__ct']}</td><td>{r['cntct_RCD::rcd start date']}</td></tr>)}</tbody></table>
+    // Columns mirror the Custom Training tab (Organization / Contact / Type /
+    // Start / Status) per Ian's request to match its layout.
+    <table className="ct-table"><thead><tr><th>Organization</th><th>Contact</th><th>Type</th><th>Start</th><th>Status</th></tr></thead>
+      <tbody>{rows.map((r, i) => <tr key={i} {...linkProps(r)}><td>{r['cntct_RCD::zz__Display_Organization__ct']}</td><td>{r['cntct_RCD::zz__Display_Contact__ct']}</td><td>{r['cntct_RCD::zz__TypeOfProjectList__ct']}</td><td>{r['cntct_RCD::rcd start date']}</td><td>{r['cntct_RCD::Status']}</td></tr>)}</tbody></table>
   );
   if (id === 'certifications') return (
     <table className="ct-table"><thead><tr><th>Certificate dates</th></tr></thead>
@@ -223,7 +250,7 @@ function PortalTable({ id, rows, onOpenRow, onRemove }) {
             <td className="mono">#{r['cntct_INVO::QuickBooks_Reference_Number'] || '—'}</td>
             <td>{r['cntct_INVO::Date']}</td>
             <td className="num">{money(info.total)}</td>
-            <td className="num" style={{ color: info.balance > 0 ? '#e8322a' : 'inherit' }}>{money(info.balance)}</td>
+            <td className="num" style={{ color: info.balance > 0 ? '#ED1C24' : 'inherit' }}>{money(info.balance)}</td>
             <td>{info.status}</td>
           </tr>
         );
@@ -463,7 +490,11 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
                 >
                   <span className="ct-item-dot" style={{ background: color }} />
                   <div className="ct-item-text">
-                    <div className="ct-item-name">{r.fieldData.zz__Display__ct || r.fieldData.Name_Organization || '—'}</div>
+                    <div className={`ct-item-name${hasClientAlert(r.fieldData) ? ' ct-alert-name' : ''}`}
+                      title={hasClientAlert(r.fieldData) ? 'Client Alert' : undefined}>
+                      {hasClientAlert(r.fieldData) && <span className="ct-alert-i" aria-hidden="true">⚠ </span>}
+                      {r.fieldData.zz__Display__ct || r.fieldData.Name_Organization || '—'}
+                    </div>
                     <div className="ct-item-sub">{r.fieldData['cntct_ADDR::zz__Display_Single_Line_No_Zip__ct'] || typeLabel(r.fieldData)}</div>
                   </div>
                 </div>
@@ -502,7 +533,7 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
               <div className="ct-avatar">{initialsOf(f.zz__Display__ct || f.Name_Organization)}</div>
               <div className="ct-hero-main">
                 <div className="ct-hero-titlerow">
-                  <h1 className="ct-hero-name">{f.zz__Display__ct || f.Name_Organization || '—'}</h1>
+                  <h1 className={`ct-hero-name${hasClientAlert(f) ? ' ct-alert-name' : ''}`}>{f.zz__Display__ct || f.Name_Organization || '—'}</h1>
                   {f.Status && (
                     <span className="ct-chip status" style={{ background: (STATUS_COLOR[f.Status] || '#64748b') + '22', color: STATUS_COLOR[f.Status] || '#64748b', borderColor: (STATUS_COLOR[f.Status] || '#64748b') + '44' }}>{f.Status}</span>
                   )}
@@ -527,7 +558,7 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
               <div className="ct-metric"><div className="ct-metric-v">{metrics.inspections}</div><div className="ct-metric-l">Inspections</div></div>
               <div className="ct-metric"><div className="ct-metric-v">{metrics.ccs}</div><div className="ct-metric-l">CCS projects</div></div>
               <div className="ct-metric"><div className="ct-metric-v">{metrics.invoices}</div><div className="ct-metric-l">Invoices</div></div>
-              <div className="ct-metric"><div className="ct-metric-v" style={{ color: metrics.openBalance > 0 ? '#e8322a' : undefined }}>{money(metrics.openBalance)}</div><div className="ct-metric-l">Open balance</div></div>
+              <div className="ct-metric"><div className="ct-metric-v" style={{ color: metrics.openBalance > 0 ? '#ED1C24' : undefined }}>{money(metrics.openBalance)}</div><div className="ct-metric-l">Open balance</div></div>
             </div>
 
 
@@ -567,8 +598,8 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
                   )}
                 </div>
 
-                {val('Client_Alert') && (
-                  <div className="ct-alert"><span className="ct-alert-i">⚠</span><span>{val('Client_Alert')}</span></div>
+                {hasClientAlert(f) && (
+                  <div className="ct-alert"><span className="ct-alert-i">⚠</span><span>Client Alert — use caution with this contact.</span></div>
                 )}
               </div>
 

@@ -1,20 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { readCacheAsync } from '../api/filemaker'
-import { RCD_CACHE_VERSION } from '../config/ccsCache'
-
-// Cross-module record sources — read from the already-prewarmed caches.
-const SOURCES = [
-  { module: 'contacts', layout: 'Contacts_New', cv: 2, type: 'Contact', icon: '◉', color: '#8b5cf6',
-    title: f => f.zz__Display__ct, sub: f => f['cntct_ADDR::zz__Display_Single_Line_No_Zip__ct'] || f.Type || '' },
-  { module: 'inspections', layout: 'Inspections_New', cv: 1, type: 'Inspection', icon: '⚑', color: '#3b82f6',
-    title: f => f.Organization || f['inspt_CNTCT__site::Name_Organization'],
-    sub: f => [f['inspt_CNTCT__site::Site Number'], f.Date].filter(Boolean).join(' · ') },
-  { module: 'projects', layout: 'RCD_New', cv: RCD_CACHE_VERSION, type: 'Project', icon: '◈', color: '#e8722a',
-    title: f => f.zz__Display_Organization__ct,
-    sub: f => [f['Type of Project(1)'], f.kanban_status].filter(Boolean).join(' · ') },
-  { module: 'products', layout: 'Products & Services_New', cv: 4, type: 'Product', icon: '◫', color: '#d97706',
-    title: f => f.Name, sub: f => f.SKU || f.Category || '' },
-]
+import { RECORD_SOURCES as SOURCES } from '../config/recordSources'
 
 const PER_SOURCE = 6
 const clean = v => (v || '').replace(/[\r\n]+/g, ' ').trim()

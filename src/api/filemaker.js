@@ -36,6 +36,18 @@ let sessionToken = null;
 let _tokenEnvId = null;
 let _tokenPromise = null; // shared in-flight auth, so a burst of calls mints one token
 
+// Force the next getToken() call to mint a brand-new FMP Data API session
+// instead of reusing the current one. Container-streaming URLs embed a token
+// tied to the specific session active when the record was fetched; FMP Server
+// can evict sessions under concurrent load well before our client-side copy
+// would otherwise expire, so a reused session can mint a streaming URL that's
+// already invalid. Called right before minting a fresh attachment/report URL
+// (see recordAttachments.js / inspectionAttachments.js) to shrink that window
+// to a single round-trip instead of "however long since the list last loaded".
+export function resetFmpSession() {
+  sessionToken = null;
+}
+
 // ── Per-user OAuth session (for write attribution) ────────────────
 // The user's FileMaker identity (minted server-side via ensureFmpUserSession →
 // /api/fmp-user-token, Basic auth as their account). We hold this user-bound
@@ -194,6 +206,60 @@ export async function getRecords(layout, limit = 100, offset = 1, signal) {
     return getRecords(layout, limit, offset, signal);
   }
   return res.json();
+}
+
+// FileMaker publishes a layout's value lists in its metadata, so dropdowns can
+// be driven by FMP instead of hardcoded arrays that silently drift out of sync
+// (Project Type, Lead Builder and friends had each drifted into two or three
+// different versions before this). Editing a list in FileMaker Pro is now the
+// only place it needs to change — no code deploy.
+//
+// Cached for an hour, in memory and localStorage: the metadata payload is large
+// (RCD_New ships a ~4,800-entry contact lookup) and value lists change rarely.
+const VL_TTL_MS = 60 * 60 * 1000;
+// Relationship-backed picker lists (contact lookups etc.) run to thousands of
+// entries and are never dropdown vocabularies — skip them so the cached payload
+// stays small and can't blow the localStorage quota.
+const VL_MAX_VALUES = 200;
+const _vlMem = {};
+
+export async function getValueLists(layout) {
+  const env = getCurrentEnv();
+  const key = `vl:${env.db}:${layout}`;
+  const fresh = e => e && Date.now() - e.at < VL_TTL_MS;
+
+  if (fresh(_vlMem[key])) return _vlMem[key].lists;
+  try {
+    const cached = JSON.parse(localStorage.getItem(key));
+    if (fresh(cached)) { _vlMem[key] = cached; return cached.lists; }
+  } catch { /* absent or unparseable — fall through and refetch */ }
+
+  const token = await getToken();
+  const res = await _scheduledFetch(_LOW, () => fetch(
+    `${getBasePath()}/fmi/data/v2/databases/${env.db}/layouts/${encodeURIComponent(layout)}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  ));
+  if (res.status === 401) {
+    sessionToken = null;
+    return getValueLists(layout);
+  }
+  const data = await res.json();
+
+  const lists = {};
+  for (const vl of data?.response?.valueLists ?? []) {
+    // FileMaker pads lists with null and whitespace-only placeholder entries
+    // ("Type of Project" leads with one, "Status: RCD" trails with a space) —
+    // drop them so a select doesn't render blank options.
+    const values = [...new Set(
+      (vl.values ?? []).map(v => String(v?.displayValue ?? '').trim()).filter(Boolean)
+    )];
+    if (values.length && values.length <= VL_MAX_VALUES) lists[vl.name] = values;
+  }
+
+  const entry = { at: Date.now(), lists };
+  _vlMem[key] = entry;
+  try { localStorage.setItem(key, JSON.stringify(entry)); } catch { /* quota */ }
+  return lists;
 }
 
 const MEM_TTL_MS = 5 * 60 * 1000;
@@ -593,6 +659,14 @@ export async function createRecord(layout, fieldData) {
 }
 
 export async function addPortalRow(layout, recordId, portalName, rowData) {
+  return addPortalRows(layout, recordId, portalName, [rowData]);
+}
+
+// Bulk variant — FileMaker accepts many new portal rows in a single PATCH, which
+// matters when copying a whole set at once (an inspection carries 25-75 line
+// items; one request beats one round trip per line).
+export async function addPortalRows(layout, recordId, portalName, rows) {
+  if (!rows?.length) return { messages: [{ code: '0', message: 'OK' }] };
   const token = await getToken({ write: true });
   const env = getCurrentEnv();
   const res = await fetch(
@@ -600,10 +674,10 @@ export async function addPortalRow(layout, recordId, portalName, rowData) {
     {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ portalData: { [portalName]: [rowData] } }),
+      body: JSON.stringify({ portalData: { [portalName]: rows } }),
     }
   );
-  if (res.status === 401) { invalidateWriteAuth(); return addPortalRow(layout, recordId, portalName, rowData); }
+  if (res.status === 401) { invalidateWriteAuth(); return addPortalRows(layout, recordId, portalName, rows); }
   return res.json();
 }
 

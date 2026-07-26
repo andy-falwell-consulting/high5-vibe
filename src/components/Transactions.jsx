@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { BRAND, UI } from '../config/brandColors'
 import ListToolbar, { useListControls } from './ListControls';
 
 const ROW_H = 54; // fixed row height (px) — must match .txn-row in CSS for virtualization
@@ -23,11 +24,11 @@ const fmtDate = v => { const t = parseDate(v); return t ? new Date(t).toLocaleDa
 
 function statusColor(s) {
   const t = String(s || '').toLowerCase();
-  if (t === 'paid') return '#22c55e';
-  if (t === 'overdue' || t === 'unapplied') return '#ef4444';
-  if (t === 'open' || t === 'pending') return '#f59e0b';
-  if (t === 'accepted' || t === 'closed' || t === 'applied') return '#3b82f6';
-  return '#94a3b8';
+  if (t === 'paid') return UI.success;
+  if (t === 'overdue' || t === 'unapplied') return UI.danger;
+  if (t === 'open' || t === 'pending') return BRAND.gold;
+  if (t === 'accepted' || t === 'closed' || t === 'applied') return BRAND.blue;
+  return UI.muted;
 }
 
 async function loadAll() {
@@ -201,7 +202,7 @@ export default function Transactions({ onRecordSelect } = {}) {
               <div className="txn-kpi"><div className="txn-kpi-l">Date</div><div className="txn-kpi-v">{fmtDate(d.date)}</div></div>
               <div className="txn-kpi"><div className="txn-kpi-l">Total</div><div className="txn-kpi-v">{money(d.total)}</div></div>
               {d.type === 'Invoice' || d.type === 'CreditMemo' ? (
-                <div className="txn-kpi"><div className="txn-kpi-l">Balance</div><div className="txn-kpi-v" style={{ color: d.balance > 0 ? '#e8322a' : 'inherit' }}>{money(d.balance)}</div></div>
+                <div className="txn-kpi"><div className="txn-kpi-l">Balance</div><div className="txn-kpi-v" style={{ color: d.balance > 0 ? '#ED1C24' : 'inherit' }}>{money(d.balance)}</div></div>
               ) : null}
               <div className="txn-kpi"><div className="txn-kpi-l">Status</div><div className="txn-kpi-v" style={{ color: statusColor(d.status) }}>{d.status}</div></div>
             </div>

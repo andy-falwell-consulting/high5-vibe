@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { getRecord, updateRecord, updatePortalRow, deletePortalRow, invalidateRecord, containerImageUrl, createRecord } from '../api/filemaker';
+import { getRecord, updateRecord, updatePortalRow, deletePortalRow, invalidateRecord, patchCachedRecord, containerImageUrl, createRecord } from '../api/filemaker';
 import { getCurrentEnv } from '../config/fmpEnvironments';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
 import BomPickerModal from './BomPickerModal';
@@ -9,12 +9,16 @@ import { pushToShopify, pushToQBO } from '../api/integrations';
 import RichTextEditor, { sanitizeHtml } from './RichTextEditor';
 import { useAllRecords } from '../hooks/useAllRecords';
 import { CATEGORIES, TYPES, VENDORS, QBO_INCOME, QBO_CLASS } from '../config/productOptions';
+import { BRAND } from '../config/brandColors';
 import './ProductsAndServicesV2.css';
 
 const LAYOUT = 'Products & Services_New';
+// Must match the cacheVersion passed to useAllRecords below — patchCachedRecord
+// writes into the version-keyed cache, so a mismatch silently no-ops.
+const CACHE_VERSION = 5;
 
 const FIELD_LABELS = {
-  SKU: 'SKU', vendor_sku: 'Vendor SKU', Vendor: 'Vendor', Type: 'Type',
+  SKU: 'High 5 Sku', vendor_sku: 'Vendor SKU', Vendor: 'Vendor', Type: 'Type',
   Category: 'Category', Cost: 'Cost', Unit_Price: 'Unit Price',
   assembly_product: 'Assembly Product', price_override: 'Price Override',
   Description: 'Description', Notes: 'Notes', shopify_description: 'Shopify Description',
@@ -23,11 +27,13 @@ const FIELD_LABELS = {
   qbo_class: 'QBO Class',
 };
 
+// Categorical distinctions drawn from the brand palette (see brandColors.js).
+// Lumber → khaki is a deliberate wood cue; red is left out (accent-reserved).
 const CATEGORY_COLORS = {
-  Hardware: '#3b82f6', Labor: '#8b5cf6', Lumber: '#f59e0b',
-  Tool: '#10b981', Training: '#ec4899', Catalog: '#6366f1',
-  'Low Element': '#14b8a6', 'High Element': '#f97316',
-  'Typical Component': '#64748b', Repair: '#ef4444',
+  Hardware: BRAND.blue, Labor: BRAND.purple, Lumber: BRAND.khaki,
+  Tool: BRAND.mustard, Training: BRAND.gold, Catalog: '#4FC3E8',
+  'Low Element': '#B968B4', 'High Element': '#C2740C',
+  'Typical Component': '#A98F3E', Repair: '#8A7B4F',
 };
 
 const URL_RE = /https?:\/\/[^\s\r\n]+/g;
@@ -137,7 +143,7 @@ async function fetchNextSku() {
 
 export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordSelect } = {}) {
   const { records, total, loading, error } = useAllRecords(LAYOUT, {
-    cacheVersion: 5,
+    cacheVersion: CACHE_VERSION,
     slimForStorage: r => ({
       recordId: r.recordId,
       fieldData: {
@@ -271,6 +277,12 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
         if (res.messages?.[0]?.code !== '0') { setSaveStatus('error'); return; }
         const merged = { ...selected.fieldData, ...edits };
         setSelected(p => ({ ...p, fieldData: merged }));
+        // Push the edit into the shared caches too. Without this the sidebar row
+        // keeps the old value (useAllRecords only re-renders on a cache notify),
+        // and getRecord's memoized detail promise would later replay the stale
+        // pre-edit fieldData back over the list cache on re-select.
+        patchCachedRecord(LAYOUT, CACHE_VERSION, selected.recordId, edits);
+        invalidateRecord(LAYOUT, selected.recordId);
         const syncFields = Object.keys(edits).filter(k => AUTO_SYNC_FIELDS.has(k));
         if (syncFields.length) {
           if (merged._kat__Item_ID_Shopify) handleSyncPush('shopify');
@@ -654,7 +666,7 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
                   <div className="v2-meta-row">
                     {f.Category && <span className="v2-cat-chip" style={{ background: catColor+'22', color: catColor, borderColor: catColor+'44' }}>{f.Category}</span>}
                     {f.Type && <span className="v2-type-chip">{f.Type}</span>}
-                    {f.SKU && <span className="v2-sku"><span className="dim">SKU</span> {f.SKU}</span>}
+                    {f.SKU && <span className="v2-sku"><span className="dim">High 5 Sku</span> {f.SKU}</span>}
                     {f.Vendor && <span className="v2-sku"><span className="dim">Vendor</span> {f.Vendor}</span>}
                   </div>
                   <div className="v2-kpis">
@@ -690,12 +702,12 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
                     <div className="v2-spec-head">Description</div>
                     <FieldValue fieldKey="Description" value={fval('Description')} onChange={handleFieldChange} dataEditing={dataEditing} />
                   </div>
-                  {(fval('Notes') || dataEditing) && (
-                    <div className="v2-spec-card">
-                      <div className="v2-spec-head">Notes</div>
-                      <FieldValue fieldKey="Notes" value={fval('Notes')} onChange={handleFieldChange} dataEditing={dataEditing} />
-                    </div>
-                  )}
+                  {/* Always rendered, like Description: gating on a value meant a
+                      record with an empty FMP Notes field had nowhere to type one. */}
+                  <div className="v2-spec-card">
+                    <div className="v2-spec-head">Notes</div>
+                    <FieldValue fieldKey="Notes" value={fval('Notes')} onChange={handleFieldChange} dataEditing={dataEditing} />
+                  </div>
                   <div className="v2-spec-card">
                     <div className="v2-spec-head">Shopify description</div>
                     {dataEditing ? (

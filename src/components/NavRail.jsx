@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { FMP_ENVIRONMENTS, getCurrentEnv, setCurrentEnvId } from '../config/fmpEnvironments'
 import { getFmpUserName, ensureFmpUserSession } from '../api/filemaker'
+import high5Logo from '../assets/high5-logo.png'
 
 const MIN_WIDTH = 48
 const COLLAPSED_WIDTH = 56
@@ -132,19 +133,19 @@ export default function NavRail({ modules, activeId, onSelect, theme, onToggleTh
         onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}
       >
         {active && showLabels && (
-          <span style={{ position: 'absolute', left: 3, top: '50%', transform: 'translateY(-50%)', width: 3, height: 16, borderRadius: 2, background: '#e8322a' }} />
+          <span style={{ position: 'absolute', left: 3, top: '50%', transform: 'translateY(-50%)', width: 3, height: 16, borderRadius: 2, background: '#ED1C24' }} />
         )}
-        <span style={{ position: 'relative', fontSize: 20, flexShrink: 0, color: active ? '#e8322a' : 'inherit', width: 18, textAlign: 'center' }}>
+        <span style={{ position: 'relative', fontSize: 20, flexShrink: 0, color: active ? '#ED1C24' : 'inherit', width: 18, textAlign: 'center' }}>
           {mod.icon}
           {badge > 0 && !showLabels && (
-            <span style={{ position: 'absolute', top: -3, right: -4, width: 8, height: 8, borderRadius: '50%', background: '#e8322a', border: `1.5px solid ${active ? c.activeBg : c.bg}` }} />
+            <span style={{ position: 'absolute', top: -3, right: -4, width: 8, height: 8, borderRadius: '50%', background: '#ED1C24', border: `1.5px solid ${active ? c.activeBg : c.bg}` }} />
           )}
         </span>
         {showLabels && (
           <span style={{ fontSize: 15, fontWeight: active ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{mod.label}</span>
         )}
         {showLabels && badge > 0 && (
-          <span style={{ flexShrink: 0, minWidth: 18, height: 18, padding: '0 5px', boxSizing: 'border-box', borderRadius: 9, background: '#e8322a', color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{badge > 99 ? '99+' : badge}</span>
+          <span style={{ flexShrink: 0, minWidth: 18, height: 18, padding: '0 5px', boxSizing: 'border-box', borderRadius: 9, background: '#ED1C24', color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{badge > 99 ? '99+' : badge}</span>
         )}
       </button>
     )
@@ -157,38 +158,39 @@ export default function NavRail({ modules, activeId, onSelect, theme, onToggleTh
         background: c.bg, borderRight: `1px solid ${c.border}`,
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}>
-        {/* ── Brand header ── */}
+        {/* ── Brand header — official High 5 logo on a white card (the logo's
+             lower band is black-on-white, so it needs a light backing and must
+             never sit on the red accent). ── */}
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 10,
-          padding: showLabels ? '14px 14px 12px' : '14px 0 12px',
-          justifyContent: showLabels ? 'flex-start' : 'center',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+          padding: showLabels ? '16px 12px 14px' : '14px 0 12px', position: 'relative',
         }}>
-          <span style={{
-            width: 30, height: 30, borderRadius: 7, background: '#1a1a1a', color: '#e8322a',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontFamily: "'Oswald', sans-serif", fontSize: 17, fontWeight: 700,
-            border: '1px solid #333', flexShrink: 0,
-          }}>V</span>
-          {showLabels && (
-            <div style={{ lineHeight: 1.2, minWidth: 0 }}>
-              <div style={{ fontSize: 17, fontWeight: 600, color: c.textActive }}>Vibe</div>
-            </div>
-          )}
           {showLabels && (
             <button onClick={() => setCollapsed(true)} title="Collapse"
-              style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: c.mutedLabel, fontSize: 18, lineHeight: 1, padding: 2 }}>«</button>
+              style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', cursor: 'pointer', color: c.mutedLabel, fontSize: 18, lineHeight: 1, padding: 2 }}>«</button>
+          )}
+          <div style={{
+            background: '#ffffff', borderRadius: 10, padding: showLabels ? '10px 12px' : '5px 6px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+          }}>
+            <img src={high5Logo} alt="High 5 Adventure Learning Center"
+              style={{ width: showLabels ? 92 : 30, height: 'auto', display: 'block' }} />
+          </div>
+          {showLabels && (
+            <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', color: c.mutedLabel }}>Vibe</div>
           )}
         </div>
 
         {/* ── Command palette trigger ── */}
         <div style={{ position: 'relative', padding: showLabels ? '0 10px 8px' : '0 0 8px', display: 'flex', justifyContent: 'center' }}>
           {searchHint && showLabels && (
-            <div style={{ position: 'absolute', top: 'calc(100% - 2px)', left: 10, right: 10, background: '#e8322a', color: '#fff', borderRadius: 8, padding: '8px 10px', fontSize: 13, lineHeight: 1.35, boxShadow: '0 6px 18px rgba(0,0,0,0.28)', zIndex: 20 }}>
+            <div style={{ position: 'absolute', top: 'calc(100% - 2px)', left: 10, right: 10, background: '#ED1C24', color: '#fff', borderRadius: 8, padding: '8px 10px', fontSize: 13, lineHeight: 1.35, boxShadow: '0 6px 18px rgba(0,0,0,0.28)', zIndex: 20 }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
                 <span style={{ flex: 1 }}><strong>✦ New:</strong> ask the assistant anything here — invoices, projects, email &amp; more.</span>
                 <button onClick={dismissSearchHint} aria-label="Dismiss" style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0, opacity: 0.85 }}>✕</button>
               </div>
-              <span style={{ position: 'absolute', bottom: '100%', left: 22, width: 0, height: 0, borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderBottom: '6px solid #e8322a' }} />
+              <span style={{ position: 'absolute', bottom: '100%', left: 22, width: 0, height: 0, borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderBottom: '6px solid #ED1C24' }} />
             </div>
           )}
           {showLabels ? (
@@ -266,13 +268,13 @@ export default function NavRail({ modules, activeId, onSelect, theme, onToggleTh
                       </div>
                     ) : (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#e8322a', flexShrink: 0 }} title="Not connected — saving is blocked" />
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#ED1C24', flexShrink: 0 }} title="Not connected — saving is blocked" />
                         <span style={{ flex: 1, fontSize: 14, color: c.sub }}>Not connected</span>
                         <button onClick={connectFmp} disabled={fmpBusy}
                           style={{ background: 'none', border: 'none', cursor: fmpBusy ? 'default' : 'pointer', fontSize: 13, color: c.text }}>{fmpBusy ? '…' : 'Connect'}</button>
                       </div>
                     )}
-                    {fmpError && <div style={{ fontSize: 12, color: '#e8322a', marginTop: 5, wordBreak: 'break-word' }}>{fmpError}</div>}
+                    {fmpError && <div style={{ fontSize: 12, color: '#ED1C24', marginTop: 5, wordBreak: 'break-word' }}>{fmpError}</div>}
                   </div>
 
                   <button onClick={onToggleTheme}
@@ -281,7 +283,7 @@ export default function NavRail({ modules, activeId, onSelect, theme, onToggleTh
                   </button>
                   {onLogout && (
                     <button onClick={() => { setUserMenuOpen(false); onLogout() }}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px', background: 'none', border: 'none', borderTop: `1px solid ${light ? '#e2e8f0' : '#1e2130'}`, cursor: 'pointer', fontSize: 14, color: '#e8322a', textAlign: 'left' }}>
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px', background: 'none', border: 'none', borderTop: `1px solid ${light ? '#e2e8f0' : '#1e2130'}`, cursor: 'pointer', fontSize: 14, color: '#ED1C24', textAlign: 'left' }}>
                       Sign out
                     </button>
                   )}
@@ -298,7 +300,7 @@ export default function NavRail({ modules, activeId, onSelect, theme, onToggleTh
       <div
         onMouseDown={startResize}
         style={{ width: 4, flexShrink: 0, cursor: 'col-resize', background: c.border, transition: 'background 0.15s' }}
-        onMouseEnter={e => e.currentTarget.style.background = '#e8322a'}
+        onMouseEnter={e => e.currentTarget.style.background = '#ED1C24'}
         onMouseLeave={e => e.currentTarget.style.background = c.border}
       />
     </div>

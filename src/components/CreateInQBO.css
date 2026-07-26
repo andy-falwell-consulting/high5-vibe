@@ -19,11 +19,11 @@
 .ciq-cust { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
 .ciq-cust label { font-size: 13px; color: #8b97aa; width: 80px; }
 .ciq-cust select { flex: 1; background: #1e2130; border: 1px solid #2a2f45; border-radius: 6px; color: #e2e8f0; padding: 7px 9px; font-family: inherit; font-size: 14px; }
-.ciq-nomatch { color: #e8322a; font-size: 14px; }
+.ciq-nomatch { color: var(--h5-red); font-size: 14px; }
 
 .ciq-lines { display: flex; flex-direction: column; }
 .ciq-line { padding: 10px 4px; border-bottom: 1px solid #171a26; border-radius: 6px; }
-.ciq-line.unresolved { background: rgba(232,50,42,0.05); }
+.ciq-line.unresolved { background: rgba(237, 28, 36,0.05); }
 .ciq-line-top { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 7px; }
 .ciq-line-name { font-size: 14px; font-weight: 500; }
 .ciq-line-nums { flex-shrink: 0; font-size: 13px; color: #8b97aa; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -42,7 +42,7 @@
 .ciq-picker-opt.on { color: #2ca01c; }
 .ciq-picker-empty { padding: 10px; color: #5e6b7c; font-size: 13px; }
 
-.ciq-error { margin-top: 12px; color: #e8322a; font-size: 13px; }
+.ciq-error { margin-top: 12px; color: var(--h5-red); font-size: 13px; }
 .ciq-foot { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-top: 1px solid #1e2130; }
 .ciq-total { font-weight: 600; font-variant-numeric: tabular-nums; }
 .ciq-spacer { flex: 1; }

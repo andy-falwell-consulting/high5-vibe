@@ -1,20 +1,22 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { BRAND, UI } from '../config/brandColors'
 import { getRecord, prefetchRecord, updateRecord, invalidateRecord, patchCachedRecord } from '../api/filemaker';
 import { useAllRecords } from '../hooks/useAllRecords';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
 import RecordSaveBar from './RecordSaveBar';
 import AttachmentsPanel from './AttachmentsPanel';
 import { trainingAttachments } from '../api/trainingAttachments';
+import { generateAndAttachWorkOrder, downloadWorkOrder } from '../api/trainingWorkOrder';
 import './Trainings.css';
 
 const LAYOUT = 'trainings_New';
 const CACHE_VERSION = 1;
 
 const STATUS_COLOR = {
-  'Final Invoiced': '#22c55e',
-  'Ready to Bill':  '#e87722',
-  'No Go':          '#64748b',
-  default:          '#64748b',
+  'Final Invoiced': UI.success,
+  'Ready to Bill':  BRAND.gold,
+  'No Go':          UI.neutral,
+  default:          UI.neutral,
 };
 
 // Cost grids mirroring the FMP "Training Costs/Expenses" tab: Program Costs and
@@ -193,6 +195,10 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
   const [saveStatus, setSaveStatus] = useState(null);
   const [saveErrorMsg, setSaveErrorMsg] = useState(null);
   const [tab, setTab] = useState('info');
+  const [woBusy, setWoBusy] = useState(null);   // 'attach' | 'download' | null
+  const [woStage, setWoStage] = useState(null);
+  const [woError, setWoError] = useState(null);
+  const [attReload, setAttReload] = useState(0); // bump to make AttachmentsPanel re-list
   const isResizing = useRef(false);
 
   const orgName = f => f.zz__Display_Organization__ct || '';
@@ -255,6 +261,25 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
       return { ...p, [fk]: `${stamp}\n${curText ? '\n' + curText : ''}` };
     });
   }, [selected]);
+
+  // Work order PDF — prints the Notes field as its body, attached (or
+  // downloaded) via the same pipeline training photos already use.
+  async function handleGenerateWorkOrder(attach) {
+    if (!selected) return;
+    setWoBusy(attach ? 'attach' : 'download');
+    setWoStage('Building PDF…'); setWoError(null);
+    // Merge pending edits so the PDF matches what's on screen, not the last save.
+    const rec = { ...selected, fieldData: { ...selected.fieldData, ...edits } };
+    try {
+      if (attach) {
+        await generateAndAttachWorkOrder(rec, setWoStage);
+        setAttReload(n => n + 1);
+      } else {
+        await downloadWorkOrder(rec, setWoStage);
+      }
+    } catch (e) { setWoError(e.message || 'Work order failed'); }
+    finally { setWoBusy(null); setWoStage(null); }
+  }
 
   async function handleSave() {
     const dirtyCount = Object.keys(edits).length;
@@ -389,6 +414,17 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
                   <TextField label="Location address" fieldKey="Location Address" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable wide />
                   <TextAreaField label="Description of training" fieldKey="Description of Training" f={f} edits={edits} onChange={handleFieldChange} rows={3} />
                   <TextAreaField label="Notes" fieldKey="Notes" f={f} edits={edits} onChange={handleFieldChange} onStamp={stampNote} rows={7} />
+                  <div className="trn-field wide">
+                    <div className="trn-wo-actions">
+                      <button type="button" className="trn-wo-btn" disabled={!!woBusy} onClick={() => handleGenerateWorkOrder(true)}>
+                        {woBusy === 'attach' ? (woStage || 'Working…') : '＋ Generate work order & attach'}
+                      </button>
+                      <button type="button" className="trn-wo-btn" disabled={!!woBusy} onClick={() => handleGenerateWorkOrder(false)}>
+                        {woBusy === 'download' ? (woStage || 'Working…') : '⤓ Download work order'}
+                      </button>
+                    </div>
+                    {woError && <p className="trn-wo-error">{woError}</p>}
+                  </div>
                 </div>
               </Section>
 
@@ -446,7 +482,7 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
 
               {tab === 'attachments' && (
               <div className="trn-section trn-section-att">
-                <AttachmentsPanel parentId={f._kpt__TrainingProposal_ID} api={trainingAttachments} title="Photos" invoiceDocNumber={f._kat__QuickBooks_Invoice_ID} />
+                <AttachmentsPanel parentId={f._kpt__TrainingProposal_ID} api={trainingAttachments} title="Photos" invoiceDocNumber={f._kat__QuickBooks_Invoice_ID} reloadSignal={attReload} />
               </div>
               )}
 

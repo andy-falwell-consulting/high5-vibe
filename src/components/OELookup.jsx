@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { getRecord } from '../api/filemaker'
+import { BRAND } from '../config/brandColors'
 import { useAllRecords } from '../hooks/useAllRecords'
 import ListToolbar, { useListControls, ListBody } from './ListControls'
 import './OELookup.css'
@@ -8,8 +9,8 @@ const LAYOUT = 'OELookup_New'
 const CACHE_VERSION = 1
 
 const TYPE_COLOR = {
-  'Open Enrollment': '#4ade80',
-  'Custom': '#c084fc',
+  'Open Enrollment': BRAND.blue,
+  'Custom': BRAND.purple,
 }
 
 function fmtDate(val) {

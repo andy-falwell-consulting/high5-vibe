@@ -22,13 +22,39 @@ src/
 
 ## Release workflow
 
-**Trunk-based.** `main` is the only permanent branch and is production
-(`db-livid.vercel.app`). Everything else is a short-lived feature branch that
-gets a Vercel **Preview** URL on push, then is squash-merged to `main` and
-deleted. No permanent staging branch — so there is no squash-divergence to
-realign (the `git reset --hard` dance is gone).
+> **⚠️ PAUSED as of 2026-07-10 — read before merging anything to `main`.**
+> `main` is still wired as Vercel's **Production Branch**, so a merge to
+> `main` auto-deploys to production immediately. The user has asked to
+> **stop that** for now: all work should land on the rolling `preview`
+> branch only, and **production is promoted manually from the Vercel
+> dashboard** (Deployments → pick a `preview` build → Promote to
+> Production) — not by merging to `main`. **Do not merge PRs to `main`
+> or open PRs against it until the user explicitly says to resume normal
+> trunk-based releases.** `main` stays frozen at whatever it was on
+> 2026-07-10 (v1.0.211) until then. The "normal mode" process is described
+> below so it's easy to resume later — it just isn't active right now.
 
-Per change:
+**Current (paused) mode — per change:**
+
+1. `git fetch origin` then `git checkout -B feat/<short-name> origin/preview`
+   — branch off the current tip of `preview` (NOT `main`), so changes stack
+   on top of whatever's already been pushed there.
+2. Bump `package.json` `version`. Commit format: `v1.0.X — short description`.
+3. Build + lint + verify as usual.
+4. Push straight to the rolling `preview` branch (no PR, no merge to `main`):
+   `git push -f origin feat/<short-name>:preview`. Vercel builds it at the
+   fixed alias `high5-new-ui-git-preview-andy-falwell-s-projects.vercel.app`
+   (see the OAuth section below — same host, already registered).
+5. Tell the user it's ready; **they** promote to production from the Vercel
+   dashboard when they're satisfied. Do not push to `main`.
+
+**Normal (trunk-based) mode — resume only when told to:**
+
+`main` is the only permanent branch and is production (`db-livid.vercel.app`
+/ `vibe.high5adventure.org`). Everything else is a short-lived feature branch
+that gets a Vercel **Preview** URL on push, then is squash-merged to `main`
+and deleted. No permanent staging branch — so there is no squash-divergence
+to realign (the `git reset --hard` dance is gone).
 
 1. `git checkout main && git pull` then `git checkout -b feat/<short-name>`.
 2. Bump `package.json` `version`. Commit format: `v1.0.X — short description`.
@@ -105,6 +131,41 @@ the disposable-branch model — `preview` is just a rolling deploy target.
 **Scopes requested:** `openid email profile gmail calendar drive` (all full-access).
 
 **Adding test users:** Google Cloud Console → OAuth consent screen → Test users. Required for unverified apps with sensitive scopes.
+
+**Preview auth bypass (v1.0.243+).** The `preview` deployment — and only that
+deployment — can let a visitor in with no Google login at all, using a stored
+copy of an admin's own session as a shared fallback identity. This exists so
+the preview link can be opened cold (for a demo, a screen recording, etc.)
+without every visitor needing to sign in and without hitting Google's
+"unverified app" warning screen.
+
+- `api/_googleSession.js` — `getGoogleSession(req)` first tries the request's
+  own `h5_session` cookie as always; only if that's missing/invalid does it
+  fall back to a fixed Redis key (`fallback_session`). The fallback is gated
+  on `process.env.VERCEL_ENV === 'preview' && process.env.VERCEL_GIT_COMMIT_REF
+  === 'preview'` — both are Vercel's own system env vars, set automatically
+  per-deployment, never hand-configured — so this can never activate on
+  production even by mistake. A real login, whenever present, always wins.
+- **Capturing the fallback session:** Admin → Preview access → "Capture my
+  session" (`api/admin-set-fallback-session.js`, admin-only, requires the
+  caller to be genuinely logged in — not already riding the fallback). Copies
+  the admin's current session into the shared key.
+- **This is not "set once."** The OAuth app is still unverified (Testing
+  mode — see "Adding test users" above), and Google expires Testing-mode
+  refresh tokens after **7 days**. The stored fallback session will quietly
+  stop working about once a week; re-run the capture step to refresh it. The
+  Admin tab shows how many days old the current capture is and flags it once
+  it's ≥6 days.
+- **Attribution:** every write made by a visitor riding the fallback —
+  FileMaker edits, Reminders (Calendar events), emails sent via the
+  assistant — is attributed to whoever last captured the session, not to the
+  actual visitor. A persistent banner (`PreviewBypassBanner.jsx`) says so
+  on every page while it's active, and offers a "Sign in as yourself" link
+  that hands control back to a real login the moment someone completes it.
+- **Blast radius:** anyone who has the `preview` link can act as that admin
+  with zero login — don't let the link travel further than a small trusted
+  circle while this is active. Real production is completely unaffected;
+  the bypass has no code path that can reach it.
 
 ## Adding a new module
 
@@ -359,3 +420,58 @@ const onMouseDown = useCallback(e => {
 .xx-resize-handle { width: 4px; background: #1e2130; cursor: col-resize; flex-shrink: 0; transition: background 0.15s; }
 .xx-resize-handle:hover { background: #e8322a; }
 ```
+
+---
+
+## Logging High5 hours to the timesheet
+
+At the end of each real working session on the High5 project, propose a time-log
+entry for Andy to approve before writing anything. The flow is always:
+
+1. **Estimate** the hours for the session, broken out across the categories below.
+2. **Show Andy** the proposed entry (date + category hours + a short note on what
+   was accomplished).
+3. **Only after Andy approves**, write the record to Airtable.
+
+Never write a timesheet entry without Andy's sign-off. If a session ended without
+logging, log it retroactively next time using whatever hours Andy provides.
+
+### Where the timesheet lives (Airtable)
+
+- **Base:** "AF Consulting" — `appJhPgh4DC9vRTvw`
+- **Table:** "Work Log" — `tblqcAgVQ151CwLLb`
+- **Client field** (single-select): set to `High5`
+- **Date field:** the work date for the entry
+- **Category fields** (number fields — enter hours in the relevant ones):
+  Research, Meetings, Strategy, Architecture/Design, Building, Documentation, Training
+- **Total Hours** is a *formula* field — it sums the categories automatically.
+  Do NOT try to set it directly.
+- **Notes:** free-text field for the short summary of what was done.
+
+Entries roll up automatically into the monthly "Time Sheet Roll-Up" table, so a
+correct Work Log entry is all that's needed.
+
+### Capability note
+
+Writing to Airtable requires the Airtable MCP connection to be configured in this
+Claude Code environment. If it isn't connected, prepare the proposed entry as text
+for Andy to enter manually, and let him know the connection needs setting up.
+I
+---
+
+## Cron / Redis budget (read before touching `vercel.json` crons)
+
+Every cron in `vercel.json` spends Upstash Redis commands, and the quota is a
+**hard monthly cap**. Exhausting it takes down *everything* Redis-backed —
+including `/api/google-auth`, so **nobody can log in** (prod and preview alike).
+This happened on 2026-07-19: the schedule was running ~1,584 invocations/day
+against a ~16,700 command/day budget and blew the cap.
+
+Rules:
+- **Do NOT add comment keys to `vercel.json`.** Vercel validates it against a
+  strict schema and rejects any unknown top-level property (e.g. `_crons_note`)
+  — the build fails with a schema error and the deploy never ships. JSON has no
+  comments; keep cron rationale here instead.
+- Dev crons were dropped entirely (sync Dev by hand when needed); prod crons
+  were slowed to fit (~530/day now). Before adding or speeding up a cron, work
+  out its daily command cost first.

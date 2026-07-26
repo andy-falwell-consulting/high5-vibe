@@ -11,7 +11,10 @@ import './RecordFormModal.css'
 //   type: 'text' | 'number' | 'date' | 'textarea' | 'select'
 //   options (for select): ['A','B'] or [{ value, label }]
 //
-// Pass extra module-specific UI (e.g. Shopify/QBO toggles) as children.
+// Pass extra module-specific UI (e.g. Shopify/QBO toggles) as children. Children
+// may be a function `(values) => node` when that UI depends on what's been
+// entered so far (Inspections' "copy a previous inspection" list narrows to the
+// contact picked above it).
 
 export default function RecordFormModal({ title, fields, submitLabel = 'Create', onCreate, onClose, children }) {
   const [values, setValues] = useState(() => {
@@ -42,6 +45,13 @@ export default function RecordFormModal({ title, fields, submitLabel = 'Create',
       for (const f of fields) {
         const v = values[f.key]
         if (v !== '' && v != null) fieldData[f.key] = v
+        // A contact field's `orgField` mirror lives in `values` under its own
+        // key, which isn't in `fields` — include it explicitly or the picked
+        // org name never gets written and the record looks unlinked.
+        if (f.orgField) {
+          const ov = values[f.orgField]
+          if (ov !== '' && ov != null) fieldData[f.orgField] = ov
+        }
       }
       await onCreate(fieldData)
       onClose()
@@ -74,7 +84,7 @@ export default function RecordFormModal({ title, fields, submitLabel = 'Create',
               </label>
             ))}
           </div>
-          {children}
+          {typeof children === 'function' ? children(values) : children}
         </div>
 
         <div className="rfm-footer">
@@ -93,6 +103,11 @@ export default function RecordFormModal({ title, fields, submitLabel = 'Create',
             const pk = contact.fieldData?.[f.valueField || '_kpt__Contact_ID']
             const label = contact.fieldData?.[f.labelField || 'zz__Display__ct'] || contact.fieldData?.Name_Organization
             set(f.key, pk)
+            // Some layouts resolve their site via a text org field, not the FK
+            // (Inspections' inspt_CNTCT__site keys on Organization). When the
+            // field declares orgField, mirror the picked org name into it so the
+            // site actually shows — otherwise the record looks "unlinked".
+            if (f.orgField) set(f.orgField, contact.fieldData?.Name_Organization || label || '')
             setLabels(l => ({ ...l, [f.key]: label }))
             setPickerField(null)
           }}

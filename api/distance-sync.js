@@ -5,9 +5,11 @@
 // format ("102 mi", "1 hour 56 mins"), matching the data already in FMP.
 //
 // Resumable + time-bounded (cron-driven): each run scans records where the
-// distance field is empty, resolves the contact's address, computes (with a
-// Redis per-address cache so one site = one Google call ever), and writes.
-// The same job is the backfill (loop it) and the keep-current mechanism.
+// distance field is empty, resolves the site address (CCS/RCD prefer the
+// record's own billing block, then the contact's address portal; trainings use
+// the contact, then Location Address), computes (with a Redis per-address cache
+// so one site = one Google call ever), and writes. The same job is the backfill
+// (loop it) and the keep-current mechanism.
 //
 // GET/POST /api/distance-sync?db=High5_Core4          run a slice
 //          &layout=trainings|rcd                      optional: one layout only
@@ -28,7 +30,10 @@ const MAX_GOOGLE_CALLS_PER_RUN = 400; // cost guard; cache fills over runs
 
 const TARGETS = {
   trainings: { layout: 'trainings_New', distField: 'Distance To High5', timeField: 'Drive Time', addrFallback: 'Location Address' },
-  rcd:       { layout: 'RCD_New',       distField: 'Distance to High5', timeField: 'Drive Time' },
+  // CCS/RCD records point at the booking PERSON (usually addressless) rather than
+  // the org, so we route from the record's own billing block FIRST and fall back
+  // to the contact's address portal only when the block has no city/state/zip.
+  rcd:       { layout: 'RCD_New',       distField: 'Distance to High5', timeField: 'Drive Time', addrBlock: 'Address_Block_Billing' },
 };
 
 async function authorized(req) {
@@ -60,6 +65,23 @@ async function lookup(address, counters) {
   const out = { d: el.distance?.text || null, t: el.duration?.text || null };
   await redis.hset('dist:addrcache', { [key]: JSON.stringify(out) });
   return out;
+}
+
+// The site address parsed out of a multi-line FMP billing block. The block is
+// reliably "Org / Person / Street / City, ST Zip", so we anchor on the last
+// "City, ST Zip" line and pair it with the street line above it — dropping the
+// org and person-name lines so they can't skew the geocode. Returns null when
+// there's no routable city/state/zip line.
+function blockAddress(raw) {
+  const lines = String(raw || '').split(/[\r\n]+/).map(s => s.trim()).filter(Boolean);
+  const cityLine = /,\s*[A-Za-z]{2}\.?\s+\d{5}(-\d{4})?\b/; // "City, ST 01364"
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (cityLine.test(lines[i])) {
+      const street = i > 0 ? lines[i - 1] : '';
+      return [street, lines[i]].filter(Boolean).join(', ');
+    }
+  }
+  return null;
 }
 
 // The record's site address, composed from the contact's address-portal
@@ -122,7 +144,10 @@ export default async function handler(req, res) {
         scanned++;
         const cid = rec.fieldData?._kft__Contact_ID;
         let addr = null;
-        if (cid) {
+        // PRIMARY: the record's own billing address block (CCS/RCD).
+        if (cfg.addrBlock) addr = blockAddress(rec.fieldData?.[cfg.addrBlock]);
+        // FALLBACK: the linked contact's address portal.
+        if (!addr && cid) {
           addr = contactCache.get(String(cid));
           if (addr === undefined) {
             // Redis-backed contact→address cache ("" = known addressless), so

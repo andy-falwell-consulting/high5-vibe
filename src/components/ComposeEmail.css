@@ -30,12 +30,12 @@
 .cm-attach { font-size: 13px; color: #94a3b8; background: #1e2130; border: 1px solid #2d3148; border-radius: 6px; padding: 7px 10px; }
 
 .cm-footer { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 13px 18px; border-top: 1px solid #1e2130; flex-shrink: 0; }
-.cm-error { margin-right: auto; color: #e8322a; font-size: 14px; }
+.cm-error { margin-right: auto; color: var(--h5-red); font-size: 14px; }
 .cm-ok { margin-right: auto; color: #22c55e; font-size: 14px; font-weight: 600; }
 .cm-btn { padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; border: 1px solid transparent; }
 .cm-btn.cancel { background: transparent; color: #94a3b8; border-color: #2d3148; }
 .cm-btn.cancel:hover:not(:disabled) { color: #e2e8f0; border-color: #4a5568; }
-.cm-btn.send { background: #e8322a; color: #fff; }
+.cm-btn.send { background: var(--h5-red); color: #fff; }
 .cm-btn.send:hover:not(:disabled) { background: #c72820; }
 .cm-btn:disabled { opacity: 0.5; cursor: default; }
 

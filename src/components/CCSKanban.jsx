@@ -7,28 +7,24 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core'
-import { useDraggable, useDroppable } from '@dnd-kit/core'
-import { SortableContext, horizontalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable'
+import { useDroppable } from '@dnd-kit/core'
+import { SortableContext, horizontalListSortingStrategy, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useAllRecords } from '../hooks/useAllRecords'
 import { updateRecord, bustCache, patchCachedRecord } from '../api/filemaker'
 import { RCD_LAYOUT, RCD_CACHE_VERSION, RCD_FIND_QUERY, RCD_SORT } from '../config/ccsCache'
+import { ACTIVE_STAGES, statusColor, mergedStatus } from '../config/ccsStatus'
+import { useKanbanBoard } from '../hooks/useKanbanBoard'
+import { useKanbanOrder } from '../hooks/useKanbanOrder'
 import './CCSKanban.css'
 
 const LAYOUT = RCD_LAYOUT
 const CACHE_VERSION = RCD_CACHE_VERSION
 
-const COLUMNS = [
-  { id: 'New Project Inquiry',          label: 'New Project Inquiry',          color: '#3b82f6' },
-  { id: 'Working Proposals',            label: 'Working Proposals',            color: '#e87722' },
-  { id: 'Proposals Out',                label: 'Proposals Out',                color: '#f59e0b' },
-  { id: 'Sent Contract and DI',         label: 'Sent Contract and DI',         color: '#a855f7' },
-  { id: 'Job Prep by Date',             label: 'Job Prep by Date',             color: '#22c55e' },
-  { id: 'Done/Ready for Building',      label: 'Done/Ready for Building',      color: '#14b8a6' },
-  { id: 'Commissioning Report Needed',  label: 'Commissioning Report Needed',  color: '#e8322a' },
-  { id: "No Go's (litter box)",         label: "No Go's",                      color: '#475569' },
-]
-const ACTIVE_STATUSES = new Set(COLUMNS.map(c => c.id))
+// Board columns = the merged active/in-flight stages (Completed / No Go / Other
+// are valid statuses but not columns — a card set to one leaves the board).
+const COLUMNS = ACTIVE_STAGES.map(id => ({ id, label: id, color: statusColor(id) }))
+const ACTIVE_STATUSES = new Set(ACTIVE_STAGES)
 
 function matchesSearch(r, q) {
   if (!q) return true
@@ -70,8 +66,12 @@ function KanbanCardView({ record, saving, dimmed }) {
   )
 }
 
-function DraggableCard({ record, saving, onOpen, dimmed }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+// Sortable, not just draggable: within a lane, dropping a card ON another
+// card reorders between them (over.id resolves to that specific card's id,
+// not just "somewhere in this column") — see handleDragEnd for how that's
+// distinguished from a cross-lane move.
+function DraggableCard({ record, saving, onOpen, dimmed, onRemove }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: record.recordId,
   })
   const didDrag = useRef(false)
@@ -85,13 +85,21 @@ function DraggableCard({ record, saving, onOpen, dimmed }) {
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      style={{ opacity: isDragging ? 0.25 : 1, cursor: 'grab', touchAction: 'none', userSelect: 'none' }}
+      style={{
+        position: 'relative', opacity: isDragging ? 0.25 : 1, cursor: 'grab', touchAction: 'none', userSelect: 'none',
+        transform: CSS.Transform.toString(transform), transition,
+      }}
       onClick={() => {
         if (didDrag.current) { didDrag.current = false; return }
         onOpen(record)
       }}
     >
       <KanbanCardView record={record} saving={saving} dimmed={dimmed} />
+      {onRemove && (
+        <button className="kb-card-remove" title="Remove from board"
+          onPointerDown={e => e.stopPropagation()}
+          onClick={e => { e.stopPropagation(); onRemove(record) }}>✕</button>
+      )}
     </div>
   )
 }
@@ -132,8 +140,8 @@ function KanbanDetail({ record, onClose, currentStatus, onNavigateTo }) {
           {f['rcd start date'] && (
             <span className="kb-detail-badge kb-detail-badge--date">{f['rcd start date']}</span>
           )}
-          {f.Status && (
-            <span className="kb-detail-badge kb-detail-badge--status">{f.Status}</span>
+          {mergedStatus(f) && (
+            <span className="kb-detail-badge kb-detail-badge--status">{mergedStatus(f)}</span>
           )}
           {col && (
             <span className="kb-detail-badge kb-detail-badge--kanban" style={{ '--badge-color': col.color }}>
@@ -182,7 +190,7 @@ function KanbanDetail({ record, onClose, currentStatus, onNavigateTo }) {
   )
 }
 
-function KanbanColumn({ column, records, saving, onOpen, collapsed, onToggleCollapse, search }) {
+function KanbanColumn({ column, records, saving, onOpen, collapsed, onToggleCollapse, search, onRemove }) {
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: column.id })
   const { attributes, listeners, setNodeRef: setSortRef, transform, transition, isDragging: isColDragging } = useSortable({
     id: `col::${column.id}`,
@@ -222,23 +230,66 @@ function KanbanColumn({ column, records, saving, onOpen, collapsed, onToggleColl
       </div>
       {!collapsed && (
         <div className="kb-col-body" ref={setDropRef}>
-          {records.map(r => {
-            const matches = matchesSearch(r, search)
-            return (
-              <DraggableCard
-                key={r.recordId}
-                record={r}
-                saving={saving[r.recordId]}
-                onOpen={onOpen}
-                dimmed={search && !matches}
-              />
-            )
-          })}
+          <SortableContext items={records.map(r => r.recordId)} strategy={verticalListSortingStrategy}>
+            {records.map(r => {
+              const matches = matchesSearch(r, search)
+              return (
+                <DraggableCard
+                  key={r.recordId}
+                  record={r}
+                  saving={saving[r.recordId]}
+                  onOpen={onOpen}
+                  dimmed={search && !matches}
+                  onRemove={onRemove}
+                />
+              )
+            })}
+          </SortableContext>
           {records.length === 0 && (
             <div className="kb-col-empty">Drop here</div>
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+// Searchable picker to add active-status projects onto the board. Candidates
+// are active-stage records not already on the board; clicking one adds it (it
+// then drops out of the list). Stays open for bulk adding.
+function AddToBoardPanel({ candidates, onAdd, onClose }) {
+  const [q, setQ] = useState('')
+  const [added, setAdded] = useState(() => new Set())
+  const needle = q.trim().toLowerCase()
+  const list = candidates
+    .filter(r => !added.has(String(r.recordId)))
+    .filter(r => !needle || matchesSearch(r, needle))
+    .sort((a, b) => (a.fieldData.zz__Display_Organization__ct || '').localeCompare(b.fieldData.zz__Display_Organization__ct || ''))
+    .slice(0, 200)
+
+  return (
+    <div className="kb-add-overlay" onClick={onClose}>
+      <div className="kb-add-panel" onClick={e => e.stopPropagation()}>
+        <div className="kb-add-head">
+          <span>Add projects to the board</span>
+          <button className="kb-add-close" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+        <input className="kb-add-search" autoFocus placeholder="Search active projects…" value={q} onChange={e => setQ(e.target.value)} />
+        <div className="kb-add-list">
+          {list.length === 0 && <div className="kb-add-empty">{needle ? 'No matching active projects.' : 'No active projects left to add.'}</div>}
+          {list.map(r => (
+            <button key={r.recordId} className="kb-add-row"
+              onClick={() => { setAdded(p => new Set(p).add(String(r.recordId))); onAdd(r) }}>
+              <span className="kb-add-row-main">
+                <span className="kb-add-row-org">{r.fieldData.zz__Display_Organization__ct || '—'}</span>
+                <span className="kb-add-row-sub">{mergedStatus(r.fieldData)}{r.fieldData['rcd start date'] ? ` · ${r.fieldData['rcd start date']}` : ''}</span>
+              </span>
+              <span className="kb-add-row-plus">＋</span>
+            </button>
+          ))}
+        </div>
+        <div className="kb-add-foot">{added.size > 0 ? `${added.size} added` : `${candidates.length} available`}</div>
+      </div>
     </div>
   )
 }
@@ -265,6 +316,9 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
     sort: RCD_SORT,
     refreshKey,
   })
+  const board = useKanbanBoard()
+  const order = useKanbanOrder()
+  const [showAdd, setShowAdd] = useState(false)
 
   // Stale-while-refreshing: show last complete fetch while a new one is in flight.
   // lastCompleteRef seeds from the cache-hydrated `records` so there is zero flash on load.
@@ -312,13 +366,14 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
   )
 
   const getStatus = useCallback((r) => {
-    return localStatusRef.current[r.recordId] ?? r.fieldData.kanban_status
+    return localStatusRef.current[r.recordId] ?? mergedStatus(r.fieldData)
   }, [])
 
-  // Filter to only kanban records, then by active status. RCD_New has no
-  // add_to_kanban flag, so board membership = has a kanban_status.
-  const kanbanRecords = displayRecords.filter(r => !!String(r.fieldData.kanban_status || '').trim())
-  const active = kanbanRecords.filter(r => ACTIVE_STATUSES.has(getStatus(r)))
+  // Board membership is curated by the team (a shared Redis set), AND the card's
+  // merged status must be an active stage — so a job the team added drops off
+  // once it's Completed / No Go.
+  const kanbanRecords = displayRecords
+  const active = kanbanRecords.filter(r => board.ids.has(String(r.recordId)) && ACTIVE_STATUSES.has(getStatus(r)))
 
   const byColumn = {}
   for (const col of COLUMNS) byColumn[col.id] = []
@@ -326,6 +381,19 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
     const s = getStatus(r)
     if (byColumn[s]) byColumn[s].push(r)
   }
+  // Apply the team's manual order (Redis, shared): stored recordIds sort
+  // first in their saved sequence; anything not yet placed (new to the
+  // board, never manually dragged) falls back to the default order at the end.
+  for (const col of COLUMNS) {
+    const savedOrder = order.orders[col.id]
+    if (!savedOrder?.length) continue
+    const idx = new Map(savedOrder.map((id, i) => [id, i]))
+    const known = byColumn[col.id].filter(r => idx.has(r.recordId)).sort((a, b) => idx.get(a.recordId) - idx.get(b.recordId))
+    const unknown = byColumn[col.id].filter(r => !idx.has(r.recordId))
+    byColumn[col.id] = [...known, ...unknown]
+  }
+  const cardColumnOf = {}
+  for (const col of COLUMNS) for (const r of byColumn[col.id]) cardColumnOf[r.recordId] = col.id
 
   const activeRecord = activeId ? kanbanRecords.find(r => r.recordId === activeId) : null
 
@@ -350,28 +418,52 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
       return
     }
 
-    // Card move
-    const newStatus = String(over.id).startsWith('col::') ? String(over.id).slice(5) : over.id
-    if (!ACTIVE_STATUSES.has(newStatus)) return
+    // Card move / reorder. `over.id` is either a column (dropped on empty
+    // space — via the column's own useDroppable) or another card (dropped
+    // directly on it — via that card's useSortable), which is how we tell a
+    // same-lane reorder from a cross-lane status change.
+    const overIsColumn = String(over.id).startsWith('col::') || ACTIVE_STATUSES.has(String(over.id))
+    const targetColumn = overIsColumn
+      ? (String(over.id).startsWith('col::') ? String(over.id).slice(5) : String(over.id))
+      : cardColumnOf[over.id]
+    if (!targetColumn || !ACTIVE_STATUSES.has(targetColumn)) return
+
     const record = kanbanRecords.find(r => r.recordId === active.id)
     if (!record) return
-    const oldStatus = localStatusRef.current[active.id] ?? record.fieldData.kanban_status
-    if (oldStatus === newStatus) return
+    const sourceColumn = cardColumnOf[active.id] ?? mergedStatus(record.fieldData)
 
-    localStatusRef.current[active.id] = newStatus
-    setLocalStatus(p => ({ ...p, [active.id]: newStatus }))
+    // Compute + persist the target lane's new order (shared, Redis).
+    const targetIds = (byColumn[targetColumn] || []).map(r => r.recordId)
+    let newTargetOrder
+    if (sourceColumn === targetColumn) {
+      const oldIdx = targetIds.indexOf(active.id)
+      const newIdx = overIsColumn ? targetIds.length - 1 : targetIds.indexOf(String(over.id))
+      if (oldIdx === -1 || newIdx === -1 || oldIdx === newIdx) return
+      newTargetOrder = arrayMove(targetIds, oldIdx, newIdx)
+    } else {
+      const insertAt = overIsColumn ? targetIds.length : targetIds.indexOf(String(over.id))
+      newTargetOrder = [...targetIds]
+      newTargetOrder.splice(insertAt === -1 ? newTargetOrder.length : insertAt, 0, active.id)
+    }
+    order.setColumnOrder(targetColumn, newTargetOrder)
+
+    if (sourceColumn === targetColumn) return // pure reorder — no status change
+
+    const oldStatus = localStatusRef.current[active.id] ?? mergedStatus(record.fieldData)
+    localStatusRef.current[active.id] = targetColumn
+    setLocalStatus(p => ({ ...p, [active.id]: targetColumn }))
     setSaving(p => ({ ...p, [active.id]: true }))
 
     try {
-      await updateRecord(LAYOUT, active.id, { kanban_status: newStatus })
-      patchCachedRecord(LAYOUT, CACHE_VERSION, active.id, { kanban_status: newStatus })
+      await updateRecord(LAYOUT, active.id, { Status: targetColumn })
+      patchCachedRecord(LAYOUT, CACHE_VERSION, active.id, { Status: targetColumn })
     } catch {
       localStatusRef.current[active.id] = oldStatus
       setLocalStatus(p => ({ ...p, [active.id]: oldStatus }))
     } finally {
       setSaving(p => { const n = { ...p }; delete n[active.id]; return n })
     }
-  }, [kanbanRecords])
+  }, [kanbanRecords, byColumn, cardColumnOf, order])
 
   const totalActive = active.length
   const searchMatchCount = search ? active.filter(r => matchesSearch(r, search)).length : totalActive
@@ -413,7 +505,15 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
             <button className="kb-search-clear" onClick={() => setSearch('')} aria-label="Clear search">✕</button>
           )}
         </div>
+        <button className="kb-add-btn" onClick={() => setShowAdd(true)} title="Add projects to the board">＋ Add projects</button>
       </div>
+      {showAdd && (
+        <AddToBoardPanel
+          candidates={displayRecords.filter(r => ACTIVE_STATUSES.has(getStatus(r)) && !board.ids.has(String(r.recordId)))}
+          onAdd={r => board.toggle(r.recordId, true)}
+          onClose={() => setShowAdd(false)}
+        />
+      )}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -432,6 +532,7 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
                 collapsed={!!collapsed[col.id]}
                 onToggleCollapse={() => toggleCollapse(col.id)}
                 search={search}
+                onRemove={r => board.toggle(r.recordId, false)}
               />
             ))}
           </div>
@@ -443,7 +544,7 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
       {detailRecord && (
         <KanbanDetail
           record={detailRecord}
-          currentStatus={localStatusRef.current[detailRecord.recordId] ?? detailRecord.fieldData.kanban_status}
+          currentStatus={localStatusRef.current[detailRecord.recordId] ?? mergedStatus(detailRecord.fieldData)}
           onClose={() => setDetailRecord(null)}
           onNavigateTo={onNavigateTo}
         />

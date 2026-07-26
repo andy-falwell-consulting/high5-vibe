@@ -9,7 +9,7 @@
 .rm-top-actions { display: flex; align-items: center; gap: 8px; }
 .rm-sound { background: #13151c; border: 1px solid #1e2130; border-radius: 8px; padding: 7px 10px; font-size: 15px; line-height: 1; cursor: pointer; }
 .rm-sound:hover { border-color: #2d3148; }
-.rm-new { background: #e8322a; color: #fff; border: none; border-radius: 8px; padding: 8px 14px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.rm-new { background: var(--h5-red); color: #fff; border: none; border-radius: 8px; padding: 8px 14px; font-size: 14px; font-weight: 600; cursor: pointer; }
 .rm-new:hover { background: #c72820; }
 
 .rm-controls { display: flex; align-items: center; gap: 12px; padding: 8px 24px 14px; flex-shrink: 0; }

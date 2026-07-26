@@ -1,19 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { createRecord, getRecord, addCachedRecord, findInLayout } from '../api/filemaker';
 import { RCD_LAYOUT, RCD_CACHE_VERSION } from '../config/ccsCache';
+import { copyProfileFields } from '../config/inspectionCopy';
+import { copyLines } from '../api/inspectionLines';
+import { markCarriedLines } from '../api/naFlags';
 import './QuickAddFromContact.css';
-
-// Fields carried over when copying a previous inspection: the site's course
-// profile (course types + equipment) and address — NOT the old inspection's
-// findings/status (Report Ready, needs_repair) or its QBO invoice/estimate
-// links, which belong to that year's inspection.
-const INSPECTION_COPY_FIELDS = [
-  'Address_Block_Billing', 'ALF', 'Organization',
-  'fa_Leads_and_Y_Lanyards', 'fa_Rope_Grabs', 'fa_Cable_Grab', 'fa_Prusik',
-  'fa_Belay_Extra_P_Cord', 'fa_Stairs_Ladder', 'fa_other',
-  'ct_Low', 'ct_High', 'ct_Trees', 'ct_Poles', 'ct_Indoors', 'ct_Dynamic',
-  'ct_Static_Voyageur_Style', 'ct_Auto_Belay', 'ct_Other',
-];
 
 // Shared "+ New" button for a contact: create a CCS project, Inspection, or
 // Estimate pre-linked to that contact (_kft__Contact_ID), then jump straight
@@ -34,12 +25,9 @@ const TYPES = {
   inspection: {
     label: 'Inspection', icon: '⚑', layout: 'Inspections_New', cacheVersion: 1, module: 'inspections',
     build: v => {
-      const copied = {};
+      let copied = {};
       if (v.mode === 'copy' && v.sourceFull) {
-        for (const k of INSPECTION_COPY_FIELDS) {
-          const val = v.sourceFull[k];
-          if (val !== undefined && val !== '') copied[k] = val;
-        }
+        copied = copyProfileFields(v.sourceFull);
         // Attach the new inspection to the SAME contact/site as its predecessor —
         // inspections often point at a site contact, not the org contact the
         // user is viewing (e.g. 4-H Camp Bristol Hills org 72380 vs site 82201).
@@ -135,6 +123,18 @@ export default function QuickAddFromContact({ contact, onNavigateTo }) {
       const res = await createRecord(cfg.layout, fieldData);
       if (res.messages?.[0]?.code !== '0') throw new Error(res.messages?.[0]?.message || 'Create failed');
       const recordId = res.response?.recordId;
+      // Copy the source's line items. This has to happen after the create —
+      // portal writes need the new record to exist and carry its own
+      // _kpt__Inspection_ID first (a copy onto a record without one fails
+      // with FileMaker error 101).
+      if (type === 'inspection' && v.mode === 'copy' && v.source?.recordId) {
+        const copied = await copyLines(v.source.recordId, recordId);
+        // Flag them as carried over so last year's findings can't quietly ship
+        // under this year's date — the badge clears as each line is edited.
+        if (copied.length) {
+          await markCarriedLines(recordId, copied.map(l => String(l.recordId))).catch(() => {});
+        }
+      }
       // Put the fresh record in the cached list immediately (don't wait for sync).
       try {
         const full = await getRecord(cfg.layout, recordId);
@@ -202,7 +202,7 @@ export default function QuickAddFromContact({ contact, onNavigateTo }) {
                   )}
                   <div className="qa-row"><label>Date</label><input type="date" value={vals.date || ''} onChange={e => set('date', e.target.value)} /></div>
                   <div className="qa-row"><label>Inspector</label><input type="text" value={vals.inspector || ''} placeholder="Optional" onChange={e => setVals(p => ({ ...p, inspector: e.target.value, inspectorTyped: true }))} /></div>
-                  {vals.mode === 'copy' && vals.source && <p className="qa-note">Copies the site's course profile (course types + equipment) from the selected inspection. Findings, report status, and QBO links start fresh.</p>}
+                  {vals.mode === 'copy' && vals.source && <p className="qa-note">Copies the site's course profile (course types + equipment) <strong>and its line items</strong> from the selected inspection. Copied lines are flagged “carried over” until you review each one — last year's grades and notes come with them. Report status and QBO links start fresh.</p>}
                 </>
               )}
               {type === 'estimate' && (

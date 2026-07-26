@@ -1,32 +1,80 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useAllRecords } from '../hooks/useAllRecords';
+import { useValueLists } from '../hooks/useValueLists';
+import { MERGED_STATUSES, PIPELINE_STAGES, PIPELINE_SHORT, statusColor, mergedStatus } from '../config/ccsStatus';
+import { useKanbanBoard } from '../hooks/useKanbanBoard';
+import { useNaFlags } from '../hooks/useNaFlags';
 import { RCD_LAYOUT, RCD_CACHE_VERSION, RCD_FIND_QUERY, RCD_SORT } from '../config/ccsCache';
 import { getRecord, prefetchRecord, updateRecord, patchCachedRecord, invalidateRecord } from '../api/filemaker';
+import { getCurrentEnv } from '../config/fmpEnvironments';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
 import AttachmentsPanel from './AttachmentsPanel';
 import { listCcsAttachments, uploadCcsAttachment, deleteCcsAttachment, ccsAttachmentUrl } from '../api/ccsAttachments';
+import { generateAndAttachWorkOrder, downloadWorkOrder } from '../api/ccsWorkOrder';
 import './CCSv2.css';
 
 const LAYOUT = RCD_LAYOUT;
 const CCS_ATT_API = { list: listCcsAttachments, upload: uploadCcsAttachment, remove: deleteCcsAttachment, freshUrl: ccsAttachmentUrl };
 
 // ── Vocabularies (grounded in live data) ─────────────────────────
-const PIPELINE = [
-  'New Project Inquiry', 'Working Proposals', 'Proposals Out', 'Sent Contract and DI',
-  'Job Prep by Date', 'Done/Ready for Building', 'Commissioning Report Needed', "No Go's (litter box)",
-];
-const PIPELINE_SHORT = [
-  'New inquiry', 'Working proposals', 'Proposals out', 'Sent contract & DI',
-  'Job prep by date', 'Ready for building', 'Commissioning report', 'No go',
+// CCS status is now the single merged 9-value set — see src/config/ccsStatus.js
+// (MERGED_STATUSES / PIPELINE_STAGES / mergedStatus / statusColor).
+
+// Project type and builders come from FileMaker's own value lists at runtime
+// (see useValueLists) — these are only the first-paint fallback for when FMP
+// hasn't answered yet. Don't add names here; edit the value list in FileMaker.
+const VL_PROJECT_TYPE = 'Type of Project';
+const VL_BUILDER = 'Lead Builder';
+const PROJECT_TYPES  = ['New Construction', 'Additions', 'Repairs', 'Site Evaluation', 'Inspection', 'Consulting', 'Equipment', 'Warranty Work', 'Pole Setting'];
+const BUILDER_OPTIONS = ['Krister Raasoch', 'Jamie Thibodeau', 'Kyle Myers', 'Colin Morton', 'Tom Woodbury', 'Jamie Haskell', 'Ian Doak', 'Todd Brown', 'Dylan Gordon', 'Aaron Gingrich', 'Chris Damboise'];
+
+// "Job Prep - External" (event_prep phase, below) groups its checklist items
+// by category, each paired with a free-text "Job Sheet <Category>" notes
+// field — mirrors the RCD_New "Job Prep - External" tab exactly (fields
+// verified live against the layout).
+const EVENT_PREP_GROUPS = [
+  { title: 'Poles', notes: 'Job Sheet Poles', items: [
+    ['eprep_Poles Ordered', 'Ordered'], ['eprep_Poles Delivered', 'Delivered'],
+  ]},
+  { title: 'Rental', notes: 'Job Sheet Equipment Rental', items: [
+    ['eprep_Equipment Requested', 'Requested'], ['eprep_Equipment Reserved', 'Reserved'],
+  ]},
+  { title: 'Setting', notes: 'Job Sheet Setting', items: [
+    ['eprep_Setting Scheduled', 'Scheduled'], ['eprep_Setting Complete', 'Complete'],
+    ['eprep_Dig Safe', 'Dig Safe / Notice to Excavate'],
+  ]},
+  { title: 'Climbing Holds', notes: 'Job Sheet Climbing Holds', items: [
+    ['eprep_Climbing Holds Ordered', 'Ordered'], ['eprep_Climbing Holds Delivered', 'Delivered'],
+  ]},
+  { title: 'Mats / Tarps', notes: 'Job Sheet Mats Tarps', items: [
+    ['eprep_Tarps Mats Ordered', 'Ordered'], ['eprep_Tarps Mats Delivered', 'Delivered'],
+  ]},
+  { title: 'Specialty Hardware', notes: 'Job Sheet Specialty Hardware', items: [
+    ['eprep_Specialty Hardware', 'Specialty Hardware'],
+  ]},
+  { title: 'Lumber', notes: 'Job Sheet Lumber Order', items: [
+    ['eprep_Lumber_ordered', 'Ordered'], ['eprep_Lumber_ordered_delivered', 'Delivered'],
+  ]},
+  { title: 'Permits', notes: 'Job Sheet Permits', items: [
+    ['eprep_Permits', 'Permits'],
+  ]},
 ];
 
-const STATUS_OPTIONS = ['Proposed', 'Confirmed', 'Confirmed/Scheduled', 'In Progress', 'Completed', 'No Go', 'On Hold', 'Cancelled'];
-const PROJECT_TYPES  = ['Inspection', 'New Construction', 'Renovation', 'Repair', 'Training', 'Other'];
-const BUILDER_OPTIONS = ['', 'Dave Klim', 'Lucas Germano', 'Gary Hillsgrove', 'Todd Brown', 'Ian Doak', 'Kyle Myers', 'Colin Morton'];
+// Post Job checkboxes — literal values per direct instruction (not sourced
+// from FMP's own value list, unlike Project Type/Builder). Stored return-
+// delimited in the single `post_job_phase` field — the same format FMP's own
+// Checkbox Set uses — even though that field is still a single popupList
+// control in FileMaker today, so multiple can be checked at once.
+const POST_JOB_ITEMS = [
+  'Inspection Report Sent',
+  'Commissioning Report Sent',
+  'As Built Drawings Sent',
+  'MA Paper Work Sent',
+];
 
 // Phases → checklist fields (exact FileMaker keys), with labels mirroring the
 // RCD_New "Additional Info" tab (Pre-Proposal / Proposal / Contract and Deposit
-// / Job Prep). Keep this in sync with that tab.
+// / Job Prep / Job Prep - External). Keep this in sync with that tab.
 const PHASES = [
   { id: 'pre_proposal', name: 'Pre-Proposal', items: [
     ['pp_Sent PD Form', 'Sent Program Development Form'],
@@ -46,6 +94,7 @@ const PHASES = [
     ['cd_Received Contract', 'Received Contract'],
     ['cd_Received Deposit', 'Received Deposit'],
     ['cd_Received PO', 'Received PO'],
+    ['Final_Invoice_Received', 'Final Invoice Received'],
   ]},
   { id: 'job_prep', name: 'Job Prep', items: [
     ['Populate_Work_Order', 'Mark as confirmed/scheduled. Populate work order.'],
@@ -55,13 +104,15 @@ const PHASES = [
     ['iprep_Equipment', 'Equipment, Notify Catalog'],
     ['iprep_Need Inspection', 'Inspection Needed?'],
   ]},
+  { id: 'event_prep', name: 'Job Prep - External', items: EVENT_PREP_GROUPS.flatMap(g => g.items) },
+  { id: 'post_job', name: 'Post Job', items: POST_JOB_ITEMS.map(v => [v, v]) },
 ];
 
 // Contract & financials block — mirrors the RCD_New "Additional Info" form.
 // `sent` is a date/text field; `rcv` is the "Received" checkbox (optional).
 // `ref: true` rows are read-only QBO identifiers.
 const FIN_ROWS = [
-  { label: 'Estimate #',        sent: '_kat__QuickBooks_Estimate_ID', type: 'text', ref: true },
+  { label: 'Estimate #',        sent: '_kat__QuickBooks_Estimate_ID(1)', type: 'text', ref: true },
   { label: 'Contract Sent',     sent: 'Contract_Date_Sent',           type: 'date', rcv: 'cd_Received Contract' },
   { label: 'Deposit Inv. Sent', sent: 'Report Date Sent',             type: 'date', rcv: 'cd_Received Deposit' },
   { label: 'PO #',              sent: 'po_number',                    type: 'text', rcv: 'cd_Received PO' },
@@ -80,17 +131,8 @@ const QUICK_ACTIONS = [
 // ── Helpers ──────────────────────────────────────────────────────
 const EMPTY_FIELDS = {};
 const isOn = v => v === 1 || v === '1';
+const postJobValues = raw => String(raw || '').split(/[\r\n]+/).map(s => s.trim()).filter(Boolean);
 
-function statusColor(s) {
-  const t = (s || '').toLowerCase();
-  if (t.includes('complet')) return '#22c55e';
-  if (t.includes('no go') || t.includes('cancel')) return '#94a3b8';
-  if (t.includes('progress')) return '#a855f7';
-  if (t.includes('confirm') || t.includes('schedul')) return '#3b82f6';
-  if (t.includes('propos') || t.includes('inquir')) return '#e8a23a';
-  if (t.includes('hold')) return '#f59e0b';
-  return '#94a3b8';
-}
 
 const num = v => { const n = Number(v); return isNaN(n) ? 0 : n; };
 const fmtMoney = v => { const n = num(v); return n ? `$${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : '—'; };
@@ -147,8 +189,22 @@ function Avatar({ name, lead }) {
   );
 }
 
+// Textarea that grows to fit its content so no note is ever clipped or hidden
+// behind a scrollbar (per Ian's Job Prep feedback). Height is recomputed on
+// every value change, including when switching records.
+function AutoGrowArea({ value, className, placeholder, onChange }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+  return <textarea ref={ref} className={className} rows={2} value={value || ''} placeholder={placeholder} onChange={e => onChange(e.target.value)} />;
+}
+
 function InlineText({ value, onChange, placeholder, area, big }) {
-  if (area) return <textarea className={`cv2-inline cv2-inline-area${big ? ' cv2-inline-area-lg' : ''}`} rows={3} value={value || ''} placeholder={placeholder} onChange={e => onChange(e.target.value)} />;
+  if (area) return <AutoGrowArea className={`cv2-inline cv2-inline-area${big ? ' cv2-inline-area-lg' : ''}`} value={value} placeholder={placeholder} onChange={onChange} />;
   return <input className="cv2-inline" value={value || ''} placeholder={placeholder} onChange={e => onChange(e.target.value)} />;
 }
 function InlineSelect({ value, options, onChange }) {
@@ -166,31 +222,106 @@ function InlineDate({ value, onChange }) {
 // ── Main ─────────────────────────────────────────────────────────
 export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSelect }) {
   const { records, total } = useAllRecords(LAYOUT, { cacheVersion: RCD_CACHE_VERSION, findQuery: RCD_FIND_QUERY, sort: RCD_SORT });
+  const valueLists = useValueLists(LAYOUT, { [VL_PROJECT_TYPE]: PROJECT_TYPES, [VL_BUILDER]: BUILDER_OPTIONS });
+  const board = useKanbanBoard();
+  const projectTypes = valueLists[VL_PROJECT_TYPE] ?? PROJECT_TYPES;
+  // Builders get a leading blank so a wrongly-assigned builder can be cleared.
+  const builderOptions = useMemo(() => ['', ...(valueLists[VL_BUILDER] ?? BUILDER_OPTIONS)], [valueLists]);
 
   const [selected, setSelected] = useState(null);
+  const naFlags = useNaFlags(selected?.recordId);
   const [navWidth, setNavWidth] = useState(300);
   const [edits, setEdits]       = useState({});
   const [saving, setSaving]     = useState(false);
-  const [addingToBoard, setAddingToBoard] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
   const [saveErrorMsg, setSaveErrorMsg] = useState(null);
   const [expanded, setExpanded] = useState({});
-  const [finTab, setFinTab]     = useState('estimates');
+  const [finTab, setFinTab]     = useState('invoices');
+  // Live QBO estimate(s) for the selected project — resolved from its D# via
+  // /api/ccs-estimate (null = not loaded/none; array = fetched).
+  const [qboEst, setQboEst]     = useState(null);
+  const [woBusy, setWoBusy]     = useState(null); // 'attach' | 'download' | null
+  const [woStage, setWoStage]   = useState(null);
+  const [woError, setWoError]   = useState(null);
+  const [attReload, setAttReload] = useState(0); // bump to make AttachmentsPanel re-list
   const isResizing = useRef(false);
+  const selectedRef = useRef(null); // guards async estimate fetch against stale selections
 
   const f = useMemo(() => selected?.fieldData || EMPTY_FIELDS, [selected]);
   const val = useCallback(fk => (fk in edits ? edits[fk] : f[fk]), [edits, f]);
   const stage = useCallback((fk, v) => setEdits(p => ({ ...p, [fk]: v })), []);
+
+  // FMP-style "Stamp": prepend "user M/D/YYYY h:mm:ss AM/PM:" to a notes field,
+  // matching the Trainings module so entries read consistently across the app.
+  const stampNote = useCallback((fk) => {
+    let user = 'admin';
+    try { user = sessionStorage.getItem('fmp_user_name') || 'admin'; } catch { /* unavailable */ }
+    const now = new Date();
+    const stamp = `${user} ${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()} ${now.toLocaleTimeString('en-US')}:`;
+    setEdits(p => {
+      const cur = fk in p ? p[fk] : (f[fk] || '');
+      const curText = typeof cur === 'string' ? cur.replace(/\r/g, '\n') : (cur ?? '');
+      return { ...p, [fk]: `${stamp}\n${curText ? `\n${curText}` : ''}` };
+    });
+  }, [f]);
   const toggle = useCallback(fk => setEdits(p => ({ ...p, [fk]: isOn(fk in p ? p[fk] : f[fk]) ? 0 : 1 })), [f]);
 
+  // Work order PDF for the builder crew — client-side render, attached (or
+  // downloaded) via the same pipeline CCS photos already use.
+  async function handleGenerateWorkOrder(attach) {
+    if (!selected) return;
+    setWoBusy(attach ? 'attach' : 'download');
+    setWoStage('Building PDF…'); setWoError(null);
+    try {
+      if (attach) {
+        await generateAndAttachWorkOrder(selected, setWoStage);
+        setAttReload(n => n + 1); // tell the attachments panel to re-list
+      } else {
+        await downloadWorkOrder(selected, setWoStage);
+      }
+    } catch (e) { setWoError(e.message || 'Work order failed'); }
+    finally { setWoBusy(null); setWoStage(null); }
+  }
+
   // Phase progress (live, reflects pending edits)
+  // An item marked N/A counts toward completion without requiring its own
+  // checkbox — some checklist items don't apply to every project (not every
+  // job needs every step), and a permanently-unchecked N/A item shouldn't
+  // block a phase from ever reaching 100%.
   const phaseStats = useMemo(() => PHASES.map(p => {
-    const done = p.items.filter(([k]) => isOn(k in edits ? edits[k] : f[k])).length;
+    // Post Job's 4 items share one multi-value field (post_job_phase), so
+    // "done" is membership in that list, not isOn() on a per-item field.
+    if (p.id === 'post_job') {
+      const postJobSel = postJobValues('post_job_phase' in edits ? edits['post_job_phase'] : f['post_job_phase']);
+      const done = p.items.filter(([k]) => postJobSel.includes(k) || naFlags.keys.has(`${p.id}::${k}`)).length;
+      return { id: p.id, name: p.name, done, all: p.items.length, pct: done / p.items.length };
+    }
+    const done = p.items.filter(([k]) => isOn(k in edits ? edits[k] : f[k]) || naFlags.keys.has(`${p.id}::${k}`)).length;
     return { id: p.id, name: p.name, done, all: p.items.length, pct: done / p.items.length };
-  }), [edits, f]);
+  }), [edits, f, naFlags.keys]);
 
   const allPhasesDone = phaseStats.every(s => s.pct >= 1);
-  const pipelineIdx = PIPELINE.indexOf(val('kanban_status'));
+
+  // Type of Project is a 3-rep FMP field (maxRepeat=3) — read/write all three
+  // reps, packed with no gaps, so multi-select works within that ceiling.
+  const projectTypeSelected = [1, 2, 3].map(i => val(`Type of Project(${i})`)).filter(Boolean);
+  const toggleProjectType = t => {
+    const cur = projectTypeSelected;
+    let next;
+    if (cur.includes(t)) next = cur.filter(x => x !== t);
+    else { if (cur.length >= 3) return; next = [...cur, t]; }
+    for (let i = 0; i < 3; i++) stage(`Type of Project(${i + 1})`, next[i] || '');
+  };
+
+  const postJobSelected = postJobValues(val('post_job_phase'));
+  const togglePostJob = v => {
+    const next = postJobSelected.includes(v) ? postJobSelected.filter(x => x !== v) : [...postJobSelected, v];
+    // Write back in canonical order, not click order, so re-reads are stable.
+    stage('post_job_phase', POST_JOB_ITEMS.filter(o => next.includes(o)).join('\r'));
+  };
+
+  const merged = mergedStatus({ Status: val('Status') });
+  const pipelineIdx = PIPELINE_STAGES.indexOf(merged);
   const startDays = daysUntil(val('rcd start date'));
   const eventStat = phaseStats.find(s => s.id === 'job_prep');
   const eventUrgent = startDays != null && startDays >= 0 && startDays <= 30 && eventStat && eventStat.pct < 1;
@@ -217,7 +348,8 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
 
   // ── Selection / nav / cache sync ──
   async function handleSelect(r) {
-    setEdits({}); setSaveStatus(null); setFinTab('estimates');
+    setEdits({}); setSaveStatus(null); setFinTab('invoices'); setQboEst(null);
+    selectedRef.current = r.recordId;
     setSelected(r);
     // auto-expand the first incomplete phase
     const firstOpen = PHASES.find(p => p.items.some(([k]) => !isOn(r.fieldData[k])));
@@ -225,6 +357,12 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
     getRecord(LAYOUT, r.recordId).then(detail => {
       setSelected(prev => prev?.recordId === r.recordId ? detail.response.data[0] : prev);
     }).catch(() => {});
+    // Live QBO estimate lookup (via the project's D#). No-ops on localhost
+    // (no serverless functions); leaves qboEst null so nothing renders.
+    fetch(`/api/ccs-estimate?db=${encodeURIComponent(getCurrentEnv().db)}&recordId=${r.recordId}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(j => { if (j) setQboEst(prev => (selectedRef.current === r.recordId ? (j.estimates || []) : prev)); })
+      .catch(() => {});
   }
 
   useEffect(() => {
@@ -301,8 +439,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   });
 
   const dirtyCount = Object.keys(edits).length;
-  const status = val('Status');
-  const sc = statusColor(status);
+  const sc = statusColor(merged);
   const org = f.zz__Display_Organization__ct || '—';
 
   return (
@@ -314,7 +451,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
         </div>
         <div className="cv2-list">
           <ListBody c={list} activeId={selected?.recordId} renderItem={r => {
-            const rf = r.fieldData; const c = statusColor(rf.Status);
+            const rf = r.fieldData; const c = statusColor(mergedStatus(rf));
             const d = daysUntil(rf['rcd start date']);
             return (
               <div key={r.recordId} className={`cv2-list-item${selected?.recordId === r.recordId ? ' active' : ''}`}
@@ -323,7 +460,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                 <div className="cv2-list-body">
                   <div className="cv2-list-org">{rf.zz__Display_Organization__ct || '—'}</div>
                   <div className="cv2-list-sub">
-                    <span>{rf.zz__Display_Contact__ct || rf.kanban_status || ''}</span>
+                    <span>{rf.zz__Display_Contact__ct || mergedStatus(rf) || ''}</span>
                     {d != null && d >= 0 && d <= 30 && <span className="cv2-list-due">{d}d</span>}
                   </div>
                 </div>
@@ -345,18 +482,17 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
               <div className="cv2-crumb">
                 <span className="cv2-crumb-dim">CCS v2</span><span className="cv2-crumb-sep">/</span><span>{org}</span>
                 <span className="cv2-crumb-spacer" />
-                {val('kanban_status')
-                  ? <button className="cv2-ghost-btn" onClick={() => onNavigateTo?.('ccs-kanban', selected.recordId)}>⊞ Board</button>
-                  : <button className="cv2-ghost-btn cv2-add-board" disabled={addingToBoard} onClick={async () => {
-                      // One-click: put this project on the Kanban board (first stage), saved immediately.
-                      setAddingToBoard(true);
-                      try {
-                        await updateRecord(LAYOUT, selected.recordId, { kanban_status: PIPELINE[0] });
-                        patchCachedRecord(RCD_LAYOUT, RCD_CACHE_VERSION, selected.recordId, { kanban_status: PIPELINE[0] });
-                        setSelected(s => ({ ...s, fieldData: { ...s.fieldData, kanban_status: PIPELINE[0] } }));
-                      } catch { window.alert('Could not add to the board.'); }
-                      finally { setAddingToBoard(false); }
-                    }}>{addingToBoard ? 'Adding…' : '⊞ Add to board'}</button>}
+                {(() => {
+                  const onBoard = board.ids.has(String(selected.recordId));
+                  return (
+                    <button className={`cv2-ghost-btn${onBoard ? ' cv2-on-board' : ''}`}
+                      onClick={() => board.toggle(selected.recordId, !onBoard)}
+                      title={onBoard ? 'Remove this project from the Kanban board' : 'Add this project to the Kanban board'}>
+                      {onBoard ? '⊞ On board ✓' : '⊞ Add to board'}
+                    </button>
+                  );
+                })()}
+                <button className="cv2-ghost-btn" onClick={() => onNavigateTo?.('ccs-kanban', selected.recordId)}>Board →</button>
                 <span className="cv2-crumb-id">#{f._kpt__RCD_ID || selected.recordId}</span>
               </div>
 
@@ -364,17 +500,16 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
               <div className="cv2-hero">
                 <div className="cv2-hero-top">
                   <div className="cv2-hero-id">
-                    <div className="cv2-hero-type">{val('Type of Project(1)') || 'Project'}</div>
+                    <div className="cv2-hero-type">{projectTypeSelected.join(' · ') || 'Project'}</div>
                     <h1 className="cv2-hero-org">{org}</h1>
                     <div className="cv2-hero-contact">
                       {f.zz__Display_Contact__ct && <><span className="cv2-ic">◉</span>{f.zz__Display_Contact__ct}</>}
                     </div>
                   </div>
                   <select className="cv2-status" style={{ color: sc, borderColor: sc + '55', background: sc + '14' }}
-                    value={status || ''} onChange={e => stage('Status', e.target.value)}>
-                    {!STATUS_OPTIONS.includes(status) && status && <option value={status}>{status}</option>}
+                    value={merged} onChange={e => stage('Status', e.target.value)}>
                     <option value="">— status —</option>
-                    {STATUS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                    {MERGED_STATUSES.map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
                 </div>
 
@@ -384,17 +519,17 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                     <span className="cv2-pipe-label">Pipeline</span>
                     <span className="cv2-pipe-stage">
                       {pipelineIdx >= 0
-                        ? <><b style={{ color: '#993c1d' }}>Stage {pipelineIdx + 1} of {PIPELINE.length}</b> · {PIPELINE_SHORT[pipelineIdx]}</>
-                        : <button className="cv2-link-btn" onClick={() => { stage('kanban_status', PIPELINE[0]); }}>+ Add to pipeline</button>}
+                        ? <><b style={{ color: '#993c1d' }}>Stage {pipelineIdx + 1} of {PIPELINE_STAGES.length}</b> · {PIPELINE_SHORT[pipelineIdx]}</>
+                        : <b style={{ color: statusColor(merged) }}>{merged || '—'}</b>}
                     </span>
                   </div>
                   <div className="cv2-pipe">
-                    {PIPELINE.map((s, i) => (
+                    {PIPELINE_STAGES.map((s, i) => (
                       <div key={s} className="cv2-pipe-seg">
                         {i > 0 && <span className="cv2-pipe-line" style={{ background: i <= pipelineIdx ? '#d85a30' : 'var(--cv2-line)' }} />}
                         <button className={`cv2-pipe-dot${i < pipelineIdx ? ' done' : i === pipelineIdx ? ' cur' : ''}`}
                           title={PIPELINE_SHORT[i]} aria-label={PIPELINE_SHORT[i]}
-                          onClick={() => stage('kanban_status', s)} />
+                          onClick={() => stage('Status', s)} />
                       </div>
                     ))}
                   </div>
@@ -426,143 +561,207 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                 </div>
               </div>
 
-              {/* BODY: phases + rail */}
+              {/* BODY: full-width phases → details → contact/financials/contract/team cluster */}
               <div className="cv2-body">
-                <div className="cv2-col-main">
-                  <div className="cv2-card">
-                    <div className="cv2-card-head"><span>Contract &amp; financials</span></div>
-                    <div className="cv2-fin-grid">
-                      {FIN_ROWS.map(row => (
-                        <div className="cv2-fin-line" key={row.label}>
-                          <span className="cv2-fin-label">{row.label}</span>
-                          <div className="cv2-fin-input">
-                            {row.ref
-                              ? <span className="cv2-fin-ref">{val(row.sent) || '—'}</span>
-                              : row.type === 'date'
-                                ? <InlineDate value={val(row.sent)} onChange={v => stage(row.sent, v)} />
-                                : <InlineText value={val(row.sent)} onChange={v => stage(row.sent, v)} placeholder="—" />}
-                          </div>
-                          {row.rcv
-                            ? <button className={`cv2-fin-rcv${isOn(val(row.rcv)) ? ' on' : ''}`} onClick={() => toggle(row.rcv)}>
-                                <span className="cv2-fin-rcv-box">{isOn(val(row.rcv)) ? '✓' : ''}</span>Received
-                              </button>
-                            : <span className="cv2-fin-rcv-spacer" />}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="cv2-card">
-                    <div className="cv2-card-head"><span>Project phases</span><span className="cv2-card-hint">click to expand · check to update</span></div>
-                    <div className="cv2-phases">
-                      {phaseStats.map(s => {
-                        const phase = PHASES.find(p => p.id === s.id);
-                        const col = phaseColor(s); const open = !!expanded[s.id]; const full = s.pct >= 1;
-                        const nextStageName = pipelineIdx >= 0 && pipelineIdx < PIPELINE.length - 1 ? PIPELINE_SHORT[pipelineIdx + 1] : null;
+                {/* project phases — full width */}
+                <div className="cv2-card cv2-phases-card">
+                  <div className="cv2-card-head"><span>Project phases</span><span className="cv2-card-hint">click to expand · check to update</span></div>
+                  <div className="cv2-phases">
+                    {phaseStats.map(s => {
+                      const phase = PHASES.find(p => p.id === s.id);
+                      const col = phaseColor(s); const open = !!expanded[s.id]; const full = s.pct >= 1;
+                      const nextStageName = pipelineIdx >= 0 && pipelineIdx < PIPELINE_STAGES.length - 1 ? PIPELINE_SHORT[pipelineIdx + 1] : null;
+                      // One checklist row: the item's own toggle + a small N/A
+                      // toggle beside it. N/A'd items count toward the phase's
+                      // completion (see phaseStats) without needing a real check —
+                      // not every item applies to every project.
+                      const renderCheckItem = (k, label, on, onToggle) => {
+                        const naKey = `${s.id}::${k}`;
+                        const isNA = naFlags.keys.has(naKey);
                         return (
-                          <div key={s.id} className={`cv2-phase${open ? ' open' : ''}`}>
-                            <button className="cv2-phase-head" onClick={() => setExpanded(p => ({ ...p, [s.id]: !p[s.id] }))}>
-                              <Ring pct={s.pct} color={col} />
-                              <div className="cv2-phase-info">
-                                <div className="cv2-phase-row"><span className="cv2-phase-name">{s.name}</span><span className="cv2-phase-count" style={{ color: full ? '#0f6e56' : 'var(--cv2-text-2)' }}>{s.done}/{s.all}{full ? ' · done' : ''}</span></div>
-                                <div className="cv2-phase-bar"><div style={{ width: `${Math.round(s.pct * 100)}%`, background: col }} /></div>
-                              </div>
-                              <span className="cv2-chev">{open ? '▴' : '▾'}</span>
+                          <div className="cv2-check-row" key={k}>
+                            <button className={`cv2-check${on ? ' on' : ''}${isNA ? ' na' : ''}`} onClick={onToggle}>
+                              <span className="cv2-check-box" style={on && !isNA ? { background: col, borderColor: col } : undefined}>{isNA ? '—' : (on ? '✓' : '')}</span>
+                              <span className="cv2-check-label">{label}</span>
                             </button>
-                            {open && (
-                              <div className="cv2-phase-body">
-                                <div className="cv2-checks">
-                                  {phase.items.map(([k, label]) => {
-                                    const on = isOn(val(k));
-                                    return (
-                                      <button key={k} className={`cv2-check${on ? ' on' : ''}`} onClick={() => toggle(k)}>
-                                        <span className="cv2-check-box" style={on ? { background: col, borderColor: col } : undefined}>{on ? '✓' : ''}</span>
-                                        <span className="cv2-check-label">{label}</span>
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                                {full && nextStageName && pipelineIdx < PIPELINE.length - 1 && (
-                                  <div className="cv2-advance">
-                                    <span>✓ Phase complete</span>
-                                    <button onClick={() => stage('kanban_status', PIPELINE[pipelineIdx + 1])}>Advance to {nextStageName} →</button>
-                                  </div>
-                                )}
-                              </div>
-                            )}
+                            <button className={`cv2-na-toggle${isNA ? ' on' : ''}`} title="Doesn't apply to this project"
+                              onClick={() => naFlags.toggle(naKey, !isNA)}>N/A</button>
                           </div>
                         );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* details */}
-                  <div className="cv2-card">
-                    <div className="cv2-card-head"><span>Details</span></div>
-                    <div className="cv2-detail-grid">
-                      <label>Project type</label><InlineSelect value={val('Type of Project(1)')} options={PROJECT_TYPES} onChange={v => stage('Type of Project(1)', v)} />
-                      <label>Start date</label><InlineDate value={val('rcd start date')} onChange={v => stage('rcd start date', v)} />
-                      <label>End date</label><InlineDate value={val('rcd end date')} onChange={v => stage('rcd end date', v)} />
-                      <label>Stage</label><InlineSelect value={val('kanban_status')} options={PIPELINE} onChange={v => stage('kanban_status', v)} />
-                    </div>
-                    <div className="cv2-field-block">
-                      <label>Work order</label>
-                      <InlineText value={val('Work Order')} onChange={v => stage('Work Order', v)} placeholder="Add a work order…" area big />
-                    </div>
-                    <div className="cv2-field-block">
-                      <label>Notes</label>
-                      <InlineText value={val('Notes')} onChange={v => stage('Notes', v)} placeholder="Add notes…" area />
-                    </div>
+                      };
+                      return (
+                        <div key={s.id} className={`cv2-phase${open ? ' open' : ''}`}>
+                          <button className="cv2-phase-head" onClick={() => setExpanded(p => ({ ...p, [s.id]: !p[s.id] }))}>
+                            <Ring pct={s.pct} color={col} />
+                            <div className="cv2-phase-info">
+                              <div className="cv2-phase-row"><span className="cv2-phase-name">{s.name}</span><span className="cv2-phase-count" style={{ color: full ? '#0f6e56' : 'var(--cv2-text-2)' }}>{s.done}/{s.all}{full ? ' · done' : ''}</span></div>
+                              <div className="cv2-phase-bar"><div style={{ width: `${Math.round(s.pct * 100)}%`, background: col }} /></div>
+                            </div>
+                            <span className="cv2-chev">{open ? '▴' : '▾'}</span>
+                          </button>
+                          {open && (
+                            <div className="cv2-phase-body">
+                              {s.id === 'event_prep' ? (
+                                <div className="cv2-eprep-grid">
+                                  {EVENT_PREP_GROUPS.map(g => (
+                                    <div className="cv2-eprep-group" key={g.title}>
+                                      <div className="cv2-eprep-title">{g.title}</div>
+                                      <div className="cv2-checks">
+                                        {g.items.map(([k, label]) => renderCheckItem(k, label, isOn(val(k)), () => toggle(k)))}
+                                      </div>
+                                      <InlineText value={val(g.notes)} onChange={v => stage(g.notes, v)} placeholder="Notes…" area />
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : s.id === 'post_job' ? (
+                                <div className="cv2-checks">
+                                  {POST_JOB_ITEMS.map(v => renderCheckItem(v, v, postJobSelected.includes(v), () => togglePostJob(v)))}
+                                </div>
+                              ) : (
+                                <div className="cv2-checks">
+                                  {phase.items.map(([k, label]) => renderCheckItem(k, label, isOn(val(k)), () => toggle(k)))}
+                                </div>
+                              )}
+                              {full && nextStageName && pipelineIdx < PIPELINE_STAGES.length - 1 && (
+                                <div className="cv2-advance">
+                                  <span>✓ Phase complete</span>
+                                  <button onClick={() => stage('Status', PIPELINE_STAGES[pipelineIdx + 1])}>Advance to {nextStageName} →</button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
-                <div className="cv2-col-rail">
-                  {/* team */}
-                  <div className="cv2-card">
-                    <div className="cv2-card-head"><span>Team</span></div>
-                    <div className="cv2-team">
-                      <div className="cv2-team-row">
-                        <Avatar name={val('Lead Builder')} lead />
-                        <div className="cv2-team-pick"><label>Lead builder</label><InlineSelect value={val('Lead Builder')} options={BUILDER_OPTIONS} onChange={v => stage('Lead Builder', v)} /></div>
+                {/* details */}
+                <div className="cv2-card">
+                  <div className="cv2-card-head"><span>Details</span></div>
+                  <div className="cv2-detail-grid">
+                    <label>Project type <span className="cv2-type-max">(up to 3)</span></label>
+                    <div className="cv2-type-chips">
+                      {projectTypes.map(t => {
+                        const on = projectTypeSelected.includes(t);
+                        const disabled = !on && projectTypeSelected.length >= 3;
+                        return (
+                          <button key={t} type="button" disabled={disabled}
+                            className={`cv2-type-chip${on ? ' on' : ''}`}
+                            onClick={() => toggleProjectType(t)}>{t}</button>
+                        );
+                      })}
+                    </div>
+                    <label>Start date</label><InlineDate value={val('rcd start date')} onChange={v => stage('rcd start date', v)} />
+                    <label>End date</label><InlineDate value={val('rcd end date')} onChange={v => stage('rcd end date', v)} />
+                    <label>Distance to HQ</label><InlineText value={val('Distance to High5')} onChange={v => stage('Distance to High5', v)} placeholder="—" />
+                    <label>Drive time</label><InlineText value={val('Drive Time')} onChange={v => stage('Drive Time', v)} placeholder="—" />
+                  </div>
+                  <div className="cv2-field-block">
+                    <label>Work order</label>
+                    <InlineText value={val('Work Order')} onChange={v => stage('Work Order', v)} placeholder="Add a work order…" area big />
+                    <div className="cv2-wo-actions">
+                      <button type="button" className="cv2-wo-btn" disabled={!!woBusy} onClick={() => handleGenerateWorkOrder(true)}>
+                        {woBusy === 'attach' ? (woStage || 'Working…') : '＋ Generate work order & attach'}
+                      </button>
+                      <button type="button" className="cv2-wo-btn" disabled={!!woBusy} onClick={() => handleGenerateWorkOrder(false)}>
+                        {woBusy === 'download' ? (woStage || 'Working…') : '⤓ Download work order'}
+                      </button>
+                    </div>
+                    {woError && <p className="cv2-wo-error">{woError}</p>}
+                  </div>
+                  <div className="cv2-field-block">
+                    <label>Notes <button type="button" className="cv2-stamp-btn" onClick={() => stampNote('Notes')}>⏱ Stamp</button></label>
+                    <InlineText value={val('Notes')} onChange={v => stage('Notes', v)} placeholder="Add notes…" area />
+                  </div>
+                </div>
+
+                <div className="cv2-cols">
+                  <div className="cv2-col-main">
+                    <div className="cv2-card">
+                      <div className="cv2-card-head"><span>Contract &amp; Financials</span></div>
+                      <div className="cv2-fin-grid">
+                        {FIN_ROWS.map(row => (
+                          <div className="cv2-fin-line" key={row.label}>
+                            <span className="cv2-fin-label">{row.label}</span>
+                            <div className="cv2-fin-input">
+                              {row.ref
+                                ? <span className="cv2-fin-ref">{val(row.sent) || '—'}</span>
+                                : row.type === 'date'
+                                  ? <InlineDate value={val(row.sent)} onChange={v => stage(row.sent, v)} />
+                                  : <InlineText value={val(row.sent)} onChange={v => stage(row.sent, v)} placeholder="—" />}
+                            </div>
+                            {row.rcv
+                              ? <button className={`cv2-fin-rcv${isOn(val(row.rcv)) ? ' on' : ''}`} onClick={() => toggle(row.rcv)}>
+                                  <span className="cv2-fin-rcv-box">{isOn(val(row.rcv)) ? '✓' : ''}</span>Received
+                                </button>
+                              : <span className="cv2-fin-rcv-spacer" />}
+                          </div>
+                        ))}
                       </div>
-                      {['Builder1', 'Builder2', 'Builder3'].map((bk, i) => (
-                        <div className="cv2-team-row" key={bk}>
-                          <Avatar name={val(bk)} />
-                          <div className="cv2-team-pick"><label>Builder {i + 1}</label><InlineSelect value={val(bk)} options={BUILDER_OPTIONS} onChange={v => stage(bk, v)} /></div>
+                      {qboEst && qboEst.length > 0 && (
+                        <div className="cv2-qboest">
+                          <div className="cv2-qboest-head">QuickBooks estimate{qboEst.length > 1 ? 's' : ''} · live</div>
+                          {qboEst.map(e => (
+                            <div className="cv2-qboest-row" key={e.docNumber}>
+                              <span className="cv2-qboest-doc">{e.docNumber}</span>
+                              {e.missing
+                                ? <span className="cv2-qboest-missing">not found in QBO</span>
+                                : <>
+                                    <span className={`cv2-qboest-status ${String(e.status || '').toLowerCase()}`}>{e.status || '—'}</span>
+                                    <span className="cv2-qboest-total">{fmtMoneyFull(e.total)}</span>
+                                  </>}
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      )}
+                      {/* Invoices / Payments (folded in from the old Financials card;
+                          estimates are covered by the live QBO block above). */}
+                      <div className="cv2-fin-embed">
+                        <div className="cv2-fin-tabs">
+                          {[['invoices', 'Invoices', invoices.length], ['payments', 'Payments', payments.length]].map(([id, lbl, n]) => (
+                            <button key={id} className={`cv2-fin-tab${finTab === id ? ' active' : ''}`} onClick={() => setFinTab(id)}>{lbl}<span>{n}</span></button>
+                          ))}
+                        </div>
+                        <div className="cv2-fin-list">
+                          {finTab === 'invoices' && (invoices.length ? invoices.map((r, i) => (
+                            <div className="cv2-fin-row" key={i}><span className="cv2-fin-main">#{r['cntct_INVO::QuickBooks_Reference_Number'] || '—'} · {fmtDateShort(r['cntct_INVO::Date'])}</span><span className="cv2-fin-amt">{fmtMoneyFull(r['cntct_INVO::zz__Total__xn'])}</span></div>
+                          )) : <div className="cv2-fin-empty">No invoices</div>)}
+                          {finTab === 'payments' && (payments.length ? payments.map((r, i) => (
+                            <div className="cv2-fin-row" key={i}><span className="cv2-fin-main">{fmtDateShort(r['cntct_PMT::Date'])} · {r['cntct_PMT::Method'] || '—'}</span><span className="cv2-fin-amt">{fmtMoneyFull(r['cntct_PMT::Amount'])}</span></div>
+                          )) : <div className="cv2-fin-empty">No payments</div>)}
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  {/* contact */}
-                  <div className="cv2-card">
-                    <div className="cv2-card-head"><span>Contact</span></div>
-                    <div className="cv2-contact">
-                      {f.Address_Block_Billing && <div className="cv2-contact-row"><span className="cv2-ic">⌖</span><span style={{ whiteSpace: 'pre-wrap' }}>{f.Address_Block_Billing.replace(/\r/g, '\n')}</span></div>}
-                      {f['rcd_cntct_INADR__email::zz__Address__ct'] && <div className="cv2-contact-row"><span className="cv2-ic">✉</span><a href={`mailto:${f['rcd_cntct_INADR__email::zz__Address__ct']}`}>{f['rcd_cntct_INADR__email::zz__Address__ct']}</a></div>}
-                      {f['rcd_cntct_PHONE__work::Number'] && <div className="cv2-contact-row"><span className="cv2-ic">✆</span><span>{f['rcd_cntct_PHONE__work::Number']}</span></div>}
-                      {f['rcd_cntct_PHONE__mobile::Number'] && <div className="cv2-contact-row"><span className="cv2-ic">▢</span><span>{f['rcd_cntct_PHONE__mobile::Number']}</span></div>}
-                      {(f['Distance to High5'] || f['Drive Time']) && <div className="cv2-contact-meta">{[f['Distance to High5'] && `${f['Distance to High5']} mi`, f['Drive Time'] && `${f['Drive Time']} drive`].filter(Boolean).join(' · ')}</div>}
+                  <div className="cv2-col-rail">
+                    {/* contact */}
+                    <div className="cv2-card">
+                      <div className="cv2-card-head"><span>Contact</span></div>
+                      <div className="cv2-contact">
+                        {f.Address_Block_Billing && <div className="cv2-contact-row"><span className="cv2-ic">⌖</span><span style={{ whiteSpace: 'pre-wrap' }}>{f.Address_Block_Billing.replace(/\r/g, '\n')}</span></div>}
+                        {f['rcd_cntct_INADR__email::zz__Address__ct'] && <div className="cv2-contact-row"><span className="cv2-ic">✉</span><a href={`mailto:${f['rcd_cntct_INADR__email::zz__Address__ct']}`}>{f['rcd_cntct_INADR__email::zz__Address__ct']}</a></div>}
+                        {f['rcd_cntct_PHONE__work::Number'] && <div className="cv2-contact-row"><span className="cv2-ic">✆</span><span>{f['rcd_cntct_PHONE__work::Number']}</span></div>}
+                        {f['rcd_cntct_PHONE__mobile::Number'] && <div className="cv2-contact-row"><span className="cv2-ic">▢</span><span>{f['rcd_cntct_PHONE__mobile::Number']}</span></div>}
+                      </div>
                     </div>
-                  </div>
 
-                  {/* financials */}
-                  <div className="cv2-card">
-                    <div className="cv2-card-head"><span>Financials</span></div>
-                    <div className="cv2-fin-tabs">
-                      {[['estimates', 'Estimates', estimates.length], ['invoices', 'Invoices', invoices.length], ['payments', 'Payments', payments.length]].map(([id, lbl, n]) => (
-                        <button key={id} className={`cv2-fin-tab${finTab === id ? ' active' : ''}`} onClick={() => setFinTab(id)}>{lbl}<span>{n}</span></button>
-                      ))}
-                    </div>
-                    <div className="cv2-fin-list">
-                      {finTab === 'estimates' && (estimates.length ? estimates.map((r, i) => (
-                        <div className="cv2-fin-row" key={i}><span className="cv2-fin-main">{r['cntct_ESTMT::Title'] || fmtDate(r['cntct_ESTMT::Date'])}</span><span className="cv2-fin-amt">{fmtMoneyFull(r['cntct_ESTMT::zz__Total__xn'])}</span></div>
-                      )) : <div className="cv2-fin-empty">No estimates</div>)}
-                      {finTab === 'invoices' && (invoices.length ? invoices.map((r, i) => (
-                        <div className="cv2-fin-row" key={i}><span className="cv2-fin-main">#{r['cntct_INVO::QuickBooks_Reference_Number'] || '—'} · {fmtDateShort(r['cntct_INVO::Date'])}</span><span className="cv2-fin-amt">{fmtMoneyFull(r['cntct_INVO::zz__Total__xn'])}</span></div>
-                      )) : <div className="cv2-fin-empty">No invoices</div>)}
-                      {finTab === 'payments' && (payments.length ? payments.map((r, i) => (
-                        <div className="cv2-fin-row" key={i}><span className="cv2-fin-main">{fmtDateShort(r['cntct_PMT::Date'])} · {r['cntct_PMT::Method'] || '—'}</span><span className="cv2-fin-amt">{fmtMoneyFull(r['cntct_PMT::Amount'])}</span></div>
-                      )) : <div className="cv2-fin-empty">No payments</div>)}
+                    {/* team */}
+                    <div className="cv2-card">
+                      <div className="cv2-card-head"><span>Team</span></div>
+                      <div className="cv2-team">
+                        <div className="cv2-team-row">
+                          <Avatar name={val('Lead Builder')} lead />
+                          <div className="cv2-team-pick"><label>Lead builder</label><InlineSelect value={val('Lead Builder')} options={builderOptions} onChange={v => stage('Lead Builder', v)} /></div>
+                        </div>
+                        {['Builder1', 'Builder2', 'Builder3'].map((bk, i) => (
+                          <div className="cv2-team-row" key={bk}>
+                            <Avatar name={val(bk)} />
+                            <div className="cv2-team-pick"><label>Builder {i + 1}</label><InlineSelect value={val(bk)} options={builderOptions} onChange={v => stage(bk, v)} /></div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -575,7 +774,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                 </div>
               )}
 
-              <AttachmentsPanel parentId={f._kpt__RCD_ID} api={CCS_ATT_API} invoiceDocNumber={f['_kat__QuickBooks_Invoice_ID(1)']} />
+              <AttachmentsPanel parentId={f._kpt__RCD_ID} api={CCS_ATT_API} invoiceDocNumber={f['_kat__QuickBooks_Invoice_ID(1)']} reloadSignal={attReload} />
 
               <div className="cv2-meta">
                 ID {f._kpt__RCD_ID} · Record {selected.recordId} · Created {f.zz__Created_On?.split(' ')[0] || '—'} by {f.zz__Created_By} · Modified {f.zz__Modified_On?.split(' ')[0] || '—'} by {f.zz__Modified_By}

@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { BRAND, UI } from '../config/brandColors'
 import { getRecord, prefetchRecord, updateRecord, invalidateRecord, patchCachedRecord } from '../api/filemaker';
-import { useAllRecords } from '../hooks/useAllRecords';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
 import RecordSaveBar from './RecordSaveBar';
 import AttachmentsPanel from './AttachmentsPanel';
@@ -14,10 +14,10 @@ const CACHE_VERSION = 1;
 const RECORDS_LOCKED = true;
 
 const STATUS_COLOR = {
-  'Final Invoiced': '#22c55e',
-  'Ready to Bill':  '#e87722',
-  'No Go':          '#64748b',
-  default:          '#64748b',
+  'Final Invoiced': UI.success,
+  'Ready to Bill':  BRAND.gold,
+  'No Go':          UI.neutral,
+  default:          UI.neutral,
 };
 
 // Proposed vs. actual cost lines. Each row is shown only when at least one side
@@ -101,7 +101,10 @@ function Section({ title, icon, children }) {
 }
 
 export default function EOL({ navTarget, onClearNav, onRecordSelect } = {}) {
-  const { records, total } = useAllRecords(LAYOUT, { cacheVersion: CACHE_VERSION });
+  // This module reads the same trainings_New layout as Trainings (there's no
+  // real EOL layout yet) — those rows are duplicates here, not EOL data, so we
+  // don't fetch or show them. Skips a second fetch of the same layout too.
+  const records = [];
   const [selected, setSelected] = useState(null);
   const [navWidth, setNavWidth] = useState(300);
   const [edits, setEdits] = useState({});
@@ -214,14 +217,17 @@ export default function EOL({ navTarget, onClearNav, onRecordSelect } = {}) {
           <div className="eol-sidebar-title">
             <div>
               <div className="eol-sidebar-module">Edge of Leadership</div>
-              <div className="eol-sidebar-count">{total ? `${total.toLocaleString()} programs` : 'Loading…'}</div>
+              <div className="eol-sidebar-count">Not available yet</div>
             </div>
           </div>
           <ListToolbar c={list} unit="programs" />
         </div>
 
         {records.length === 0 ? (
-          <div className="eol-loading">{[...Array(8)].map((_, i) => <div key={i} className="eol-skeleton" />)}</div>
+          <div className="eol-empty-state">
+            <div className="eol-empty-icon">◳</div>
+            <p>Not available yet — a dedicated Edge of Leadership layout hasn't been built in FileMaker.</p>
+          </div>
         ) : (
           <div className="eol-list">
             <ListBody c={list} activeId={selected?.recordId} renderItem={r => {

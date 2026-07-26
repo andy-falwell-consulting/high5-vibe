@@ -7,12 +7,11 @@
   ],
   "crons": [
     { "path": "/api/sync?db=High5_Core4", "schedule": "*/5 * * * *" },
-    { "path": "/api/sync?db=High5_Core4_Dev", "schedule": "*/5 * * * *" },
-    { "path": "/api/qbo-invoice-sync?db=High5_Core4", "schedule": "*/5 * * * *" },
-    { "path": "/api/qbo-invoice-sync?db=High5_Core4_Dev", "schedule": "*/5 * * * *" },
+    { "path": "/api/qbo-invoice-sync?db=High5_Core4", "schedule": "*/15 * * * *" },
     { "path": "/api/replica-reconcile?db=High5_Core4", "schedule": "0 * * * *" },
-    { "path": "/api/replica-reconcile?db=High5_Core4_Dev", "schedule": "0 * * * *" },
-    { "path": "/api/txn-sync?db=High5_Core4", "schedule": "*/15 * * * *" },
-    { "path": "/api/distance-sync?db=High5_Core4", "schedule": "*/30 * * * *" }
+    { "path": "/api/txn-sync?db=High5_Core4", "schedule": "0 * * * *" },
+    { "path": "/api/qbo-estimate-sync?db=High5_Core4", "schedule": "*/15 * * * *" },
+    { "path": "/api/distance-sync?db=High5_Core4&layout=rcd", "schedule": "0 6 * * *" },
+    { "path": "/api/distance-sync?db=High5_Core4&layout=trainings", "schedule": "30 6 * * *" }
   ]
 }

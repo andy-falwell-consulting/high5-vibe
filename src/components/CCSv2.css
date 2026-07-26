@@ -11,7 +11,7 @@
   --cv2-text-4: #79859a;
   --cv2-ring-track: #262b3d;
   --cv2-line: #2a2f45;
-  --cv2-accent: #e8322a;
+  --cv2-accent: var(--h5-red);
 
   display: flex; flex: 1; min-height: 0; overflow: hidden;
   background: var(--cv2-bg); color: var(--cv2-text);
@@ -126,9 +126,15 @@
 .cv2-kpi-sub { font-size: 14px; color: var(--cv2-text-3); }
 .cv2-kpi-sub.urg { color: #b45309; font-weight: 600; }
 
-/* ── Body grid ─────────────────────────────────────────────────── */
-.cv2-body { display: grid; grid-template-columns: 1.55fr 1fr; gap: 12px; margin-top: 12px; align-items: start; }
-@media (max-width: 920px) { .cv2-body { grid-template-columns: 1fr; } .cv2-kpis { grid-template-columns: repeat(2, 1fr); } }
+/* ── Body layout ───────────────────────────────────────────────────
+   Contact + Financials sit in a full-width top row, then Project phases
+   spans the full width below them (previously it was squeezed into the
+   narrower main column), then the remaining cards resume a 2-col layout. */
+.cv2-body { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+.cv2-top-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+@media (max-width: 700px) { .cv2-top-row { grid-template-columns: 1fr; } .cv2-kpis { grid-template-columns: repeat(2, 1fr); } }
+.cv2-cols { display: grid; grid-template-columns: 1.55fr 1fr; gap: 12px; align-items: start; }
+@media (max-width: 920px) { .cv2-cols { grid-template-columns: 1fr; } }
 .cv2-col-main, .cv2-col-rail { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 
 .cv2-card { background: var(--cv2-surface); border: 1px solid var(--cv2-border); border-radius: 12px; padding: 14px 16px; }
@@ -161,12 +167,29 @@
 .cv2-advance button { background: transparent; border: 1px solid #0f6e5566; color: #0f6e56; border-radius: 7px; padding: 5px 11px; font-size: 15px; cursor: pointer; font-family: inherit; }
 .cv2-advance button:hover { background: #0f6e5512; }
 
+/* "Job Prep - External" — checklist items grouped by category, each with its
+   own notes field (mirrors the RCD_New FileMaker tab of the same name). */
+.cv2-eprep-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+@media (max-width: 560px) { .cv2-eprep-grid { grid-template-columns: 1fr; } }
+.cv2-eprep-group { background: var(--cv2-surface-2); border: 1px solid var(--cv2-border); border-radius: 9px; padding: 10px 11px; }
+.cv2-eprep-title { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--cv2-text-3); border-bottom: 1px solid var(--cv2-border-2); padding-bottom: 6px; margin-bottom: 6px; }
+.cv2-eprep-group .cv2-checks { grid-template-columns: 1fr; gap: 0; margin-top: 0; }
+.cv2-eprep-group .cv2-inline-area { margin-top: 6px; background: var(--cv2-bg); border-color: var(--cv2-border-2); min-height: 44px; }
+
 /* ── Inline editors ────────────────────────────────────────────── */
 .cv2-inline { width: 100%; box-sizing: border-box; background: transparent; border: 1px solid transparent; border-radius: 6px; color: var(--cv2-text); font-size: 17px; padding: 5px 8px; font-family: inherit; outline: none; }
 .cv2-inline:hover { background: var(--cv2-surface-2); }
 .cv2-inline:focus { background: var(--cv2-bg); border-color: var(--cv2-accent); }
-.cv2-inline-area { resize: vertical; min-height: 56px; line-height: 1.5; }
+/* Auto-grown by JS to fit content, so no manual resize and no inner scrollbar. */
+.cv2-inline-area { resize: none; overflow: hidden; min-height: 56px; line-height: 1.5; }
 .cv2-inline-area-lg { min-height: 250px; }
+.cv2-stamp-btn {
+  margin-left: 8px; font-size: 11px; padding: 1px 8px; border-radius: 4px;
+  background: #1a1d27; border: 1px solid var(--cv2-border); color: var(--cv2-muted);
+  cursor: pointer; vertical-align: middle;
+}
+.cv2-stamp-btn:hover { border-color: #e87722; color: #e87722; }
+[data-theme="light"] .cv2-stamp-btn { background: #f1f5f9; border-color: #e2e8f0; color: #334155; }
 .cv2-inline-select { cursor: pointer; appearance: none; }
 .cv2-inline-date { color-scheme: dark; }
 [data-theme="light"] .cv2-inline-date { color-scheme: light; }
@@ -175,6 +198,16 @@
 .cv2-detail-grid > label { font-size: 14px; color: var(--cv2-text-3); text-transform: uppercase; letter-spacing: 0.04em; }
 .cv2-field-block { margin-top: 12px; }
 .cv2-field-block > label { display: block; font-size: 14px; color: var(--cv2-text-3); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 3px; }
+
+.cv2-wo-actions { display: flex; gap: 8px; margin-top: 8px; }
+.cv2-wo-btn {
+  font-size: 13px; padding: 7px 12px; border-radius: 6px; font-family: inherit;
+  background: #1a1d27; border: 1px solid var(--cv2-border); color: var(--cv2-muted); cursor: pointer;
+}
+.cv2-wo-btn:hover:not(:disabled) { border-color: #e87722; color: #e87722; }
+.cv2-wo-btn:disabled { opacity: 0.6; cursor: default; }
+[data-theme="light"] .cv2-wo-btn { background: #f1f5f9; border-color: #e2e8f0; color: #334155; }
+.cv2-wo-error { color: #ef4444; font-size: 12px; margin: 6px 0 0; }
 
 /* ── Team ──────────────────────────────────────────────────────── */
 .cv2-team { display: flex; flex-direction: column; gap: 8px; }
@@ -234,3 +267,50 @@
 .cv2-fin-rcv.on { color: var(--cv2-text); border-color: #16a34a; }
 .cv2-fin-rcv.on .cv2-fin-rcv-box { background: #16a34a; border-color: #16a34a; }
 .cv2-fin-rcv-spacer { display: inline-block; }
+
+/* Invoices/Payments tabs folded into the Contract & Financials card. */
+.cv2-fin-embed { margin-top: 12px; border-top: 1px solid var(--cv2-border); padding-top: 12px; }
+
+/* Live QBO estimate(s) resolved from the project's D# (api/ccs-estimate). */
+.cv2-qboest { margin-top: 12px; border-top: 1px solid var(--cv2-border); padding-top: 10px; }
+.cv2-qboest-head { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--cv2-text-3); margin-bottom: 6px; }
+.cv2-qboest-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+.cv2-qboest-doc { font-family: ui-monospace, monospace; font-size: 15px; color: var(--cv2-text); min-width: 74px; }
+.cv2-qboest-total { margin-left: auto; font-size: 16px; color: var(--cv2-text); }
+.cv2-qboest-missing { font-size: 14px; color: var(--cv2-text-4); font-style: italic; }
+.cv2-qboest-status { font-size: 13px; font-weight: 600; padding: 2px 9px; border-radius: 999px; text-transform: capitalize; color: #64748b; background: #64748b1f; }
+.cv2-qboest-status.accepted { color: #16a34a; background: #16a34a1f; }
+.cv2-qboest-status.closed   { color: #2563eb; background: #2563eb1f; }
+.cv2-qboest-status.pending  { color: #b45309; background: #f59e0b22; }
+.cv2-qboest-status.rejected { color: #dc2626; background: #dc26261f; }
+
+/* Board-membership toggle — active ("on board") state */
+.cv2-ghost-btn.cv2-on-board { color: var(--h5-blue); border-color: var(--h5-blue); }
+
+/* Project Type multi-select — FMP field caps at 3 reps (maxRepeat=3). */
+.cv2-type-max { font-size: 11px; text-transform: none; letter-spacing: 0; color: var(--cv2-text-3); opacity: 0.7; }
+.cv2-type-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.cv2-type-chip {
+  padding: 4px 11px; border-radius: 999px; font-size: 13px; cursor: pointer;
+  background: var(--cv2-bg); border: 1px solid var(--cv2-border-2); color: var(--cv2-text-2);
+  transition: all 0.12s;
+}
+.cv2-type-chip:hover:not(:disabled) { border-color: var(--h5-blue); color: var(--cv2-text); }
+.cv2-type-chip.on { background: var(--h5-blue); border-color: var(--h5-blue); color: #fff; }
+.cv2-type-chip:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* N/A toggle — an item that doesn't apply to this project still counts
+   toward phase completion (see phaseStats in CCSv2.jsx) without needing a
+   real checkbox. */
+.cv2-check-row { display: flex; align-items: center; gap: 4px; }
+.cv2-check-row .cv2-check { flex: 1; min-width: 0; }
+.cv2-check.na .cv2-check-label { opacity: 0.55; font-style: italic; text-decoration: none; }
+.cv2-check.na .cv2-check-box { color: var(--cv2-text-3); border-color: var(--cv2-border-2) !important; background: transparent !important; }
+.cv2-na-toggle {
+  flex-shrink: 0; font-size: 10px; font-weight: 700; letter-spacing: 0.03em;
+  padding: 3px 7px; border-radius: 5px; cursor: pointer; line-height: 1;
+  background: transparent; border: 1px solid var(--cv2-border-2); color: var(--cv2-text-3);
+  opacity: 0.45; transition: all 0.12s;
+}
+.cv2-check-row:hover .cv2-na-toggle { opacity: 1; }
+.cv2-na-toggle.on { opacity: 1; background: var(--cv2-text-3); color: var(--cv2-bg); border-color: var(--cv2-text-3); }

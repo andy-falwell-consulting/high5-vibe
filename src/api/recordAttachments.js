@@ -1,7 +1,7 @@
 // Generic file-attachments helper, backed by a FileMaker container "pics" table
 // related to a parent record by a foreign-key field. Configure it once per
 // record type (see ccsAttachments.js) and reuse the CRUD + fresh-URL helpers.
-import { findInLayout, createRecord, deleteRecord, uploadContainer, containerImageUrl, getRecord, invalidateRecord } from './filemaker';
+import { findInLayout, createRecord, deleteRecord, uploadContainer, containerImageUrl, getRecord, invalidateRecord, resetFmpSession } from './filemaker';
 import { getCurrentEnv } from '../config/fmpEnvironments';
 
 const IMG_EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'heic', 'bmp', 'tif', 'tiff'];
@@ -71,8 +71,11 @@ export function makeAttachments({ picsLayout, container, fkField, nameField }) {
 
   // FileMaker container streaming URLs expire with the session — re-fetch the
   // record at click time so attachments stay openable/downloadable forever.
+  // Force a brand-new session too: FMP Server can evict sessions under
+  // concurrent load, so reusing the current one can mint an already-dead URL.
   async function freshUrl(recordId) {
     invalidateRecord(picsLayout, recordId);
+    resetFmpSession();
     const streaming = (await getRecord(picsLayout, recordId))?.response?.data?.[0]?.fieldData?.[container];
     if (!streaming) return null;
     try { const u = new URL(streaming); return u.pathname + u.search; } catch { return streaming; }

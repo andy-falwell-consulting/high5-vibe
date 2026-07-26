@@ -20,6 +20,7 @@ export default async function handler(req, res) {
     name: session.name,
     picture: session.picture,
     isAdmin: await isAdminEmail(session.email),
+    isFallback: !!session.isFallback,
   };
 
   const db = String(req.query.fmpDb || '');

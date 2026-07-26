@@ -66,18 +66,42 @@ export default function AttachmentsPanel({ parentId, api, title = 'Attachments',
     } catch (e) { setError(e.message || 'Could not fetch invoice'); }
     finally { setBusy(null); }
   }
+  // Mint a fresh streaming URL and fetch it ourselves (rather than blindly
+  // navigating and hoping) so an expired FMP session shows up as a catchable
+  // error instead of a dead tab with FileMaker's raw "unauthorized" page.
+  // Reusing the fetched bytes as a blob: URL also avoids downloading twice.
+  async function openFreshUrl(recordId, w) {
+    const fresh = await api.freshUrl(recordId);
+    if (!fresh) throw new Error('File is no longer available');
+    const abs = fresh.startsWith('http') ? fresh : window.location.origin + fresh;
+    const res = await fetch(abs, { credentials: 'include' });
+    if (!res.ok) {
+      const err = new Error(res.status === 401 ? 'Session expired' : `Could not open file (HTTP ${res.status})`);
+      err.status = res.status;
+      throw err;
+    }
+    const blobUrl = URL.createObjectURL(await res.blob());
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 5 * 60 * 1000);
+    if (w) w.location.href = blobUrl; else window.open(blobUrl, '_blank', 'noopener');
+  }
+
   async function handleOpen(a) {
     setError(null);
     if (a.url && a.url.startsWith('blob:')) { window.open(a.url, '_blank', 'noopener'); return; }
     const w = window.open('', '_blank'); // open synchronously to dodge popup blockers
     try {
-      const fresh = await api.freshUrl(a.recordId);
-      if (!fresh) throw new Error('File is no longer available');
-      const abs = fresh.startsWith('http') ? fresh : window.location.origin + fresh;
-      if (w) w.location.href = abs; else window.open(abs, '_blank', 'noopener');
+      await openFreshUrl(a.recordId, w);
     } catch (e) {
+      // A 401 here means the FMP session that minted this URL was evicted
+      // between mint and click — freshUrl() forces a brand-new session on
+      // each call, so retry once before giving up.
+      if (e.status === 401) {
+        try { await openFreshUrl(a.recordId, w); return; } catch { /* fall through to error */ }
+      }
       if (w) w.close();
-      setError(e.message || 'Could not open file');
+      setError(e.status === 401
+        ? 'Could not open this file — your FileMaker session expired. Please try again.'
+        : (e.message || 'Could not open file'));
     }
   }
 

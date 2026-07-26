@@ -135,7 +135,7 @@ export default function InvoicePane({ contact, title = 'Invoices' }) {
                   <td>{r['cntct_INVO::Date'] || '—'}</td>
                   <td className="mono">#{ref}</td>
                   <td className="num">{money(total)}</td>
-                  <td className="num" style={{ color: balance > 0 ? '#e8322a' : undefined }}>{money(balance)}</td>
+                  <td className="num" style={{ color: balance > 0 ? '#ED1C24' : undefined }}>{money(balance)}</td>
                   <td><span className={`invp-pill ${status === 'Paid' ? 'paid' : status === 'Open' ? 'open' : 'na'}`}>{status}</span></td>
                   <td className="invp-actcell"><button className="invp-pdf" disabled={busy === rid} onClick={e => viewPdf(rid, ref, e)}>{busy === rid ? '…' : '📄 PDF'}</button></td>
                 </tr>,

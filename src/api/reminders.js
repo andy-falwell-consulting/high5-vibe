@@ -58,12 +58,15 @@ export async function createReminder({ title, notes, startISO, durationMin = 30,
   return mapEvent(ev);
 }
 
-export async function updateReminder(id, { title, notes, startISO, durationMin = 30, overrides } = {}) {
+export async function updateReminder(id, { title, notes, startISO, durationMin = 30, overrides, recordLink } = {}) {
   const patch = { id, timeZone: tz() };
   if (title !== undefined) patch.title = title;
   if (notes !== undefined) patch.notes = notes;
   if (startISO) { patch.startISO = startISO; patch.endISO = new Date(new Date(startISO).getTime() + durationMin * 60000).toISOString(); }
   if (overrides) patch.overrides = overrides;
+  // recordLink is only sent when the caller explicitly wants to set/change/clear
+  // the linked record — omitting it leaves whatever link the event already has.
+  if (recordLink) patch.recordLink = recordLink;
   const ev = await call('calendar.update', patch);
   notifyRemindersChanged();
   return mapEvent(ev);

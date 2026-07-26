@@ -44,7 +44,7 @@ export default function NewItemModal({ onClose, onCreate }) {
               <label>Name *
                 <input value={fields.Name} onChange={e => set('Name', e.target.value)} placeholder="Product name" />
               </label>
-              <label>SKU
+              <label>High 5 Sku
                 <input value="Assigned automatically on save" readOnly disabled className="nim-readonly" />
               </label>
               <label>Type
