@@ -659,6 +659,14 @@ export async function createRecord(layout, fieldData) {
 }
 
 export async function addPortalRow(layout, recordId, portalName, rowData) {
+  return addPortalRows(layout, recordId, portalName, [rowData]);
+}
+
+// Bulk variant — FileMaker accepts many new portal rows in a single PATCH, which
+// matters when copying a whole set at once (an inspection carries 25-75 line
+// items; one request beats one round trip per line).
+export async function addPortalRows(layout, recordId, portalName, rows) {
+  if (!rows?.length) return { messages: [{ code: '0', message: 'OK' }] };
   const token = await getToken({ write: true });
   const env = getCurrentEnv();
   const res = await fetch(
@@ -666,10 +674,10 @@ export async function addPortalRow(layout, recordId, portalName, rowData) {
     {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ portalData: { [portalName]: [rowData] } }),
+      body: JSON.stringify({ portalData: { [portalName]: rows } }),
     }
   );
-  if (res.status === 401) { invalidateWriteAuth(); return addPortalRow(layout, recordId, portalName, rowData); }
+  if (res.status === 401) { invalidateWriteAuth(); return addPortalRows(layout, recordId, portalName, rows); }
   return res.json();
 }
 

@@ -11,7 +11,10 @@ import './RecordFormModal.css'
 //   type: 'text' | 'number' | 'date' | 'textarea' | 'select'
 //   options (for select): ['A','B'] or [{ value, label }]
 //
-// Pass extra module-specific UI (e.g. Shopify/QBO toggles) as children.
+// Pass extra module-specific UI (e.g. Shopify/QBO toggles) as children. Children
+// may be a function `(values) => node` when that UI depends on what's been
+// entered so far (Inspections' "copy a previous inspection" list narrows to the
+// contact picked above it).
 
 export default function RecordFormModal({ title, fields, submitLabel = 'Create', onCreate, onClose, children }) {
   const [values, setValues] = useState(() => {
@@ -74,7 +77,7 @@ export default function RecordFormModal({ title, fields, submitLabel = 'Create',
               </label>
             ))}
           </div>
-          {children}
+          {typeof children === 'function' ? children(values) : children}
         </div>
 
         <div className="rfm-footer">
