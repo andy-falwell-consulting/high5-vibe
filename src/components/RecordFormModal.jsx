@@ -45,6 +45,13 @@ export default function RecordFormModal({ title, fields, submitLabel = 'Create',
       for (const f of fields) {
         const v = values[f.key]
         if (v !== '' && v != null) fieldData[f.key] = v
+        // A contact field's `orgField` mirror lives in `values` under its own
+        // key, which isn't in `fields` — include it explicitly or the picked
+        // org name never gets written and the record looks unlinked.
+        if (f.orgField) {
+          const ov = values[f.orgField]
+          if (ov !== '' && ov != null) fieldData[f.orgField] = ov
+        }
       }
       await onCreate(fieldData)
       onClose()
