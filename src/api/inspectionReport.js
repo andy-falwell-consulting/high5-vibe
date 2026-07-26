@@ -1,5 +1,6 @@
 // Inspection report PDF generator — matches the FileMaker "Print Report" output.
 // pdfmake + bundled fonts/logos are lazy-loaded only when a report is generated.
+import { categoryRank } from '../config/inspectionCopy';
 
 const FOOTER = '130 Austine Drive  l  Brattleboro  l  VT  l  05301  l  (802) 254-8718  l  Fax (802) 251-7203';
 const BOLD_PHRASES = ['THIS ELEMENT IS READY TO USE.', 'THIS ELEMENT SHOULD NOT BE USED UNTIL REPAIRS CAN BE MADE.'];
@@ -50,11 +51,18 @@ export function buildInspectionDoc(record, logos) {
   const nameNorm = indiv.toLowerCase();
   const recip = [indiv, ...addrLines.filter(l => l.replace(/\s+/g, ' ').trim().toLowerCase() !== nameNorm)].filter(Boolean);
 
-  const order = []; const groups = {};
+  // Group by Category in the canonical value-list order (History → Repairs),
+  // the same order the on-screen line editor uses, so the report sections come
+  // out in a fixed order rather than however the portal happened to return the
+  // rows. Categories not on the list keep their relative position at the end.
+  const groups = {};
   li.forEach(r => {
     const c = r['inspt_INSPLI::Category'] || '';
-    if (!groups[c]) { groups[c] = []; order.push(c); }
-    groups[c].push(r);
+    (groups[c] = groups[c] || []).push(r);
+  });
+  const order = Object.keys(groups).sort((a, b) => {
+    const ra = categoryRank(a), rb = categoryRank(b);
+    return ra !== rb ? ra - rb : a.localeCompare(b);
   });
 
   const content = [];

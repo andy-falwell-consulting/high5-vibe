@@ -11,16 +11,13 @@
 //     _kpt__Inspection_ID yet, so a copy must create the parent first, read
 //     back its ID, and only then write lines.
 import { addPortalRows, updatePortalRow, deletePortalRow, getRecordWithPortals } from './filemaker';
+import { CATEGORIES, categoryRank } from '../config/inspectionCopy';
 
 export const LAYOUT = 'Inspections_New';
 export const PORTAL = 'inspt_INSPLI';
 export const PORTAL_LIMIT = 2000;   // the portal default caps at 50
 
-// Value lists as defined on the Inspections_New layout. CATEGORIES is also the
-// canonical report order — History first, Repairs last.
-export const CATEGORIES = ['History', 'General Comments', 'Equipment', 'Low Element', 'High Element', 'Addendum', 'Repairs'];
-export const ELEMENT_GRADES = ['5', '4', '3', '2', '1', 'NI'];
-export const EQUIPMENT = ['ropes', 'harnesses', 'helmets', 'carabiners', 'belay devices', 'pulleys', 'misc.'];
+export { CATEGORIES, ELEMENT_GRADES, EQUIPMENT } from '../config/inspectionCopy';
 
 // The line fields this app owns. `ITEM::Name` also appears in the portal but
 // belongs to a different table occurrence (a related item record), so it is
@@ -50,12 +47,8 @@ export function toRow(line) {
 // Categories not on the value list (historical drift) sort after the known
 // ones, alphabetically, rather than being dropped or silently reordered.
 export function sortLines(lines) {
-  const rank = c => {
-    const i = CATEGORIES.indexOf(c);
-    return i === -1 ? CATEGORIES.length : i;
-  };
   return [...lines].sort((a, b) => {
-    const ra = rank(a.Category), rb = rank(b.Category);
+    const ra = categoryRank(a.Category), rb = categoryRank(b.Category);
     if (ra !== rb) return ra - rb;
     if (ra === CATEGORIES.length) return String(a.Category || '').localeCompare(String(b.Category || ''));
     return 0;   // stable within a category — preserves the order lines were entered
