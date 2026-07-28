@@ -3,6 +3,12 @@ import { RCD_CACHE_VERSION } from './ccsCache'
 // Cross-module record sources — read from the already-prewarmed caches.
 // Shared by CommandPalette (⌘K search) and RecordPicker (reminder linking),
 // so the type→color/label mapping only lives in one place.
+//
+// `cv` MUST match the module's own CACHE_VERSION (and App.jsx's prewarm entry)
+// for that layout. Reading a version nobody wrote finds an empty cache, so the
+// type silently vanishes from search with no error — Products sat on a stale
+// cv: 4 against an actual 5 and never appeared in ⌘K at all. When you bump a
+// module's CACHE_VERSION, bump it here too.
 export const RECORD_SOURCES = [
   { module: 'contacts', layout: 'Contacts_New', cv: 2, type: 'Contact', icon: '◉', color: '#8b5cf6',
     title: f => f.zz__Display__ct, sub: f => f['cntct_ADDR::zz__Display_Single_Line_No_Zip__ct'] || f.Type || '' },
@@ -12,7 +18,7 @@ export const RECORD_SOURCES = [
   { module: 'projects', layout: 'RCD_New', cv: RCD_CACHE_VERSION, type: 'Project', icon: '◈', color: '#e8722a',
     title: f => f.zz__Display_Organization__ct,
     sub: f => [f['Type of Project(1)'], f.kanban_status].filter(Boolean).join(' · ') },
-  { module: 'products', layout: 'Products & Services_New', cv: 4, type: 'Product', icon: '◫', color: '#d97706',
+  { module: 'products', layout: 'Products & Services_New', cv: 5, type: 'Product', icon: '◫', color: '#d97706',
     title: f => f.Name, sub: f => f.SKU || f.Category || '' },
   { module: 'estimates', layout: 'Estimates_New', cv: 1, type: 'Estimate', icon: '▤', color: '#10b981',
     title: f => f.zz__Display_Contact__ct || f.Title, sub: f => f.Title !== (f.zz__Display_Contact__ct || f.Title) ? f.Title : '' },
