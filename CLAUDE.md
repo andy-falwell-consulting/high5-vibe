@@ -45,11 +45,20 @@ on push, then is squash-merged to `main` and deleted.
 6. Merge deploys production. The auto-tag workflow tags `v1.0.X`
    (`.github/workflows/auto-tag.yml`) — no manual `git tag`.
 
-**Squash per feature, but never squash a bulk promotion.** The auto-tag
-workflow reads the version out of each commit message, so squashing one
-feature branch (one `v1.0.X` commit) is right, while squashing a many-commit
-promotion would collapse every version into a single tag and lose the release
-history. Use a merge commit for those.
+**Tagging is one tag per merge, not one per version.**
+`.github/workflows/auto-tag.yml` reads `package.json` at the tip of `main`
+after a push and creates that single tag. It does **not** parse commit
+messages, and the merge strategy makes no difference to it.
+
+So a normal one-feature merge tags correctly, while a bulk promotion covering
+many versions produces only the final tag — the intermediate ones are never
+created and can't be recovered by choosing a merge commit over a squash. The
+gaps in the tag list (v1.0.211 → v1.0.250 → v1.0.253) are exactly this.
+
+Squash-merge per feature as usual. For a bulk promotion, a merge commit is
+still the better choice — it keeps the individual `v1.0.X` commits readable in
+`main`'s history — just don't expect it to backfill tags. If the intermediate
+tags matter, create them by hand.
 
 **Branch protection on `main`:** PRs are required and force-pushes are off, but
 `enforce_admins` is off — so the repo owner can merge their own PR without a
