@@ -22,48 +22,44 @@ src/
 
 ## Release workflow
 
-> **⚠️ PAUSED as of 2026-07-10 — read before merging anything to `main`.**
-> `main` is still wired as Vercel's **Production Branch**, so a merge to
-> `main` auto-deploys to production immediately. The user has asked to
-> **stop that** for now: all work should land on the rolling `preview`
-> branch only, and **production is promoted manually from the Vercel
-> dashboard** (Deployments → pick a `preview` build → Promote to
-> Production) — not by merging to `main`. **Do not merge PRs to `main`
-> or open PRs against it until the user explicitly says to resume normal
-> trunk-based releases.** `main` stays frozen at whatever it was on
-> 2026-07-10 (v1.0.211) until then. The "normal mode" process is described
-> below so it's easy to resume later — it just isn't active right now.
+**Trunk-based, and active.** (The 2026-07-10 pause is over: on 2026-07-26 the
+accumulated `preview` work was promoted to `main` in one merge, v1.0.211 →
+v1.0.250, and normal releases resumed. Don't reinstate the pause unless asked.)
 
-**Current (paused) mode — per change:**
+`main` is the only permanent branch and **is** production (`db-livid.vercel.app`
+/ `vibe.high5adventure.org`) — a merge to `main` auto-deploys immediately.
+Everything else is a short-lived feature branch that gets a Vercel Preview URL
+on push, then is squash-merged to `main` and deleted.
 
-1. `git fetch origin` then `git checkout -B feat/<short-name> origin/preview`
-   — branch off the current tip of `preview` (NOT `main`), so changes stack
-   on top of whatever's already been pushed there.
+**Per change:**
+
+1. `git fetch origin` then `git checkout -b feat/<short-name> origin/main`.
 2. Bump `package.json` `version`. Commit format: `v1.0.X — short description`.
-3. Build + lint + verify as usual.
-4. Push straight to the rolling `preview` branch (no PR, no merge to `main`):
-   `git push -f origin feat/<short-name>:preview`. Vercel builds it at the
-   fixed alias `high5-new-ui-git-preview-andy-falwell-s-projects.vercel.app`
-   (see the OAuth section below — same host, already registered).
-5. Tell the user it's ready; **they** promote to production from the Vercel
-   dashboard when they're satisfied. Do not push to `main`.
+3. Build + lint + verify.
+4. Push the branch → Vercel auto-builds a **Preview** (unique URL + stable
+   `…-git-feat-<short-name>-…vercel.app` alias). Test it there. If the change
+   needs a real Google login to test, use the rolling `preview` branch instead
+   — see "Testing auth-gated features" below; only that host can sign in.
+5. Happy? Open a PR (`feat/... → main`), title `v1.0.X — short description`,
+   **squash-merge**, then delete the branch. Not happy? Just delete it.
+6. Merge deploys production. The auto-tag workflow tags `v1.0.X`
+   (`.github/workflows/auto-tag.yml`) — no manual `git tag`.
 
-**Normal (trunk-based) mode — resume only when told to:**
+**Squash per feature, but never squash a bulk promotion.** The auto-tag
+workflow reads the version out of each commit message, so squashing one
+feature branch (one `v1.0.X` commit) is right, while squashing a many-commit
+promotion would collapse every version into a single tag and lose the release
+history. Use a merge commit for those.
 
-`main` is the only permanent branch and is production (`db-livid.vercel.app`
-/ `vibe.high5adventure.org`). Everything else is a short-lived feature branch
-that gets a Vercel **Preview** URL on push, then is squash-merged to `main`
-and deleted. No permanent staging branch — so there is no squash-divergence
-to realign (the `git reset --hard` dance is gone).
+**Branch protection on `main`:** PRs are required and force-pushes are off, but
+`enforce_admins` is off — so the repo owner can merge their own PR without a
+second reviewer. Claude cannot merge to `main` on its own initiative; a merge
+is a production deploy, so it needs the user to ask for it explicitly.
 
-1. `git checkout main && git pull` then `git checkout -b feat/<short-name>`.
-2. Bump `package.json` `version`. Commit format: `v1.0.X — short description`.
-3. Push the branch → Vercel auto-builds a **Preview** (unique URL + stable
-   `…-git-feat-<short-name>-…vercel.app` alias). Test it there.
-4. Like it? Open a PR (`feat/... → main`), title `v1.0.X — short description`,
-   **squash-merge**, then **delete the branch**. Don't like it? Just delete it.
-5. Merge to `main` deploys production. The auto-tag workflow tags `v1.0.X`
-   (`.github/workflows/auto-tag.yml`) — no manual `git tag` needed.
+**The rolling `preview` branch still exists** and is still the only host that
+can complete a Google sign-in. It's no longer the release path — just a shared
+testing target. Push to it with
+`git push -f origin <branch>:preview` when a change needs authenticated testing.
 
 Note: the GitHub repo was renamed `high5-new-ui` → `high5-vibe` (2026-07-05);
 GitHub redirects the old paths. **Vercel URLs are NOT affected by this** — they
@@ -113,16 +109,28 @@ callback must be re-registered to match (until then, sign-in keeps working).
 To test any branch with sign-in (one branch at a time):
 
 ```
+git push -f origin <branch>:preview
+```
+
+This is enough **whenever the branch tip is a commit Vercel hasn't built yet** —
+i.e. the normal case, where you just committed. Vercel keys builds by commit
+SHA, so a fresh commit always triggers a fresh `preview` deployment.
+
+The exception: pointing `preview` at an SHA Vercel has **already built**
+(re-testing an old commit, or re-pointing at a branch that was itself already
+deployed). Vercel deduplicates, no `preview` deployment is created, and the
+alias 404s (`DEPLOYMENT_NOT_FOUND`). Force a unique SHA in that case:
+
+```
 git checkout -B preview origin/<branch> && git commit --allow-empty -m "preview deploy" && git push -f origin preview
 ```
 
-The empty commit is **required**: Vercel keys builds by commit SHA, so a plain
-`git push -f origin <branch>:preview` points `preview` at an already-built SHA,
-Vercel deduplicates it, no `preview` deployment is created, and the alias 404s
-(`DEPLOYMENT_NOT_FOUND`). The empty commit forces a unique SHA → fresh build →
-the fixed `…-git-preview-…` URL resolves and sign-in works. `preview` isn't
-`main`, so branch protection doesn't block the force-push. This doesn't change
-the disposable-branch model — `preview` is just a rolling deploy target.
+`preview` isn't `main`, so branch protection doesn't block the force-push.
+
+**Always confirm the deploy actually succeeded** rather than assuming it from a
+clean push — poll GitHub's deployment statuses for the pushed SHA until
+`success`/`failure`/`error`:
+`gh api "repos/<owner>/<repo>/deployments?sha=$SHA"` → `.../statuses`.
 
 **Auth gate in App.jsx:** calls `/api/me` on mount; blocks with `<LoginScreen />` on deployed environments (passes through on `localhost` since serverless functions don't run locally).
 
@@ -382,6 +390,58 @@ subscribeCacheUpdates(layout, cacheVersion, callback)
 
 `getRecord` is high-priority and will preempt in-flight batch pages. Use it for interactive selection.
 
+### Portal (child-row) writes — read this before building a line-item editor
+
+Verified against the live file on 2026-07-26. These behaviours are **not**
+discoverable from the code, and getting them wrong wastes a lot of time.
+
+```js
+addPortalRows(layout, recordId, portalName, rows)   // many rows in ONE request
+addPortalRow(layout, recordId, portalName, row)     // singular, delegates to the above
+updatePortalRow(layout, recordId, portalName, rowRecordId, rowData)
+deletePortalRow(layout, recordId, tableOccurrence, rowRecordId)
+getRecordWithPortals(layout, recordId, { portalName: 2000 })
+```
+
+- **Portals cap at 50 rows by default.** Always pass an explicit limit via
+  `getRecordWithPortals`, or long records silently truncate (this bit both the
+  inspection report and the on-screen list).
+- **Bulk add works** — FileMaker accepts many new rows in a single PATCH. Use it;
+  an inspection carries 25–75 lines and one request beats 75 round trips.
+- **Update needs the portal name, delete needs the table occurrence.** They are
+  different strings for the same portal. See `ProductsAndServicesV2.jsx` for the
+  original instance of this asymmetry.
+- **Updates fail with error 101 "Record is missing" if the parent has no primary
+  key yet.** So "create a record, then copy child rows onto it" must be two
+  steps: create → read back the parent's ID → write rows. A brand-new record
+  whose key hasn't been assigned cannot take portal edits.
+- **Script-maintained fields don't recompute over the Data API.** FileMaker
+  script triggers fire on human entry in FMP Pro, not on API writes. Two
+  consequences seen in practice:
+  - Estimates: `estmt_ESTLI::Amount` stays empty unless written explicitly, and
+    the parent totals (`zz__Subtotal__xn`, `zz__Tax__xn`, `zz__Total__xn`)
+    **cannot be written at all** — they return `201 Field cannot be modified`.
+    Adding an estimate line from the app therefore leaves the stored total
+    stale. Don't ship estimate line editing without solving this (a
+    Data API-callable recalc script is the way).
+  - Inspections: `inspt_INSPLI` rows have no such trap — all six fields we own
+    write cleanly.
+- **Probe before building.** A short read-only Node script that imports
+  `api/_fmp.js` (so no credentials live in the script) and hits
+  `High5_Core4_Dev` answers these questions in minutes. Create a throwaway
+  parent, exercise the writes, delete it. Never probe against production, and
+  always restore or remove what you create.
+
+### Site vs org contacts — a recurring join trap
+
+Inspections (and similar site-based records) hang off a **site** contact that is
+a different record from the **organization** contact a picker returns. 4-H Camp
+Bristol Hills is org `72380`, but every one of its inspections points at site
+contact `82201`. Matching related records on `_kft__Contact_ID` alone will
+silently find nothing. Match on the organization name (which is what the
+`inspt_CNTCT__site` relationship keys on), and when copying a record, inherit
+the source's `_kft__Contact_ID` rather than the picked one.
+
 ---
 
 ## Hash-based routing
@@ -453,10 +513,19 @@ correct Work Log entry is all that's needed.
 
 ### Capability note
 
-Writing to Airtable requires the Airtable MCP connection to be configured in this
-Claude Code environment. If it isn't connected, prepare the proposed entry as text
-for Andy to enter manually, and let him know the connection needs setting up.
-I
+Writing to Airtable needs an Airtable connection in this Claude Code
+environment. There are two independent ones, and they fail separately:
+
+- **The native connector** (tools named `mcp__…__create_records_for_table` etc.)
+  — this is what has actually been used to log time. Reach it via ToolSearch.
+- **The `airtable-cli` skill** — a separate CLI needing its own personal access
+  token, and **not** required if the native connector works.
+
+A "requires authentication" notice for one does **not** mean the other is
+unavailable. Check the native connector before concluding Airtable is
+unreachable. If neither works, prepare the entry as text for Andy to enter
+manually and say the connection needs setting up.
+
 ---
 
 ## Cron / Redis budget (read before touching `vercel.json` crons)
