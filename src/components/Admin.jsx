@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import ShopifyConnect from './ShopifyConnect';
+import QboConnect from './QboConnect';
 import './Admin.css';
 
 const TABS = [
@@ -22,6 +23,17 @@ function IntegrationsTab() {
             </div>
           </div>
           <ShopifyConnect />
+        </div>
+
+        <div className="admin-card">
+          <div className="admin-card-head">
+            <span className="admin-card-icon">◐</span>
+            <div className="admin-card-meta">
+              <div className="admin-card-title">QuickBooks</div>
+              <div className="admin-card-desc">Connect the company file to sync invoices, estimates, and items.</div>
+            </div>
+          </div>
+          <QboConnect />
         </div>
       </div>
     </section>

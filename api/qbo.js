@@ -12,6 +12,32 @@ async function authorized(req) {
 }
 
 export default async function handler(req, res) {
+  // GET = read-only connection health, for the Admin panel's QuickBooks card.
+  // Mirrors GET /api/shopify. Touches nothing: getAccessToken serves the cached
+  // access token when there is one, and only exchanges the refresh token when
+  // that has expired — which is exactly the condition we want to surface.
+  if (req.method === 'GET') {
+    if (!(await authorized(req))) return res.status(401).json({ error: 'unauthorized' });
+    const env = req.query?.env === 'sandbox' ? 'sandbox' : 'production';
+    const realmId = env === 'sandbox'
+      ? (process.env.QBO_SANDBOX_REALM_ID || process.env.QBO_REALM_ID)
+      : process.env.QBO_REALM_ID;
+    try {
+      await getAccessToken(env);
+      return res.status(200).json({ ok: true, env, realmId });
+    } catch (e) {
+      // Surface the reason without leaking tokens: invalid_grant means the
+      // refresh token died and someone has to redo the Intuit consent flow.
+      const msg = String(e?.message || e);
+      const expired = msg.includes('invalid_grant');
+      return res.status(200).json({
+        ok: false, env, realmId,
+        reason: expired ? 'expired' : 'error',
+        detail: msg.slice(0, 300),
+      });
+    }
+  }
+
   if (req.method !== 'POST') return res.status(405).end();
   if (!(await authorized(req))) return res.status(401).json({ error: 'unauthorized' });
 

@@ -7,7 +7,7 @@ import { Redis } from '@upstash/redis';
 const redis = Redis.fromEnv();
 
 export default async function handler(req, res) {
-  const { code, realmId, state, error } = req.query || {};
+  const { code, state, error } = req.query || {};
   if (error) return res.status(400).send(`Intuit returned: ${error}`);
   if (!code || !state) return res.status(400).send('Missing code/state.');
 
@@ -31,7 +31,12 @@ export default async function handler(req, res) {
   });
   const tok = await r.json().catch(() => ({}));
   if (!r.ok || !tok.refresh_token) {
-    return res.status(502).send('Token exchange failed: ' + JSON.stringify(tok).slice(0, 400));
+    // Bounce back to the Admin panel with the reason, same shape as the
+    // success path, so the QuickBooks card can show a failure toast.
+    // Query goes BEFORE the hash — the app is hash-routed, and anything after
+    // `#` never reaches window.location.search where the card reads it.
+    const why = encodeURIComponent(String(tok?.error || 'exchange-failed').slice(0, 80));
+    return res.redirect(302, `/?qbo=failed&reason=${why}#admin`);
   }
 
   const rk = env === 'sandbox' ? 'qbo_sandbox_refresh_token' : 'qbo_refresh_token';
@@ -39,8 +44,7 @@ export default async function handler(req, res) {
   await redis.set(rk, tok.refresh_token, { ex: 86400 * 90 });
   await redis.set(ak, tok.access_token, { ex: 55 * 60 });
 
-  res.setHeader('Content-Type', 'text/html');
-  res.status(200).send(`<div style="font-family:system-ui;padding:40px;max-width:520px;margin:auto">
-    <h2>✓ Connected ${env} QuickBooks</h2>
-    <p>Realm <b>${realmId || '(n/a)'}</b>. Refresh token stored. You can close this tab and tell Claude to re-test.</p></div>`);
+  // Return the user to the Admin panel rather than a dead-end page — the
+  // QuickBooks card picks up ?qbo=connected and re-checks its status.
+  res.redirect(302, `/?qbo=connected&env=${encodeURIComponent(env)}#admin`);
 }
