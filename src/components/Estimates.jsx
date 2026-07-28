@@ -5,6 +5,13 @@ import ListToolbar, { useListControls, ListBody } from './ListControls'
 import RecordSaveBar from './RecordSaveBar'
 import RecordFormModal from './RecordFormModal'
 import CreateInQBO from './CreateInQBO'
+import EstimateLines from './EstimateLines'
+import BomPickerModal from './BomPickerModal'
+import { readCacheAsync } from '../api/filemaker'
+import {
+  toLine, sortLines, addLines, updateLine, deleteLine, recalcTotals,
+  lineFromProduct, nextSortOrder,
+} from '../api/estimateLines'
 import { BRAND, UI } from '../config/brandColors'
 import './Estimates.css'
 
@@ -93,6 +100,30 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
   const [showNew, setShowNew] = useState(false)
   const dragging = useRef(false)
 
+  // ── Line-item editing ──
+  // Staged like field `edits`: nothing is written until Save, so Discard really
+  // discards. Adds land in `newLines`, edits in `lineEdits`, removals in
+  // `deletedIds` (reversible until saved).
+  const [lineEdits, setLineEdits] = useState({})
+  const [newLines, setNewLines] = useState([])
+  const [deletedIds, setDeletedIds] = useState(() => new Set())
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [products, setProducts] = useState([])
+  const tempId = useRef(0)
+
+  const resetLines = useCallback(() => {
+    setLineEdits({}); setNewLines([]); setDeletedIds(new Set())
+  }, [])
+
+  // Products for the picker come from the cache App.jsx already prewarms.
+  useEffect(() => {
+    let alive = true
+    readCacheAsync('Products & Services_New', 5)
+      .then(r => { if (alive) setProducts(r?.records || []) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
+
   const controls = useListControls({
     records,
     storageKey: 'estimates',
@@ -115,12 +146,41 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
 
   async function handleSelect(r) {
     setEdits({}); setSaveStatus(null)
+    resetLines()
     setSelected(r)
     getRecord(LAYOUT, r.recordId).then(d => {
       const fresh = d?.response?.data?.[0]
       if (fresh) setSelected(fresh)
     }).catch(() => {})
   }
+
+  // Editing a line marks it dirty so the save bar and the live total react.
+  const onLineEdit = useCallback((id, field, value) => {
+    if (String(id).startsWith('new:')) {
+      setNewLines(rows => rows.map(r => (r._tempId === id ? { ...r, [field]: value } : r)))
+      return
+    }
+    setLineEdits(p => ({ ...p, [id]: { ...(p[id] || {}), [field]: value } }))
+  }, [])
+
+  const onLineDelete = useCallback(id => {
+    if (String(id).startsWith('new:')) { setNewLines(rows => rows.filter(r => r._tempId !== id)); return }
+    setDeletedIds(prev => new Set(prev).add(String(id)))
+  }, [])
+
+  const onLineUndelete = useCallback(id => {
+    setDeletedIds(prev => { const next = new Set(prev); next.delete(String(id)); return next })
+  }, [])
+
+  // Unit price always comes from the catalogue — no per-line override.
+  const onPickProduct = useCallback(({ item, quantity }) => {
+    setNewLines(rows => {
+      const existing = (selected?.portalData?.[ 'estmt_ESTLI' ] || []).map(toLine)
+      const order = nextSortOrder([...existing, ...rows]) + rows.length
+      return [...rows, { ...lineFromProduct(item, Number(quantity) || 1, order), _tempId: `new:${++tempId.current}` }]
+    })
+    setPickerOpen(false)
+  }, [selected])
 
   useEffect(() => {
     if (!navTarget || navTarget.moduleId !== 'estimates') return
@@ -163,17 +223,35 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
   }, [sidebarWidth])
 
   const handleChange = useCallback((fk, val) => setEdits(p => ({ ...p, [fk]: val })), [])
-  const handleDiscard = () => { setEdits({}); setSaveStatus(null); setSaveErrorMsg(null) }
+  const handleDiscard = () => { setEdits({}); resetLines(); setSaveStatus(null); setSaveErrorMsg(null) }
 
   async function handleSave() {
-    const n = Object.keys(edits).length
-    if (!n) { return }
+    const lineChanges = Object.keys(lineEdits).length + newLines.length + deletedIds.size
+    if (!Object.keys(edits).length && !lineChanges) { return }
     setSaving(true); setSaveStatus(null); setSaveErrorMsg(null)
     try {
-      await updateRecord(LAYOUT, selected.recordId, edits)
-      patchCachedRecord(LAYOUT, CACHE_VERSION, selected.recordId, edits)
+      if (lineChanges) {
+        for (const id of deletedIds) await deleteLine(selected.recordId, id)
+        for (const [id, changes] of Object.entries(lineEdits)) {
+          if (deletedIds.has(String(id))) continue           // deleted beats edited
+          const base = savedLines.find(l => String(l.recordId) === String(id))
+          await updateLine(selected.recordId, id, { ...base, ...changes })
+        }
+        if (newLines.length) await addLines(selected.recordId, newLines)
+
+        // The stored totals are script-maintained and reject direct writes, so
+        // this is the only way to keep them honest. Throws on script failure
+        // rather than leaving a silently stale total behind.
+        const fresh = await recalcTotals(selected.recordId)
+        if (fresh) setSelected(fresh)
+        resetLines()
+      }
+      if (Object.keys(edits).length) {
+        await updateRecord(LAYOUT, selected.recordId, edits)
+        patchCachedRecord(LAYOUT, CACHE_VERSION, selected.recordId, edits)
+        setSelected(prev => ({ ...prev, fieldData: { ...prev.fieldData, ...edits } }))
+      }
       invalidateRecord(LAYOUT, selected.recordId)
-      setSelected(prev => ({ ...prev, fieldData: { ...prev.fieldData, ...edits } }))
       setEdits({}); setSaveStatus('saved')
       setTimeout(() => setSaveStatus(null), 2000)
     } catch (e) { setSaveStatus('error'); setSaveErrorMsg(e?.message || null); }
@@ -183,7 +261,20 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
   const f = selected?.fieldData ?? {}
   const p = selected?.portalData
   const lineItems = p?.estmt_ESTLI || []
-  const dirtyCount = Object.keys(edits).length
+
+  // Saved rows in display order (the portal returns them backwards), with any
+  // staged edits applied and removals marked, followed by lines added this session.
+  const savedLines = sortLines(lineItems.map(toLine))
+  const workingLines = [
+    ...savedLines.map(l => {
+      const staged = lineEdits[l.recordId]
+      return { ...l, ...(staged || {}), _dirty: !!staged, _deleted: deletedIds.has(String(l.recordId)) }
+    }),
+    ...newLines,
+  ]
+
+  const lineChangeCount = Object.keys(lineEdits).length + newLines.length + deletedIds.size
+  const dirtyCount = Object.keys(edits).length + lineChangeCount
 
   const displayTotal = parseFloat(String(f.zz__Total__xn ?? '').replace(/[^0-9.-]/g, '')) || 0
   const status = f.Status || ''
@@ -336,54 +427,20 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
                 </div>
               </Section>
 
-              <Section title={`Line Items${lineItems.length ? ` (${lineItems.length})` : ''}`} icon="≡">
-                {lineItems.length === 0 ? (
-                  <p className="est-empty-portal">No line items on this estimate</p>
-                ) : (
-                  <div className="est-table-wrap">
-                    <table className="est-table">
-                      <thead>
-                        <tr>
-                          <th className="desc">Item / Description</th>
-                          <th className="num">Qty</th>
-                          <th className="num">Unit Price</th>
-                          <th className="num">Amount</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {lineItems.map((li, i) => {
-                          const name = li['estmt_ESTLI::Item_Name']
-                          const desc = li['estmt_ESTLI::Description']
-                          const showDesc = desc && desc !== name
-                          return (
-                          <tr key={li.recordId || i}>
-                            <td className="desc">
-                              {name && <div className="est-li-name">{name}</div>}
-                              {showDesc && <div className="est-li-desc">{desc}</div>}
-                              {!name && !desc && '—'}
-                            </td>
-                            <td className="num">{li['estmt_ESTLI::Quantity'] ?? '—'}</td>
-                            <td className="num">{fmtCurrency(li['estmt_ESTLI::Unit_Price'])}</td>
-                            <td className="num">{fmtCurrency(li['estmt_ESTLI::Amount'])}</td>
-                          </tr>
-                        )})}
-                      </tbody>
-                    </table>
-
-                    <div className="est-totals">
-                      {f.zz__Subtotal__xn != null && (
-                        <div className="est-total-row"><span>Subtotal</span><span>{fmtCurrency(f.zz__Subtotal__xn)}</span></div>
-                      )}
-                      {f.zz__Tax__xn != null && (
-                        <div className="est-total-row">
-                          <span>Tax{f.Tax_Name ? ` (${f.Tax_Name})` : ''}{f.Tax_Rate ? ` ${f.Tax_Rate}%` : ''}</span>
-                          <span>{fmtCurrency(f.zz__Tax__xn)}</span>
-                        </div>
-                      )}
-                      <div className="est-total-row grand"><span>Total</span><span>{fmtCurrency(displayTotal)}</span></div>
-                    </div>
-                  </div>
-                )}
+              <Section title="Line Items" icon="≡">
+                <EstimateLines
+                  lines={workingLines}
+                  onEdit={onLineEdit}
+                  onDelete={onLineDelete}
+                  onUndelete={onLineUndelete}
+                  onAddClick={() => setPickerOpen(true)}
+                  storedSubtotal={f.zz__Subtotal__xn}
+                  storedTax={f.zz__Tax__xn}
+                  storedTotal={displayTotal}
+                  taxName={f.Tax_Name}
+                  taxRate={f.Tax_Rate}
+                  pushedToQbo={!!f.qbo_estimate_id}
+                />
               </Section>
 
               {f.Memo && (
@@ -410,6 +467,16 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
           submitLabel="Create estimate"
           onCreate={handleCreate}
           onClose={() => setShowNew(false)}
+        />
+      )}
+
+      {pickerOpen && (
+        <BomPickerModal
+          allRecords={products}
+          title="Add line item"
+          showCost={false}
+          onAdd={onPickProduct}
+          onClose={() => setPickerOpen(false)}
         />
       )}
     </div>

@@ -1,0 +1,53 @@
+.est-li-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.est-li-count { font-size: 13px; color: #94a3b8; }
+.est-li-spacer { flex: 1; }
+.est-li-add {
+  background: #1e2130; border: 1px solid #334155; color: #cbd5e1;
+  border-radius: 6px; font-size: 13px; padding: 5px 11px; cursor: pointer; font-family: inherit;
+}
+.est-li-add:hover { border-color: #e87722; color: #e87722; }
+
+.est-li-warn {
+  margin: 0 0 10px; font-size: 13px; line-height: 1.5;
+  color: #f0a93b; background: #f0a93b14; border: 1px solid #f0a93b33;
+  border-radius: 6px; padding: 8px 11px;
+}
+
+.est-li-table td { vertical-align: top; }
+.est-li-table tr:hover td { background: inherit; }
+.est-li-name { font-size: 15px; color: #e2e8f0; margin-bottom: 4px; }
+.est-li-desc-input, .est-li-qty {
+  background: #0f1117; border: 1px solid #2d3148; border-radius: 5px;
+  color: #e2e8f0; font-size: 13px; font-family: inherit; padding: 4px 7px; outline: none;
+  box-sizing: border-box;
+}
+.est-li-desc-input { width: 100%; }
+.est-li-qty { width: 64px; text-align: right; font-variant-numeric: tabular-nums; }
+.est-li-desc-input:focus, .est-li-qty:focus { border-color: #3b82f6; }
+.est-li-desc-input:disabled, .est-li-qty:disabled { opacity: 0.55; }
+
+.est-li-table td.unit, .est-li-table td.amount { font-variant-numeric: tabular-nums; }
+.est-li-table td.act, .est-li-table th.act { width: 40px; text-align: right; }
+
+.est-li-row.deleted td { opacity: 0.45; }
+.est-li-row.deleted .est-li-name { text-decoration: line-through; }
+.est-li-row.is-new td { box-shadow: inset 2px 0 0 #1d9e75; }
+
+.est-li-del, .est-li-undo {
+  background: none; border: none; cursor: pointer; font-family: inherit;
+  color: #64748b; font-size: 14px; padding: 4px 6px; border-radius: 5px;
+}
+.est-li-del:hover { color: #e24b4a; background: #e24b4a1a; }
+.est-li-undo { font-size: 12px; color: #93c5fd; }
+.est-li-undo:hover { text-decoration: underline; }
+
+.est-li-pending { margin: 6px 0 0; font-size: 12px; color: #94a3b8; text-align: right; }
+
+/* ── Light theme ─────────────────────────────────────────────────── */
+[data-theme="light"] .est-li-add { background: #f1f5f9; border-color: #e2e8f0; color: #334155; }
+[data-theme="light"] .est-li-count { color: #64748b; }
+[data-theme="light"] .est-li-name { color: #0f172a; }
+[data-theme="light"] .est-li-desc-input,
+[data-theme="light"] .est-li-qty { background: #ffffff; border-color: #e2e8f0; color: #0f172a; }
+[data-theme="light"] .est-li-warn { color: #92620f; background: #f0a93b14; border-color: #f0a93b44; }
+[data-theme="light"] .est-li-pending { color: #64748b; }

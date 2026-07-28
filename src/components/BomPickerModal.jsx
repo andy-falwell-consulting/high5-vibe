@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import './BomPickerModal.css';
 
-export default function BomPickerModal({ allRecords, onAdd, onClose }) {
+// Product search + quantity picker. Built for the Bill of Materials, also used
+// to add estimate line items — hence the configurable title/verb.
+export default function BomPickerModal({ allRecords, onAdd, onClose, title = 'Add to Bill of Materials', showCost = true }) {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
   const [quantity, setQuantity] = useState(1);
@@ -38,7 +40,7 @@ export default function BomPickerModal({ allRecords, onAdd, onClose }) {
       <div className="bom-modal">
         {/* Header */}
         <div className="bom-header">
-          <h2>Add to Bill of Materials</h2>
+          <h2>{title}</h2>
           <button className="bom-close" onClick={onClose}>✕</button>
         </div>
 
@@ -107,7 +109,7 @@ export default function BomPickerModal({ allRecords, onAdd, onClose }) {
                   <div className="bom-selected-desc">{selected.fieldData.Description}</div>
                 )}
                 <div className="bom-selected-prices">
-                  {selected.fieldData.Cost != null && (
+                  {showCost && selected.fieldData.Cost != null && (
                     <div className="bom-price-row">
                       <span>Cost</span>
                       <strong>${Number(selected.fieldData.Cost).toFixed(2)}</strong>
