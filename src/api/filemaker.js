@@ -632,6 +632,42 @@ export async function getRecord(layout, recordId) {
   return promise;
 }
 
+// Fetch a record AND run a FileMaker script against it in one request.
+//
+// Some fields are maintained by FileMaker scripts that only fire on human entry
+// in FMP Pro — the Data API doesn't trigger them, so values written through the
+// API leave those fields stale (estimate totals are the case that matters; they
+// also reject direct writes with `201 Field cannot be modified`). Running the
+// recalc script attached to a record GET fixes the record and returns it fresh
+// in the same round trip.
+//
+// The script must be server-compatible and must NOT be invoked via the
+// standalone /script/ endpoint — that runs with no record context and silently
+// does nothing. Verified against the live file 2026-07-28.
+//
+// Returns { data, scriptError } — scriptError is FileMaker's own code as a
+// string, '0' on success. Callers should surface a non-zero value rather than
+// let a stale total through unnoticed.
+export async function getRecordWithScript(layout, recordId, scriptName, scriptParam) {
+  const token = await getToken({ write: true });
+  const env = getCurrentEnv();
+  const qs = new URLSearchParams({ script: scriptName });
+  if (scriptParam != null) qs.set('script.param', String(scriptParam));
+  const res = await _scheduledFetch(_HIGH, () => fetch(
+    `${getBasePath()}/fmi/data/v2/databases/${env.db}/layouts/${encodeURIComponent(layout)}/records/${recordId}?${qs}`,
+    { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' }
+  ));
+  if (res.status === 401) { invalidateWriteAuth(); return getRecordWithScript(layout, recordId, scriptName, scriptParam); }
+  const data = await res.json();
+  const rec = data?.response?.data?.[0];
+  // Keep the caches honest — the script just changed stored fields.
+  if (rec) {
+    detailCache.delete(`${layout}:${recordId}`);
+    patchCachedRecordAcrossVersions(layout, recordId, rec.fieldData, rec.portalData);
+  }
+  return { data, scriptError: String(data?.response?.scriptError ?? '') };
+}
+
 // Fire-and-forget prefetch — call on hover so detail is ready before click
 export function prefetchRecord(layout, recordId) {
   const key = `${layout}:${recordId}`;
