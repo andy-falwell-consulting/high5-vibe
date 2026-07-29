@@ -323,3 +323,9 @@
 .cv2-fin-tag.due  { background: #854f0b1f; color: #a9690f; }
 .cv2-fin-tag.paid { background: #0f6e561f; color: #0f6e56; }
 .cv2-fin-src { margin-top: 8px; font-size: 12px; color: var(--cv2-text-4); text-align: right; }
+
+/* Clickable rows that open the record in QuickBooks Online. */
+.cv2-fin-link { text-decoration: none; color: inherit; cursor: pointer; }
+.cv2-fin-link:hover { background: var(--cv2-bg-3); }
+.cv2-fin-link:hover .cv2-fin-ext { opacity: 1; }
+.cv2-fin-ext { margin-left: 6px; font-size: 12px; opacity: 0; transition: opacity 0.12s; }

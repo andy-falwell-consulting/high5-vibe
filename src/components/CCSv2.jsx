@@ -7,6 +7,7 @@ import { useNaFlags } from '../hooks/useNaFlags';
 import { RCD_LAYOUT, RCD_CACHE_VERSION, RCD_FIND_QUERY, RCD_SORT } from '../config/ccsCache';
 import { getRecord, prefetchRecord, updateRecord, patchCachedRecord, invalidateRecord } from '../api/filemaker';
 import { getCurrentEnv } from '../config/fmpEnvironments';
+import { qboLink } from '../config/qboLinks';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
 import AttachmentsPanel from './AttachmentsPanel';
 import { listCcsAttachments, uploadCcsAttachment, deleteCcsAttachment, ccsAttachmentUrl } from '../api/ccsAttachments';
@@ -740,15 +741,22 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                         <div className="cv2-qboest">
                           <div className="cv2-qboest-head">QuickBooks estimate{qboEst.length > 1 ? 's' : ''} · live</div>
                           {qboEst.map(e => (
-                            <div className="cv2-qboest-row" key={e.docNumber}>
-                              <span className="cv2-qboest-doc">{e.docNumber}</span>
-                              {e.missing
-                                ? <span className="cv2-qboest-missing">not found in QBO</span>
-                                : <>
-                                    <span className={`cv2-qboest-status ${String(e.status || '').toLowerCase()}`}>{e.status || '—'}</span>
-                                    <span className="cv2-qboest-total">{fmtMoneyFull(e.total)}</span>
-                                  </>}
-                            </div>
+                            // A missing estimate has no QBO id, so it stays a plain
+                            // row — there's nothing to open.
+                            e.missing ? (
+                              <div className="cv2-qboest-row" key={e.docNumber}>
+                                <span className="cv2-qboest-doc">{e.docNumber}</span>
+                                <span className="cv2-qboest-missing">not found in QBO</span>
+                              </div>
+                            ) : (
+                              <a className="cv2-qboest-row cv2-fin-link" key={e.docNumber}
+                                href={qboLink('Estimate', e.qboId)} target="_blank" rel="noreferrer"
+                                title="Open this estimate in QuickBooks Online">
+                                <span className="cv2-qboest-doc">{e.docNumber}</span>
+                                <span className={`cv2-qboest-status ${String(e.status || '').toLowerCase()}`}>{e.status || '—'}</span>
+                                <span className="cv2-qboest-total">{fmtMoneyFull(e.total)}<span className="cv2-fin-ext">↗</span></span>
+                              </a>
+                            )
                           ))}
                         </div>
                       )}
@@ -762,26 +770,30 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                         </div>
                         <div className="cv2-fin-list">
                           {finTab === 'invoices' && (qboInvoices.length ? qboInvoices.map(r => (
-                            <div className="cv2-fin-row" key={r.qboId}>
+                            <a className="cv2-fin-row cv2-fin-link" key={r.qboId}
+                              href={qboLink('Invoice', r.qboId)} target="_blank" rel="noreferrer"
+                              title="Open this invoice in QuickBooks Online">
                               <span className="cv2-fin-main">
                                 #{r.docNumber || r.qboId} · {fmtIsoShort(r.date)}
                                 {r.balance > 0
                                   ? <span className="cv2-fin-tag due">{fmtMoneyFull(r.balance)} due</span>
                                   : <span className="cv2-fin-tag paid">paid</span>}
                               </span>
-                              <span className="cv2-fin-amt">{fmtMoneyFull(r.total)}</span>
-                            </div>
+                              <span className="cv2-fin-amt">{fmtMoneyFull(r.total)}<span className="cv2-fin-ext">↗</span></span>
+                            </a>
                           )) : <div className="cv2-fin-empty">{qboFin ? 'No invoices in QuickBooks' : 'No invoice linked to this project'}</div>)}
                           {finTab === 'payments' && (qboPayments.length ? qboPayments.map(r => (
-                            <div className="cv2-fin-row" key={r.qboId}>
+                            <a className="cv2-fin-row cv2-fin-link" key={r.qboId}
+                              href={qboLink('Payment', r.qboId)} target="_blank" rel="noreferrer"
+                              title="Open this payment in QuickBooks Online">
                               <span className="cv2-fin-main">
                                 {fmtIsoShort(r.date)} · {r.method || 'Payment'}{r.reference ? ` · ${r.reference}` : ''}
                                 {/* A payment can settle several invoices at once; show the
                                     whole cheque only when it exceeded this project's share. */}
                                 {r.paymentTotal > r.amount && <span className="cv2-fin-tag">of {fmtMoneyFull(r.paymentTotal)}</span>}
                               </span>
-                              <span className="cv2-fin-amt">{fmtMoneyFull(r.amount)}</span>
-                            </div>
+                              <span className="cv2-fin-amt">{fmtMoneyFull(r.amount)}<span className="cv2-fin-ext">↗</span></span>
+                            </a>
                           )) : <div className="cv2-fin-empty">{qboInvoices.length ? 'No payments received yet' : 'No invoice linked to this project'}</div>)}
                         </div>
                         {(qboInvoices.length > 0 || qboPayments.length > 0) && (
