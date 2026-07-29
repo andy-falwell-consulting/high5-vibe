@@ -93,20 +93,30 @@ async function refsFromRecord(db, recordId) {
 }
 
 // The stored invoice reference is a bare number, and it isn't documented whether
-// that's QBO's DocNumber or its internal Id — in practice the file holds both
-// shapes. Query each and merge, so a reference resolves either way.
+// that's QBO's DocNumber or its internal Id — the file holds both shapes.
+//
+// Resolution is DocNumber-FIRST, and the Id query only covers references that
+// DocNumber did not resolve. Querying both and merging is wrong: a single
+// reference can legitimately match one invoice's DocNumber AND a different
+// invoice's Id. Record 15741 does exactly that — ref "81092" is invoice 81092
+// ($148,435.01) and also the internal Id of invoice 77334 ($695) — so merging
+// silently added $695 of an unrelated invoice to the project's total.
 async function fetchInvoices(refs) {
   if (!refs.length) return [];
-  const inList = refs.map(v => `'${v}'`).join(',');
-  const [byDoc, byId] = await Promise.all([
-    qboQuery(`SELECT * FROM Invoice WHERE DocNumber IN (${inList})`).catch(() => ({})),
-    qboQuery(`SELECT * FROM Invoice WHERE Id IN (${inList})`).catch(() => ({})),
-  ]);
-  const seen = new Map();
-  for (const inv of [...(byDoc.Invoice || []), ...(byId.Invoice || [])]) {
-    if (!seen.has(inv.Id)) seen.set(inv.Id, slimInvoice(inv));   // dedupe: a ref can match both ways
+  const quote = list => list.map(v => `'${v}'`).join(',');
+
+  const byDoc = await qboQuery(`SELECT * FROM Invoice WHERE DocNumber IN (${quote(refs)})`).catch(() => ({}));
+  const found = (byDoc.Invoice || []).map(slimInvoice);
+  const resolved = new Set(found.map(i => i.docNumber));
+
+  const unresolved = refs.filter(r => !resolved.has(r));
+  if (unresolved.length) {
+    const byId = await qboQuery(`SELECT * FROM Invoice WHERE Id IN (${quote(unresolved)})`).catch(() => ({}));
+    for (const inv of byId.Invoice || []) {
+      if (!found.some(f => f.qboId === inv.Id)) found.push(slimInvoice(inv));
+    }
   }
-  return [...seen.values()];
+  return found;
 }
 
 export default async function handler(req, res) {
