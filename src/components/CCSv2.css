@@ -314,3 +314,12 @@
 }
 .cv2-check-row:hover .cv2-na-toggle { opacity: 1; }
 .cv2-na-toggle.on { opacity: 1; background: var(--cv2-text-3); color: var(--cv2-bg); border-color: var(--cv2-text-3); }
+
+/* ── Financials list: QuickBooks-sourced invoice/payment rows ── */
+.cv2-fin-tag {
+  margin-left: 8px; font-size: 12px; padding: 1px 7px; border-radius: 999px;
+  background: var(--cv2-bg-3); color: var(--cv2-text-4); white-space: nowrap;
+}
+.cv2-fin-tag.due  { background: #854f0b1f; color: #a9690f; }
+.cv2-fin-tag.paid { background: #0f6e561f; color: #0f6e56; }
+.cv2-fin-src { margin-top: 8px; font-size: 12px; color: var(--cv2-text-4); text-align: right; }

@@ -75,6 +75,45 @@ function slimInvoice(i) {
   };
 }
 
+// Payments applied to a set of invoices.
+//
+// A QBO Payment can settle several invoices at once — often across different
+// projects — so `TotalAmt` is NOT what this project received. Each payment Line
+// carries its own amount and the invoice it was applied to, so we sum only the
+// lines pointing at these invoices. Showing TotalAmt here would overstate a
+// project whenever a client paid for two jobs on one cheque.
+function slimPayment(p, invoiceIds) {
+  const applied = (p.Line || []).reduce((t, ln) => {
+    const hits = (ln.LinkedTxn || []).some(lt => lt.TxnType === 'Invoice' && invoiceIds.has(String(lt.TxnId)));
+    return hits ? t + n(ln.Amount) : t;
+  }, 0);
+  return {
+    qboId: p.Id,
+    date: p.TxnDate || '',
+    method: p.PaymentMethodRef?.name || '',
+    reference: p.PaymentRefNum || '',
+    amount: Math.round(applied * 100) / 100,   // applied to THIS project
+    paymentTotal: n(p.TotalAmt),               // the whole payment, for context
+  };
+}
+
+async function fetchPayments(rawInvoices) {
+  const invoiceIds = new Set(rawInvoices.map(i => String(i.Id)));
+  const paymentIds = new Set();
+  for (const inv of rawInvoices) {
+    for (const lt of inv.LinkedTxn || []) {
+      if (lt.TxnType === 'Payment' && lt.TxnId) paymentIds.add(String(lt.TxnId));
+    }
+  }
+  if (!paymentIds.size) return [];
+  const list = [...paymentIds].map(v => `'${v}'`).join(',');
+  const q = await qboQuery(`SELECT * FROM Payment WHERE Id IN (${list})`).catch(() => ({}));
+  return (q.Payment || [])
+    .map(p => slimPayment(p, invoiceIds))
+    .filter(p => p.amount > 0)
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+}
+
 // Read the CCS record's estimate + invoice id reps and parse both.
 async function refsFromRecord(db, recordId) {
   const token = await fmpToken(db);
@@ -101,22 +140,24 @@ async function refsFromRecord(db, recordId) {
 // invoice's Id. Record 15741 does exactly that — ref "81092" is invoice 81092
 // ($148,435.01) and also the internal Id of invoice 77334 ($695) — so merging
 // silently added $695 of an unrelated invoice to the project's total.
+// Returns { raw, invoices } — `raw` keeps the QBO objects so linked payments
+// can be resolved from their LinkedTxn without a second round trip.
 async function fetchInvoices(refs) {
-  if (!refs.length) return [];
+  if (!refs.length) return { raw: [], invoices: [] };
   const quote = list => list.map(v => `'${v}'`).join(',');
 
   const byDoc = await qboQuery(`SELECT * FROM Invoice WHERE DocNumber IN (${quote(refs)})`).catch(() => ({}));
-  const found = (byDoc.Invoice || []).map(slimInvoice);
-  const resolved = new Set(found.map(i => i.docNumber));
+  const raw = [...(byDoc.Invoice || [])];
+  const resolved = new Set(raw.map(i => i.DocNumber));
 
   const unresolved = refs.filter(r => !resolved.has(r));
   if (unresolved.length) {
     const byId = await qboQuery(`SELECT * FROM Invoice WHERE Id IN (${quote(unresolved)})`).catch(() => ({}));
     for (const inv of byId.Invoice || []) {
-      if (!found.some(f => f.qboId === inv.Id)) found.push(slimInvoice(inv));
+      if (!raw.some(f => f.Id === inv.Id)) raw.push(inv);
     }
   }
-  return found;
+  return { raw, invoices: raw.map(slimInvoice) };
 }
 
 export default async function handler(req, res) {
@@ -134,7 +175,7 @@ export default async function handler(req, res) {
 
     // Estimates and invoices are independent — a record can have either, both,
     // or neither, so fetch in parallel and never let one failure hide the other.
-    const [ordered, invoices] = await Promise.all([
+    const [ordered, invResult] = await Promise.all([
       (async () => {
         if (!docs.length) return [];
         const inList = docs.map(d => `'${d}'`).join(',');
@@ -146,6 +187,9 @@ export default async function handler(req, res) {
       })(),
       fetchInvoices(invoiceRefs),
     ]);
+    const { raw: rawInvoices, invoices } = invResult;
+    // Payments hang off the invoices, so this can only run once they're known.
+    const payments = await fetchPayments(rawInvoices);
 
     // Roll up here so the KPI tiles just render. `estimated` prefers the
     // estimate total and falls back to what was actually invoiced, matching how
@@ -161,7 +205,7 @@ export default async function handler(req, res) {
       balanceDue: invoiceRefs.length ? sum(invoices, 'balance') : null,
     };
 
-    return res.status(200).json({ org, docs, estimates: ordered, invoiceRefs, invoices, totals });
+    return res.status(200).json({ org, docs, estimates: ordered, invoiceRefs, invoices, payments, totals });
   } catch (e) {
     return res.status(502).json({ error: String(e?.message || e).slice(0, 400) });
   }

@@ -152,9 +152,14 @@ const fmtDate = v => {
   const dt = parseFmDate(v);
   return dt ? dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : (v || '—');
 };
-const fmtDateShort = v => {
-  const dt = parseFmDate(v);
-  return dt ? dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
+// QBO returns ISO dates (2026-08-07), not FileMaker's MM/DD/YYYY. Parsed as
+// local parts rather than `new Date(iso)` — that would treat the value as UTC
+// and can shift the date back a day for anyone west of Greenwich.
+const fmtIsoShort = v => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || ''));
+  if (!m) return '—';
+  const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 const daysUntil = v => {
   const dt = parseFmDate(v);
@@ -243,6 +248,8 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   // /api/ccs-estimate (null = not loaded/none; array = fetched).
   const [qboEst, setQboEst]     = useState(null);
   const [qboFin, setQboFin]     = useState(null); // { estimated, invoiced, received, balanceDue } | null
+  const [qboInvoices, setQboInvoices] = useState([]);
+  const [qboPayments, setQboPayments] = useState([]);
   const [woBusy, setWoBusy]     = useState(null); // 'attach' | 'download' | null
   const [woStage, setWoStage]   = useState(null);
   const [woError, setWoError]   = useState(null);
@@ -350,11 +357,6 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   //
   // null (not 0) means "nothing linked" → the tile shows an em dash instead of
   // a confident $0.00.
-  // The raw portals still back the Invoices/Payments lists in the financials
-  // card lower down — kept as-is so that card's behaviour is unchanged by this.
-  const portals = selected?.portalData || {};
-  const invoices = portals['Portal__Invoices'] || [];
-  const payments = portals['Portal__Payments'] || [];
   const estValue   = qboFin ? qboFin.estimated  : null;
   const received   = qboFin ? qboFin.received   : null;
   const balanceDue = qboFin ? qboFin.balanceDue : null;
@@ -374,13 +376,15 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
     // Live QBO financials (estimates + invoices, via the project's stored refs).
     // No-ops on localhost (no serverless functions); leaves both null so the
     // KPI tiles fall back to em dashes rather than showing a wrong number.
-    setQboFin(null);
+    setQboFin(null); setQboInvoices([]); setQboPayments([]);
     fetch(`/api/ccs-estimate?db=${encodeURIComponent(getCurrentEnv().db)}&recordId=${r.recordId}`)
       .then(res => res.ok ? res.json() : null)
       .then(j => {
         if (!j || selectedRef.current !== r.recordId) return;
         setQboEst(j.estimates || []);
         setQboFin(j.totals || null);
+        setQboInvoices(j.invoices || []);
+        setQboPayments(j.payments || []);
       })
       .catch(() => {});
   }
@@ -752,18 +756,37 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                           estimates are covered by the live QBO block above). */}
                       <div className="cv2-fin-embed">
                         <div className="cv2-fin-tabs">
-                          {[['invoices', 'Invoices', invoices.length], ['payments', 'Payments', payments.length]].map(([id, lbl, n]) => (
+                          {[['invoices', 'Invoices', qboInvoices.length], ['payments', 'Payments', qboPayments.length]].map(([id, lbl, n]) => (
                             <button key={id} className={`cv2-fin-tab${finTab === id ? ' active' : ''}`} onClick={() => setFinTab(id)}>{lbl}<span>{n}</span></button>
                           ))}
                         </div>
                         <div className="cv2-fin-list">
-                          {finTab === 'invoices' && (invoices.length ? invoices.map((r, i) => (
-                            <div className="cv2-fin-row" key={i}><span className="cv2-fin-main">#{r['cntct_INVO::QuickBooks_Reference_Number'] || '—'} · {fmtDateShort(r['cntct_INVO::Date'])}</span><span className="cv2-fin-amt">{fmtMoneyFull(r['cntct_INVO::zz__Total__xn'])}</span></div>
-                          )) : <div className="cv2-fin-empty">No invoices</div>)}
-                          {finTab === 'payments' && (payments.length ? payments.map((r, i) => (
-                            <div className="cv2-fin-row" key={i}><span className="cv2-fin-main">{fmtDateShort(r['cntct_PMT::Date'])} · {r['cntct_PMT::Method'] || '—'}</span><span className="cv2-fin-amt">{fmtMoneyFull(r['cntct_PMT::Amount'])}</span></div>
-                          )) : <div className="cv2-fin-empty">No payments</div>)}
+                          {finTab === 'invoices' && (qboInvoices.length ? qboInvoices.map(r => (
+                            <div className="cv2-fin-row" key={r.qboId}>
+                              <span className="cv2-fin-main">
+                                #{r.docNumber || r.qboId} · {fmtIsoShort(r.date)}
+                                {r.balance > 0
+                                  ? <span className="cv2-fin-tag due">{fmtMoneyFull(r.balance)} due</span>
+                                  : <span className="cv2-fin-tag paid">paid</span>}
+                              </span>
+                              <span className="cv2-fin-amt">{fmtMoneyFull(r.total)}</span>
+                            </div>
+                          )) : <div className="cv2-fin-empty">{qboFin ? 'No invoices in QuickBooks' : 'No invoice linked to this project'}</div>)}
+                          {finTab === 'payments' && (qboPayments.length ? qboPayments.map(r => (
+                            <div className="cv2-fin-row" key={r.qboId}>
+                              <span className="cv2-fin-main">
+                                {fmtIsoShort(r.date)} · {r.method || 'Payment'}{r.reference ? ` · ${r.reference}` : ''}
+                                {/* A payment can settle several invoices at once; show the
+                                    whole cheque only when it exceeded this project's share. */}
+                                {r.paymentTotal > r.amount && <span className="cv2-fin-tag">of {fmtMoneyFull(r.paymentTotal)}</span>}
+                              </span>
+                              <span className="cv2-fin-amt">{fmtMoneyFull(r.amount)}</span>
+                            </div>
+                          )) : <div className="cv2-fin-empty">{qboInvoices.length ? 'No payments received yet' : 'No invoice linked to this project'}</div>)}
                         </div>
+                        {(qboInvoices.length > 0 || qboPayments.length > 0) && (
+                          <div className="cv2-fin-src">live from QuickBooks</div>
+                        )}
                       </div>
                     </div>
                   </div>
