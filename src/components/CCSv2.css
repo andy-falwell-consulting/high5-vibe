@@ -351,3 +351,17 @@
   .cv2-fin-link { transition: none; }
   .cv2-fin-link:hover { transform: none; }
 }
+
+/* A linked QuickBooks record that belongs to a different customer. Shown, but
+   never counted — the row stays clickable so it can be checked in QBO. */
+.cv2-fin-suspect { opacity: 0.75; }
+.cv2-fin-suspect:hover { opacity: 1; box-shadow: inset 2px 0 0 #ba7517; }
+.cv2-fin-warn {
+  margin-left: 8px; font-size: 12px; padding: 1px 7px; border-radius: 999px;
+  background: #ba75171f; color: #a9690f; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; max-width: 190px; display: inline-block; vertical-align: bottom;
+}
+.cv2-fin-mismatch {
+  margin: -4px 0 14px; padding: 9px 12px; border-radius: 8px; font-size: 14px; line-height: 1.5;
+  background: #ba75170f; border: 1px solid #ba751733; color: #a9690f;
+}

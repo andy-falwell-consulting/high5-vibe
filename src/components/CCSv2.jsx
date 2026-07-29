@@ -251,6 +251,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   const [qboFin, setQboFin]     = useState(null); // { estimated, invoiced, received, balanceDue } | null
   const [qboInvoices, setQboInvoices] = useState([]);
   const [qboPayments, setQboPayments] = useState([]);
+  const [qboMismatch, setQboMismatch] = useState(null); // { estimates, invoices } counts
   const [woBusy, setWoBusy]     = useState(null); // 'attach' | 'download' | null
   const [woStage, setWoStage]   = useState(null);
   const [woError, setWoError]   = useState(null);
@@ -362,6 +363,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   const received   = qboFin ? qboFin.received   : null;
   const balanceDue = qboFin ? qboFin.balanceDue : null;
   const finLive    = !!qboFin && (estValue != null || received != null || balanceDue != null);
+  const mismatchCount = (qboMismatch?.estimates || 0) + (qboMismatch?.invoices || 0);
 
   // ── Selection / nav / cache sync ──
   async function handleSelect(r) {
@@ -377,7 +379,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
     // Live QBO financials (estimates + invoices, via the project's stored refs).
     // No-ops on localhost (no serverless functions); leaves both null so the
     // KPI tiles fall back to em dashes rather than showing a wrong number.
-    setQboFin(null); setQboInvoices([]); setQboPayments([]);
+    setQboFin(null); setQboInvoices([]); setQboPayments([]); setQboMismatch(null);
     fetch(`/api/ccs-estimate?db=${encodeURIComponent(getCurrentEnv().db)}&recordId=${r.recordId}`)
       .then(res => res.ok ? res.json() : null)
       .then(j => {
@@ -386,6 +388,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
         setQboFin(j.totals || null);
         setQboInvoices(j.invoices || []);
         setQboPayments(j.payments || []);
+        setQboMismatch(j.mismatched || null);
       })
       .catch(() => {});
   }
@@ -599,6 +602,18 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                 </div>
               </div>
 
+              {/* A stored reference resolving to another client's record is common
+                  enough (roughly 3 in 4 estimate links) that it needs saying out
+                  loud — those records are excluded from the totals above. */}
+              {mismatchCount > 0 && (
+                <div className="cv2-fin-mismatch">
+                  ⚠ {mismatchCount === 1
+                    ? 'A QuickBooks record linked to this project belongs to a different customer, so it is'
+                    : `${mismatchCount} QuickBooks records linked to this project belong to a different customer, so they are`} excluded
+                  from the figures above. Check the estimate and invoice numbers on this record.
+                </div>
+              )}
+
               {/* BODY: full-width phases → details → contact/financials/contract/team cluster */}
               <div className="cv2-body">
                 {/* project phases — full width */}
@@ -749,11 +764,15 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                                 <span className="cv2-qboest-missing">not found in QBO</span>
                               </div>
                             ) : (
-                              <a className="cv2-qboest-row cv2-fin-link" key={e.docNumber}
+                              <a className={`cv2-qboest-row cv2-fin-link${e.customerMatch === false ? ' cv2-fin-suspect' : ''}`} key={e.docNumber}
                                 href={qboLink('Estimate', e.qboId)} target="_blank" rel="noreferrer"
-                                title="Open this estimate in QuickBooks Online">
+                                title={e.customerMatch === false
+                                  ? `This QuickBooks estimate belongs to "${e.customer}", not this project — check the estimate number on the record`
+                                  : 'Open this estimate in QuickBooks Online'}>
                                 <span className="cv2-qboest-doc">{e.docNumber}</span>
-                                <span className={`cv2-qboest-status ${String(e.status || '').toLowerCase()}`}>{e.status || '—'}</span>
+                                {e.customerMatch === false
+                                  ? <span className="cv2-fin-warn">⚠ {e.customer}</span>
+                                  : <span className={`cv2-qboest-status ${String(e.status || '').toLowerCase()}`}>{e.status || '—'}</span>}
                                 <span className="cv2-qboest-total">{fmtMoneyFull(e.total)}<span className="cv2-fin-ext">↗</span></span>
                               </a>
                             )
@@ -770,14 +789,18 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                         </div>
                         <div className="cv2-fin-list">
                           {finTab === 'invoices' && (qboInvoices.length ? qboInvoices.map(r => (
-                            <a className="cv2-fin-row cv2-fin-link" key={r.qboId}
+                            <a className={`cv2-fin-row cv2-fin-link${r.customerMatch === false ? ' cv2-fin-suspect' : ''}`} key={r.qboId}
                               href={qboLink('Invoice', r.qboId)} target="_blank" rel="noreferrer"
-                              title="Open this invoice in QuickBooks Online">
+                              title={r.customerMatch === false
+                                ? `This QuickBooks invoice belongs to "${r.customer}", not this project — check the invoice number on the record`
+                                : 'Open this invoice in QuickBooks Online'}>
                               <span className="cv2-fin-main">
                                 #{r.docNumber || r.qboId} · {fmtIsoShort(r.date)}
-                                {r.balance > 0
-                                  ? <span className="cv2-fin-tag due">{fmtMoneyFull(r.balance)} due</span>
-                                  : <span className="cv2-fin-tag paid">paid</span>}
+                                {r.customerMatch === false
+                                  ? <span className="cv2-fin-warn">⚠ {r.customer}</span>
+                                  : r.balance > 0
+                                    ? <span className="cv2-fin-tag due">{fmtMoneyFull(r.balance)} due</span>
+                                    : <span className="cv2-fin-tag paid">paid</span>}
                               </span>
                               <span className="cv2-fin-amt">{fmtMoneyFull(r.total)}<span className="cv2-fin-ext">↗</span></span>
                             </a>

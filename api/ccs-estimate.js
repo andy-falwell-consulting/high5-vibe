@@ -39,6 +39,39 @@ const parseDocs = s => [...new Set([...String(s || '').matchAll(/D-\s?(\d+)/gi)]
 
 const n = v => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
 
+// ── Customer-match guard ─────────────────────────────────────────
+// A stored reference can resolve to a QBO record belonging to a completely
+// different client. Measured on 40 CCS records carrying an estimate reference:
+// 30 estimates resolved to another customer entirely (e.g. Ashokan Center's
+// "D-3199" is Gateway Healthcare, Inc, dated 2013 — eleven years before that
+// project). Invoices are far cleaner: the only two "mismatches" in the same
+// sample were the same school written two ways.
+//
+// So a resolved record is NOT proof it belongs to this project. Every returned
+// estimate/invoice is tagged `customerMatch` and anything suspect is excluded
+// from the roll-up totals — better an em dash than another client's money
+// quoted as fact on this job.
+//
+// Comparison is deliberately loose: org names differ harmlessly between systems
+// ("Greece Athena M.S./H.S." vs "Greece Athena High School"), so we strip
+// punctuation and accept either name containing the other, plus a shared
+// distinctive-word test for cases like "Camp Wabasso" / "4-H Camp Wabasso".
+const STOP_WORDS = new Set(['the', 'of', 'and', 'inc', 'llc', 'school', 'schools', 'high', 'middle',
+  'elementary', 'center', 'centre', 'college', 'university', 'district', 'camp', 'ymca', 'academy']);
+const normName = s => String(s || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+
+export function customerMatches(qboCustomer, projectOrg) {
+  const a = normName(qboCustomer), b = normName(projectOrg);
+  if (!a || !b) return null;                       // nothing to compare against
+  const ca = a.replace(/ /g, ''), cb = b.replace(/ /g, '');
+  if (ca.includes(cb) || cb.includes(ca)) return true;
+  // Fall back to a shared distinctive word (ignoring generic org vocabulary).
+  const wordsA = new Set(a.split(' ').filter(w => w.length > 3 && !STOP_WORDS.has(w)));
+  const wordsB = a === b ? wordsA : new Set(b.split(' ').filter(w => w.length > 3 && !STOP_WORDS.has(w)));
+  for (const w of wordsA) if (wordsB.has(w)) return true;
+  return false;
+}
+
 // Map a raw QBO Estimate to the slim shape the UI needs.
 function slim(e) {
   return {
@@ -187,25 +220,42 @@ export default async function handler(req, res) {
       })(),
       fetchInvoices(invoiceRefs),
     ]);
-    const { raw: rawInvoices, invoices } = invResult;
+    const { raw: rawInvoices, invoices: rawSlimInvoices } = invResult;
     // Payments hang off the invoices, so this can only run once they're known.
     const payments = await fetchPayments(rawInvoices);
 
-    // Roll up here so the KPI tiles just render. `estimated` prefers the
-    // estimate total and falls back to what was actually invoiced, matching how
-    // the workspace previously behaved. null (not 0) means "nothing linked" —
-    // the UI shows an em dash rather than a misleading $0.00.
-    const sum = (arr, k) => arr.reduce((t, r) => t + (Number(r[k]) || 0), 0);
-    const estimated = docs.length ? sum(ordered.filter(e => !e.missing), 'total') : null;
-    const invoiced = invoiceRefs.length ? sum(invoices, 'total') : null;
-    const totals = {
-      estimated: estimated || invoiced,
-      invoiced,
-      received: invoiceRefs.length ? sum(invoices, 'paid') : null,
-      balanceDue: invoiceRefs.length ? sum(invoices, 'balance') : null,
+    // Tag every resolved record with whether its QBO customer actually matches
+    // this project. `null` = couldn't compare (a name was missing) — treated as
+    // trusted, since refusing to show a figure over absent metadata would be
+    // worse than showing it.
+    const tag = r => (r.missing ? r : { ...r, customerMatch: customerMatches(r.customer, org) });
+    const estimates = ordered.map(tag);
+    const invoices = rawSlimInvoices.map(tag);
+
+    const trusted = r => !r.missing && r.customerMatch !== false;
+    const goodEstimates = estimates.filter(trusted);
+    const goodInvoices = invoices.filter(trusted);
+    const mismatched = {
+      estimates: estimates.filter(e => e.customerMatch === false).length,
+      invoices: invoices.filter(i => i.customerMatch === false).length,
     };
 
-    return res.status(200).json({ org, docs, estimates: ordered, invoiceRefs, invoices, payments, totals });
+    // Roll up from TRUSTED records only. A reference pointing at another
+    // client's record must not contribute to this project's money — better an
+    // em dash than a confident wrong total. null = nothing usable linked.
+    const sum = (arr, k) => arr.reduce((t, r) => t + (Number(r[k]) || 0), 0);
+    const estimated = goodEstimates.length ? sum(goodEstimates, 'total') : null;
+    const invoiced = goodInvoices.length ? sum(goodInvoices, 'total') : null;
+    const totals = {
+      estimated: estimated ?? invoiced,
+      invoiced,
+      received: goodInvoices.length ? sum(goodInvoices, 'paid') : null,
+      balanceDue: goodInvoices.length ? sum(goodInvoices, 'balance') : null,
+    };
+
+    return res.status(200).json({
+      org, docs, estimates, invoiceRefs, invoices, payments, totals, mismatched,
+    });
   } catch (e) {
     return res.status(502).json({ error: String(e?.message || e).slice(0, 400) });
   }
