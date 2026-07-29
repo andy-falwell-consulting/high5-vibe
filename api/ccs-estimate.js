@@ -1,9 +1,20 @@
-// Live QBO estimate lookup for a CCS/project record. The link is the estimate
-// DocNumber "D-####", stored (free-text, often with notes appended) in the
-// RCD_New repeating field `_kat__QuickBooks_Estimate_ID`. We parse the D-token
-// out of that field and pull the CURRENT estimate straight from QBO, so the
-// CCS Workspace can show live status/total without duplicating anything into
+// Live QBO financials for a CCS/project record — estimates AND invoices.
+//
+// Estimates link by DocNumber "D-####", stored (free-text, often with notes
+// appended) in the RCD_New repeating field `_kat__QuickBooks_Estimate_ID`
+// (populated on 71% of CCS records). Invoices link by the plain reference in
+// `_kat__QuickBooks_Invoice_ID` (60.8%). Both are read straight from QBO, so
+// the CCS Workspace shows live figures without duplicating anything into
 // FileMaker or running a bulk write-back.
+//
+// Why not the FileMaker portals: `Portal__Invoices` / `Portal__Payments` on
+// RCD_New are filtered by GLOBAL fields (GLBL::Portal_Filter_*). Globals are
+// session state — they're set when a human works the layout in FMP Pro, and a
+// Data API session never gets them. The result over the API is 1,125 hollow
+// invoice rows (real row ids, every field blank) and zero payment rows, which
+// is why the KPI tiles read '—' on every record. Those portals also resolve
+// through the CONTACT, so even working they'd show every invoice for the
+// client rather than this project's.
 //
 //   GET /api/ccs-estimate?db=High5_Core4&recordId=10253   (resolve via FMP)
 //   GET /api/ccs-estimate?doc=D-3041                       (direct lookup, no FMP)
@@ -43,41 +54,104 @@ function slim(e) {
   };
 }
 
-// Read the CCS record's estimate-id reps (1-3 are placed on RCD_New) and parse.
-async function docsFromRecord(db, recordId) {
+// Invoice references are plain digits ("64995"), unlike the D-prefixed estimate
+// tokens — pull every number of 3+ digits so trailing notes don't break it.
+const parseInvoiceRefs = s => [...new Set([...String(s || '').matchAll(/\b(\d{3,})\b/g)].map(m => m[1]))];
+
+// Map a raw QBO Invoice to the slim shape the UI needs. `Balance` is what's
+// still owed, so paid = total - balance (no inference required).
+function slimInvoice(i) {
+  const total = n(i.TotalAmt);
+  const balance = n(i.Balance);
+  return {
+    docNumber: i.DocNumber || '',
+    qboId: i.Id,
+    total,
+    balance,
+    paid: Math.round((total - balance) * 100) / 100,
+    date: i.TxnDate || '',
+    dueDate: i.DueDate || '',
+    customer: i.CustomerRef?.name || '',
+  };
+}
+
+// Read the CCS record's estimate + invoice id reps and parse both.
+async function refsFromRecord(db, recordId) {
   const token = await fmpToken(db);
   const r = await fetch(`${FMP_HOST}/fmi/data/v2/databases/${db}/layouts/RCD_New/records/${recordId}`,
     { headers: { Authorization: `Bearer ${token}` } });
   const j = await r.json().catch(() => ({}));
   const fd = j?.response?.data?.[0]?.fieldData;
-  if (!fd) return { docs: [], org: null };
-  const raw = [1, 2, 3, 4, 5].map(i => fd[`_kat__QuickBooks_Estimate_ID(${i})`]).filter(Boolean).join(' ');
-  return { docs: parseDocs(raw), org: fd.zz__Display_Organization__ct || fd.zz__Display_Contact__ct || null };
+  if (!fd) return { docs: [], invoiceRefs: [], org: null };
+  const rawEst = [1, 2, 3, 4, 5].map(i => fd[`_kat__QuickBooks_Estimate_ID(${i})`]).filter(Boolean).join(' ');
+  const rawInv = [1, 2, 3].map(i => fd[`_kat__QuickBooks_Invoice_ID(${i})`]).filter(Boolean).join(' ');
+  return {
+    docs: parseDocs(rawEst),
+    invoiceRefs: parseInvoiceRefs(rawInv),
+    org: fd.zz__Display_Organization__ct || fd.zz__Display_Contact__ct || null,
+  };
+}
+
+// The stored invoice reference is a bare number, and it isn't documented whether
+// that's QBO's DocNumber or its internal Id — in practice the file holds both
+// shapes. Query each and merge, so a reference resolves either way.
+async function fetchInvoices(refs) {
+  if (!refs.length) return [];
+  const inList = refs.map(v => `'${v}'`).join(',');
+  const [byDoc, byId] = await Promise.all([
+    qboQuery(`SELECT * FROM Invoice WHERE DocNumber IN (${inList})`).catch(() => ({})),
+    qboQuery(`SELECT * FROM Invoice WHERE Id IN (${inList})`).catch(() => ({})),
+  ]);
+  const seen = new Map();
+  for (const inv of [...(byDoc.Invoice || []), ...(byId.Invoice || [])]) {
+    if (!seen.has(inv.Id)) seen.set(inv.Id, slimInvoice(inv));   // dedupe: a ref can match both ways
+  }
+  return [...seen.values()];
 }
 
 export default async function handler(req, res) {
   if (!(await authorized(req))) return res.status(401).json({ error: 'unauthorized' });
   try {
-    let docs, org = null;
+    let docs, invoiceRefs = [], org = null;
     if (req.query?.doc) {
       docs = parseDocs(req.query.doc);
     } else {
       const db = req.query?.db || 'High5_Core4';
       if (!ALLOWED_DBS.has(db)) return res.status(400).json({ error: 'db not allowed' });
       if (!req.query?.recordId) return res.status(400).json({ error: 'recordId or doc required' });
-      ({ docs, org } = await docsFromRecord(db, String(req.query.recordId)));
+      ({ docs, invoiceRefs, org } = await refsFromRecord(db, String(req.query.recordId)));
     }
 
-    if (!docs.length) return res.status(200).json({ org, docs: [], estimates: [] });
+    // Estimates and invoices are independent — a record can have either, both,
+    // or neither, so fetch in parallel and never let one failure hide the other.
+    const [ordered, invoices] = await Promise.all([
+      (async () => {
+        if (!docs.length) return [];
+        const inList = docs.map(d => `'${d}'`).join(',');
+        const qr = await qboQuery(`SELECT * FROM Estimate WHERE DocNumber IN (${inList})`);
+        const estimates = (qr.Estimate || []).map(slim);
+        // Preserve the record's D# order; flag any that didn't resolve in QBO.
+        const byDoc = Object.fromEntries(estimates.map(e => [e.docNumber, e]));
+        return docs.map(d => byDoc[d] || { docNumber: d, missing: true });
+      })(),
+      fetchInvoices(invoiceRefs),
+    ]);
 
-    // One QBO query for all this record's D#s. DocNumbers are safe (D + digits).
-    const inList = docs.map(d => `'${d}'`).join(',');
-    const qr = await qboQuery(`SELECT * FROM Estimate WHERE DocNumber IN (${inList})`);
-    const estimates = (qr.Estimate || []).map(slim);
-    // Preserve the record's D# order; flag any that didn't resolve in QBO.
-    const byDoc = Object.fromEntries(estimates.map(e => [e.docNumber, e]));
-    const ordered = docs.map(d => byDoc[d] || { docNumber: d, missing: true });
-    return res.status(200).json({ org, docs, estimates: ordered });
+    // Roll up here so the KPI tiles just render. `estimated` prefers the
+    // estimate total and falls back to what was actually invoiced, matching how
+    // the workspace previously behaved. null (not 0) means "nothing linked" —
+    // the UI shows an em dash rather than a misleading $0.00.
+    const sum = (arr, k) => arr.reduce((t, r) => t + (Number(r[k]) || 0), 0);
+    const estimated = docs.length ? sum(ordered.filter(e => !e.missing), 'total') : null;
+    const invoiced = invoiceRefs.length ? sum(invoices, 'total') : null;
+    const totals = {
+      estimated: estimated || invoiced,
+      invoiced,
+      received: invoiceRefs.length ? sum(invoices, 'paid') : null,
+      balanceDue: invoiceRefs.length ? sum(invoices, 'balance') : null,
+    };
+
+    return res.status(200).json({ org, docs, estimates: ordered, invoiceRefs, invoices, totals });
   } catch (e) {
     return res.status(502).json({ error: String(e?.message || e).slice(0, 400) });
   }

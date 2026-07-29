@@ -135,8 +135,10 @@ const postJobValues = raw => String(raw || '').split(/[\r\n]+/).map(s => s.trim(
 
 
 const num = v => { const n = Number(v); return isNaN(n) ? 0 : n; };
-const fmtMoney = v => { const n = num(v); return n ? `$${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : '—'; };
 const fmtMoneyFull = v => `$${num(v).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+// KPI variant: distinguishes "nothing linked" (null → em dash) from a real
+// zero. A $0 balance means paid in full, which fmtMoney would hide as '—'.
+const kpiMoney = v => (v == null ? '—' : `$${num(v).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`);
 
 const parseFmDate = v => {
   if (!v) return null;
@@ -240,6 +242,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   // Live QBO estimate(s) for the selected project — resolved from its D# via
   // /api/ccs-estimate (null = not loaded/none; array = fetched).
   const [qboEst, setQboEst]     = useState(null);
+  const [qboFin, setQboFin]     = useState(null); // { estimated, invoiced, received, balanceDue } | null
   const [woBusy, setWoBusy]     = useState(null); // 'attach' | 'download' | null
   const [woStage, setWoStage]   = useState(null);
   const [woError, setWoError]   = useState(null);
@@ -334,17 +337,28 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   }, [eventUrgent, eventCritical]);
 
 
-  // Financial roll-ups from portals
+  // Financial roll-ups.
+  //
+  // These come from QuickBooks, resolved live from the estimate/invoice
+  // references stored on the record — NOT from the FileMaker portals below.
+  // Those portals (`Portal__Invoices`, `Portal__Payments`) are filtered by
+  // GLOBAL fields, which are session state a Data API request never receives:
+  // over the API they return hollow rows (real row ids, every field blank) and
+  // no payments at all, which is why these tiles read '—' on every record.
+  // They're also contact-scoped, so even working they'd show every invoice for
+  // the client rather than this project's. See api/ccs-estimate.js.
+  //
+  // null (not 0) means "nothing linked" → the tile shows an em dash instead of
+  // a confident $0.00.
+  // The raw portals still back the Invoices/Payments lists in the financials
+  // card lower down — kept as-is so that card's behaviour is unchanged by this.
   const portals = selected?.portalData || {};
-  const estimates = portals['Portal__Estimates 2'] || [];
-  const invoices  = portals['Portal__Invoices']    || [];
-  const payments  = portals['Portal__Payments']    || [];
-  const estTotal  = estimates.reduce((a, r) => a + num(r['cntct_ESTMT::zz__Total__xn']), 0);
-  const invTotal  = invoices.reduce((a, r) => a + num(r['cntct_INVO::zz__Total__xn']), 0);
-  const balanceDue = invoices.reduce((a, r) => a + num(r['cntct_INVO::zz__Balance_Due__cn']), 0);
-  const paid      = payments.reduce((a, r) => a + num(r['cntct_PMT::Amount']), 0);
-  const received  = paid > 0 ? paid : Math.max(0, invTotal - balanceDue);
-  const estValue  = estTotal || invTotal;
+  const invoices = portals['Portal__Invoices'] || [];
+  const payments = portals['Portal__Payments'] || [];
+  const estValue   = qboFin ? qboFin.estimated  : null;
+  const received   = qboFin ? qboFin.received   : null;
+  const balanceDue = qboFin ? qboFin.balanceDue : null;
+  const finLive    = !!qboFin && (estValue != null || received != null || balanceDue != null);
 
   // ── Selection / nav / cache sync ──
   async function handleSelect(r) {
@@ -357,11 +371,17 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
     getRecord(LAYOUT, r.recordId).then(detail => {
       setSelected(prev => prev?.recordId === r.recordId ? detail.response.data[0] : prev);
     }).catch(() => {});
-    // Live QBO estimate lookup (via the project's D#). No-ops on localhost
-    // (no serverless functions); leaves qboEst null so nothing renders.
+    // Live QBO financials (estimates + invoices, via the project's stored refs).
+    // No-ops on localhost (no serverless functions); leaves both null so the
+    // KPI tiles fall back to em dashes rather than showing a wrong number.
+    setQboFin(null);
     fetch(`/api/ccs-estimate?db=${encodeURIComponent(getCurrentEnv().db)}&recordId=${r.recordId}`)
       .then(res => res.ok ? res.json() : null)
-      .then(j => { if (j) setQboEst(prev => (selectedRef.current === r.recordId ? (j.estimates || []) : prev)); })
+      .then(j => {
+        if (!j || selectedRef.current !== r.recordId) return;
+        setQboEst(j.estimates || []);
+        setQboFin(j.totals || null);
+      })
       .catch(() => {});
   }
 
@@ -551,9 +571,22 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
 
               {/* KPIs */}
               <div className="cv2-kpis">
-                <div className="cv2-kpi"><div className="cv2-kpi-label">Estimated value</div><div className="cv2-kpi-num">{fmtMoney(estValue)}</div></div>
-                <div className="cv2-kpi"><div className="cv2-kpi-label">Received</div><div className="cv2-kpi-num" style={{ color: received ? '#0f6e56' : 'inherit' }}>{fmtMoney(received)}</div></div>
-                <div className="cv2-kpi"><div className="cv2-kpi-label">Balance due</div><div className="cv2-kpi-num" style={{ color: balanceDue ? '#854f0b' : 'inherit' }}>{fmtMoney(balanceDue)}</div></div>
+                <div className="cv2-kpi">
+                  <div className="cv2-kpi-label">Estimated value</div>
+                  <div className="cv2-kpi-num">{kpiMoney(estValue)}</div>
+                  {finLive && <div className="cv2-kpi-sub">live from QuickBooks</div>}
+                </div>
+                <div className="cv2-kpi">
+                  <div className="cv2-kpi-label">Received</div>
+                  <div className="cv2-kpi-num" style={{ color: received ? '#0f6e56' : 'inherit' }}>{kpiMoney(received)}</div>
+                  {finLive && <div className="cv2-kpi-sub">live from QuickBooks</div>}
+                </div>
+                <div className="cv2-kpi">
+                  <div className="cv2-kpi-label">Balance due</div>
+                  <div className="cv2-kpi-num" style={{ color: balanceDue ? '#854f0b' : 'inherit' }}>{kpiMoney(balanceDue)}</div>
+                  {finLive && balanceDue === 0 && <div className="cv2-kpi-sub">paid in full</div>}
+                  {finLive && balanceDue !== 0 && <div className="cv2-kpi-sub">live from QuickBooks</div>}
+                </div>
                 <div className="cv2-kpi">
                   <div className="cv2-kpi-label">Event date</div>
                   <div className="cv2-kpi-num">{fmtDate(val('rcd start date'))}</div>
