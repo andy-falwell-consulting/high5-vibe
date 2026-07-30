@@ -214,8 +214,22 @@ export default async function handler(req, res) {
         const inList = docs.map(d => `'${d}'`).join(',');
         const qr = await qboQuery(`SELECT * FROM Estimate WHERE DocNumber IN (${inList})`);
         const estimates = (qr.Estimate || []).map(slim);
+        // A D# is NOT unique in QBO. The sequence has been reused over the
+        // years, so a single "D-4281" can be several unrelated estimates a
+        // decade apart — which is how a 2026 project ends up showing a 2015
+        // estimate for a different customer. Keep only the most recent by
+        // TxnDate; a higher QBO Id breaks a tie, and an undated record loses
+        // to a dated one. (This was Object.fromEntries, which kept whichever
+        // row QBO happened to return last — arbitrary, not newest.)
+        const byDoc = {};
+        for (const e of estimates) {
+          const prev = byDoc[e.docNumber];
+          const newer = !prev
+            || e.date > prev.date
+            || (e.date === prev.date && Number(e.qboId) > Number(prev.qboId));
+          if (newer) byDoc[e.docNumber] = e;
+        }
         // Preserve the record's D# order; flag any that didn't resolve in QBO.
-        const byDoc = Object.fromEntries(estimates.map(e => [e.docNumber, e]));
         return docs.map(d => byDoc[d] || { docNumber: d, missing: true });
       })(),
       fetchInvoices(invoiceRefs),
