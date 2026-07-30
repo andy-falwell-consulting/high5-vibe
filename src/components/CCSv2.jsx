@@ -614,8 +614,143 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                 </div>
               )}
 
-              {/* BODY: full-width phases → details → contact/financials/contract/team cluster */}
-              <div className="cv2-body">
+                {/* BODY: contract & financials → details → phases → contact/team */}
+                <div className="cv2-body">
+                {/* contract & financials — full width */}
+                <div className="cv2-card">
+                  <div className="cv2-card-head"><span>Contract &amp; Financials</span></div>
+                  <div className="cv2-fin-grid">
+                    {FIN_ROWS.map(row => (
+                      <div className="cv2-fin-line" key={row.label}>
+                        <span className="cv2-fin-label">{row.label}</span>
+                        <div className="cv2-fin-input">
+                          {row.ref
+                            ? <span className="cv2-fin-ref">{val(row.sent) || '—'}</span>
+                            : row.type === 'date'
+                              ? <InlineDate value={val(row.sent)} onChange={v => stage(row.sent, v)} />
+                              : <InlineText value={val(row.sent)} onChange={v => stage(row.sent, v)} placeholder="—" />}
+                        </div>
+                        {row.rcv
+                          ? <button className={`cv2-fin-rcv${isOn(val(row.rcv)) ? ' on' : ''}`} onClick={() => toggle(row.rcv)}>
+                              <span className="cv2-fin-rcv-box">{isOn(val(row.rcv)) ? '✓' : ''}</span>Received
+                            </button>
+                          : <span className="cv2-fin-rcv-spacer" />}
+                      </div>
+                    ))}
+                  </div>
+                  {qboEst && qboEst.length > 0 && (
+                    <div className="cv2-qboest">
+                      <div className="cv2-qboest-head">QuickBooks estimate{qboEst.length > 1 ? 's' : ''} · live</div>
+                      {qboEst.map(e => (
+                        // A missing estimate has no QBO id, so it stays a plain
+                        // row — there's nothing to open.
+                        e.missing ? (
+                          <div className="cv2-qboest-row" key={e.docNumber}>
+                            <span className="cv2-qboest-doc">{e.docNumber}</span>
+                            <span className="cv2-qboest-missing">not found in QBO</span>
+                          </div>
+                        ) : (
+                          <a className={`cv2-qboest-row cv2-fin-link${e.customerMatch === false ? ' cv2-fin-suspect' : ''}`} key={e.docNumber}
+                            href={qboLink('Estimate', e.qboId)} target="_blank" rel="noreferrer"
+                            title={e.customerMatch === false
+                              ? `This QuickBooks estimate belongs to "${e.customer}", not this project — check the estimate number on the record`
+                              : 'Open this estimate in QuickBooks Online'}>
+                            <span className="cv2-qboest-doc">{e.docNumber}</span>
+                            {e.customerMatch === false
+                              ? <span className="cv2-fin-warn">⚠ {e.customer}</span>
+                              : <span className={`cv2-qboest-status ${String(e.status || '').toLowerCase()}`}>{e.status || '—'}</span>}
+                            <span className="cv2-qboest-total">{fmtMoneyFull(e.total)}<span className="cv2-fin-ext">↗</span></span>
+                          </a>
+                        )
+                      ))}
+                    </div>
+                  )}
+                  {/* Invoices / Payments (folded in from the old Financials card;
+                      estimates are covered by the live QBO block above). */}
+                  <div className="cv2-fin-embed">
+                    <div className="cv2-fin-tabs">
+                      {[['invoices', 'Invoices', qboInvoices.length], ['payments', 'Payments', qboPayments.length]].map(([id, lbl, n]) => (
+                        <button key={id} className={`cv2-fin-tab${finTab === id ? ' active' : ''}`} onClick={() => setFinTab(id)}>{lbl}<span>{n}</span></button>
+                      ))}
+                    </div>
+                    <div className="cv2-fin-list">
+                      {finTab === 'invoices' && (qboInvoices.length ? qboInvoices.map(r => (
+                        <a className={`cv2-fin-row cv2-fin-link${r.customerMatch === false ? ' cv2-fin-suspect' : ''}`} key={r.qboId}
+                          href={qboLink('Invoice', r.qboId)} target="_blank" rel="noreferrer"
+                          title={r.customerMatch === false
+                            ? `This QuickBooks invoice belongs to "${r.customer}", not this project — check the invoice number on the record`
+                            : 'Open this invoice in QuickBooks Online'}>
+                          <span className="cv2-fin-main">
+                            #{r.docNumber || r.qboId} · {fmtIsoShort(r.date)}
+                            {r.customerMatch === false
+                              ? <span className="cv2-fin-warn">⚠ {r.customer}</span>
+                              : r.balance > 0
+                                ? <span className="cv2-fin-tag due">{fmtMoneyFull(r.balance)} due</span>
+                                : <span className="cv2-fin-tag paid">paid</span>}
+                          </span>
+                          <span className="cv2-fin-amt">{fmtMoneyFull(r.total)}<span className="cv2-fin-ext">↗</span></span>
+                        </a>
+                      )) : <div className="cv2-fin-empty">{qboFin ? 'No invoices in QuickBooks' : 'No invoice linked to this project'}</div>)}
+                      {finTab === 'payments' && (qboPayments.length ? qboPayments.map(r => (
+                        <a className="cv2-fin-row cv2-fin-link" key={r.qboId}
+                          href={qboLink('Payment', r.qboId)} target="_blank" rel="noreferrer"
+                          title="Open this payment in QuickBooks Online">
+                          <span className="cv2-fin-main">
+                            {fmtIsoShort(r.date)} · {r.method || 'Payment'}{r.reference ? ` · ${r.reference}` : ''}
+                            {/* A payment can settle several invoices at once; show the
+                                whole cheque only when it exceeded this project's share. */}
+                            {r.paymentTotal > r.amount && <span className="cv2-fin-tag">of {fmtMoneyFull(r.paymentTotal)}</span>}
+                          </span>
+                          <span className="cv2-fin-amt">{fmtMoneyFull(r.amount)}<span className="cv2-fin-ext">↗</span></span>
+                        </a>
+                      )) : <div className="cv2-fin-empty">{qboInvoices.length ? 'No payments received yet' : 'No invoice linked to this project'}</div>)}
+                    </div>
+                    {(qboInvoices.length > 0 || qboPayments.length > 0) && (
+                      <div className="cv2-fin-src">live from QuickBooks</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* details */}
+                <div className="cv2-card">
+                  <div className="cv2-card-head"><span>Details</span></div>
+                  <div className="cv2-detail-grid">
+                    <label>Project type <span className="cv2-type-max">(up to 3)</span></label>
+                    <div className="cv2-type-chips">
+                      {projectTypes.map(t => {
+                        const on = projectTypeSelected.includes(t);
+                        const disabled = !on && projectTypeSelected.length >= 3;
+                        return (
+                          <button key={t} type="button" disabled={disabled}
+                            className={`cv2-type-chip${on ? ' on' : ''}`}
+                            onClick={() => toggleProjectType(t)}>{t}</button>
+                        );
+                      })}
+                    </div>
+                    <label>Start date</label><InlineDate value={val('rcd start date')} onChange={v => stage('rcd start date', v)} />
+                    <label>End date</label><InlineDate value={val('rcd end date')} onChange={v => stage('rcd end date', v)} />
+                    <label>Distance to HQ</label><InlineText value={val('Distance to High5')} onChange={v => stage('Distance to High5', v)} placeholder="—" />
+                    <label>Drive time</label><InlineText value={val('Drive Time')} onChange={v => stage('Drive Time', v)} placeholder="—" />
+                  </div>
+                  <div className="cv2-field-block">
+                    <label>Work order</label>
+                    <InlineText value={val('Work Order')} onChange={v => stage('Work Order', v)} placeholder="Add a work order…" area big />
+                    <div className="cv2-wo-actions">
+                      <button type="button" className="cv2-wo-btn" disabled={!!woBusy} onClick={() => handleGenerateWorkOrder(true)}>
+                        {woBusy === 'attach' ? (woStage || 'Working…') : '＋ Generate work order & attach'}
+                      </button>
+                      <button type="button" className="cv2-wo-btn" disabled={!!woBusy} onClick={() => handleGenerateWorkOrder(false)}>
+                        {woBusy === 'download' ? (woStage || 'Working…') : '⤓ Download work order'}
+                      </button>
+                    </div>
+                    {woError && <p className="cv2-wo-error">{woError}</p>}
+                  </div>
+                  <div className="cv2-field-block">
+                    <label>Notes <button type="button" className="cv2-stamp-btn" onClick={() => stampNote('Notes')}>⏱ Stamp</button></label>
+                    <InlineText value={val('Notes')} onChange={v => stage('Notes', v)} placeholder="Add notes…" area />
+                  </div>
+                </div>
+
                 {/* project phases — full width */}
                 <div className="cv2-card cv2-phases-card">
                   <div className="cv2-card-head"><span>Project phases</span><span className="cv2-card-hint">click to expand · check to update</span></div>
@@ -689,174 +824,36 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                   </div>
                 </div>
 
-                {/* details */}
-                <div className="cv2-card">
-                  <div className="cv2-card-head"><span>Details</span></div>
-                  <div className="cv2-detail-grid">
-                    <label>Project type <span className="cv2-type-max">(up to 3)</span></label>
-                    <div className="cv2-type-chips">
-                      {projectTypes.map(t => {
-                        const on = projectTypeSelected.includes(t);
-                        const disabled = !on && projectTypeSelected.length >= 3;
-                        return (
-                          <button key={t} type="button" disabled={disabled}
-                            className={`cv2-type-chip${on ? ' on' : ''}`}
-                            onClick={() => toggleProjectType(t)}>{t}</button>
-                        );
-                      })}
-                    </div>
-                    <label>Start date</label><InlineDate value={val('rcd start date')} onChange={v => stage('rcd start date', v)} />
-                    <label>End date</label><InlineDate value={val('rcd end date')} onChange={v => stage('rcd end date', v)} />
-                    <label>Distance to HQ</label><InlineText value={val('Distance to High5')} onChange={v => stage('Distance to High5', v)} placeholder="—" />
-                    <label>Drive time</label><InlineText value={val('Drive Time')} onChange={v => stage('Drive Time', v)} placeholder="—" />
-                  </div>
-                  <div className="cv2-field-block">
-                    <label>Work order</label>
-                    <InlineText value={val('Work Order')} onChange={v => stage('Work Order', v)} placeholder="Add a work order…" area big />
-                    <div className="cv2-wo-actions">
-                      <button type="button" className="cv2-wo-btn" disabled={!!woBusy} onClick={() => handleGenerateWorkOrder(true)}>
-                        {woBusy === 'attach' ? (woStage || 'Working…') : '＋ Generate work order & attach'}
-                      </button>
-                      <button type="button" className="cv2-wo-btn" disabled={!!woBusy} onClick={() => handleGenerateWorkOrder(false)}>
-                        {woBusy === 'download' ? (woStage || 'Working…') : '⤓ Download work order'}
-                      </button>
-                    </div>
-                    {woError && <p className="cv2-wo-error">{woError}</p>}
-                  </div>
-                  <div className="cv2-field-block">
-                    <label>Notes <button type="button" className="cv2-stamp-btn" onClick={() => stampNote('Notes')}>⏱ Stamp</button></label>
-                    <InlineText value={val('Notes')} onChange={v => stage('Notes', v)} placeholder="Add notes…" area />
-                  </div>
-                </div>
-
-                <div className="cv2-cols">
-                  <div className="cv2-col-main">
-                    <div className="cv2-card">
-                      <div className="cv2-card-head"><span>Contract &amp; Financials</span></div>
-                      <div className="cv2-fin-grid">
-                        {FIN_ROWS.map(row => (
-                          <div className="cv2-fin-line" key={row.label}>
-                            <span className="cv2-fin-label">{row.label}</span>
-                            <div className="cv2-fin-input">
-                              {row.ref
-                                ? <span className="cv2-fin-ref">{val(row.sent) || '—'}</span>
-                                : row.type === 'date'
-                                  ? <InlineDate value={val(row.sent)} onChange={v => stage(row.sent, v)} />
-                                  : <InlineText value={val(row.sent)} onChange={v => stage(row.sent, v)} placeholder="—" />}
-                            </div>
-                            {row.rcv
-                              ? <button className={`cv2-fin-rcv${isOn(val(row.rcv)) ? ' on' : ''}`} onClick={() => toggle(row.rcv)}>
-                                  <span className="cv2-fin-rcv-box">{isOn(val(row.rcv)) ? '✓' : ''}</span>Received
-                                </button>
-                              : <span className="cv2-fin-rcv-spacer" />}
-                          </div>
-                        ))}
-                      </div>
-                      {qboEst && qboEst.length > 0 && (
-                        <div className="cv2-qboest">
-                          <div className="cv2-qboest-head">QuickBooks estimate{qboEst.length > 1 ? 's' : ''} · live</div>
-                          {qboEst.map(e => (
-                            // A missing estimate has no QBO id, so it stays a plain
-                            // row — there's nothing to open.
-                            e.missing ? (
-                              <div className="cv2-qboest-row" key={e.docNumber}>
-                                <span className="cv2-qboest-doc">{e.docNumber}</span>
-                                <span className="cv2-qboest-missing">not found in QBO</span>
-                              </div>
-                            ) : (
-                              <a className={`cv2-qboest-row cv2-fin-link${e.customerMatch === false ? ' cv2-fin-suspect' : ''}`} key={e.docNumber}
-                                href={qboLink('Estimate', e.qboId)} target="_blank" rel="noreferrer"
-                                title={e.customerMatch === false
-                                  ? `This QuickBooks estimate belongs to "${e.customer}", not this project — check the estimate number on the record`
-                                  : 'Open this estimate in QuickBooks Online'}>
-                                <span className="cv2-qboest-doc">{e.docNumber}</span>
-                                {e.customerMatch === false
-                                  ? <span className="cv2-fin-warn">⚠ {e.customer}</span>
-                                  : <span className={`cv2-qboest-status ${String(e.status || '').toLowerCase()}`}>{e.status || '—'}</span>}
-                                <span className="cv2-qboest-total">{fmtMoneyFull(e.total)}<span className="cv2-fin-ext">↗</span></span>
-                              </a>
-                            )
-                          ))}
-                        </div>
-                      )}
-                      {/* Invoices / Payments (folded in from the old Financials card;
-                          estimates are covered by the live QBO block above). */}
-                      <div className="cv2-fin-embed">
-                        <div className="cv2-fin-tabs">
-                          {[['invoices', 'Invoices', qboInvoices.length], ['payments', 'Payments', qboPayments.length]].map(([id, lbl, n]) => (
-                            <button key={id} className={`cv2-fin-tab${finTab === id ? ' active' : ''}`} onClick={() => setFinTab(id)}>{lbl}<span>{n}</span></button>
-                          ))}
-                        </div>
-                        <div className="cv2-fin-list">
-                          {finTab === 'invoices' && (qboInvoices.length ? qboInvoices.map(r => (
-                            <a className={`cv2-fin-row cv2-fin-link${r.customerMatch === false ? ' cv2-fin-suspect' : ''}`} key={r.qboId}
-                              href={qboLink('Invoice', r.qboId)} target="_blank" rel="noreferrer"
-                              title={r.customerMatch === false
-                                ? `This QuickBooks invoice belongs to "${r.customer}", not this project — check the invoice number on the record`
-                                : 'Open this invoice in QuickBooks Online'}>
-                              <span className="cv2-fin-main">
-                                #{r.docNumber || r.qboId} · {fmtIsoShort(r.date)}
-                                {r.customerMatch === false
-                                  ? <span className="cv2-fin-warn">⚠ {r.customer}</span>
-                                  : r.balance > 0
-                                    ? <span className="cv2-fin-tag due">{fmtMoneyFull(r.balance)} due</span>
-                                    : <span className="cv2-fin-tag paid">paid</span>}
-                              </span>
-                              <span className="cv2-fin-amt">{fmtMoneyFull(r.total)}<span className="cv2-fin-ext">↗</span></span>
-                            </a>
-                          )) : <div className="cv2-fin-empty">{qboFin ? 'No invoices in QuickBooks' : 'No invoice linked to this project'}</div>)}
-                          {finTab === 'payments' && (qboPayments.length ? qboPayments.map(r => (
-                            <a className="cv2-fin-row cv2-fin-link" key={r.qboId}
-                              href={qboLink('Payment', r.qboId)} target="_blank" rel="noreferrer"
-                              title="Open this payment in QuickBooks Online">
-                              <span className="cv2-fin-main">
-                                {fmtIsoShort(r.date)} · {r.method || 'Payment'}{r.reference ? ` · ${r.reference}` : ''}
-                                {/* A payment can settle several invoices at once; show the
-                                    whole cheque only when it exceeded this project's share. */}
-                                {r.paymentTotal > r.amount && <span className="cv2-fin-tag">of {fmtMoneyFull(r.paymentTotal)}</span>}
-                              </span>
-                              <span className="cv2-fin-amt">{fmtMoneyFull(r.amount)}<span className="cv2-fin-ext">↗</span></span>
-                            </a>
-                          )) : <div className="cv2-fin-empty">{qboInvoices.length ? 'No payments received yet' : 'No invoice linked to this project'}</div>)}
-                        </div>
-                        {(qboInvoices.length > 0 || qboPayments.length > 0) && (
-                          <div className="cv2-fin-src">live from QuickBooks</div>
-                        )}
-                      </div>
+                <div className="cv2-cols cv2-cols-even">
+                  {/* contact */}
+                  <div className="cv2-card">
+                    <div className="cv2-card-head"><span>Contact</span></div>
+                    <div className="cv2-contact">
+                      {f.Address_Block_Billing && <div className="cv2-contact-row"><span className="cv2-ic">⌖</span><span style={{ whiteSpace: 'pre-wrap' }}>{f.Address_Block_Billing.replace(/\r/g, '\n')}</span></div>}
+                      {f['rcd_cntct_INADR__email::zz__Address__ct'] && <div className="cv2-contact-row"><span className="cv2-ic">✉</span><a href={`mailto:${f['rcd_cntct_INADR__email::zz__Address__ct']}`}>{f['rcd_cntct_INADR__email::zz__Address__ct']}</a></div>}
+                      {f['rcd_cntct_PHONE__work::Number'] && <div className="cv2-contact-row"><span className="cv2-ic">✆</span><span>{f['rcd_cntct_PHONE__work::Number']}</span></div>}
+                      {f['rcd_cntct_PHONE__mobile::Number'] && <div className="cv2-contact-row"><span className="cv2-ic">▢</span><span>{f['rcd_cntct_PHONE__mobile::Number']}</span></div>}
                     </div>
                   </div>
 
-                  <div className="cv2-col-rail">
-                    {/* contact */}
-                    <div className="cv2-card">
-                      <div className="cv2-card-head"><span>Contact</span></div>
-                      <div className="cv2-contact">
-                        {f.Address_Block_Billing && <div className="cv2-contact-row"><span className="cv2-ic">⌖</span><span style={{ whiteSpace: 'pre-wrap' }}>{f.Address_Block_Billing.replace(/\r/g, '\n')}</span></div>}
-                        {f['rcd_cntct_INADR__email::zz__Address__ct'] && <div className="cv2-contact-row"><span className="cv2-ic">✉</span><a href={`mailto:${f['rcd_cntct_INADR__email::zz__Address__ct']}`}>{f['rcd_cntct_INADR__email::zz__Address__ct']}</a></div>}
-                        {f['rcd_cntct_PHONE__work::Number'] && <div className="cv2-contact-row"><span className="cv2-ic">✆</span><span>{f['rcd_cntct_PHONE__work::Number']}</span></div>}
-                        {f['rcd_cntct_PHONE__mobile::Number'] && <div className="cv2-contact-row"><span className="cv2-ic">▢</span><span>{f['rcd_cntct_PHONE__mobile::Number']}</span></div>}
+                  {/* team */}
+                  <div className="cv2-card">
+                    <div className="cv2-card-head"><span>Team</span></div>
+                    <div className="cv2-team">
+                      <div className="cv2-team-row">
+                        <Avatar name={val('Lead Builder')} lead />
+                        <div className="cv2-team-pick"><label>Lead builder</label><InlineSelect value={val('Lead Builder')} options={builderOptions} onChange={v => stage('Lead Builder', v)} /></div>
                       </div>
-                    </div>
-
-                    {/* team */}
-                    <div className="cv2-card">
-                      <div className="cv2-card-head"><span>Team</span></div>
-                      <div className="cv2-team">
-                        <div className="cv2-team-row">
-                          <Avatar name={val('Lead Builder')} lead />
-                          <div className="cv2-team-pick"><label>Lead builder</label><InlineSelect value={val('Lead Builder')} options={builderOptions} onChange={v => stage('Lead Builder', v)} /></div>
+                      {['Builder1', 'Builder2', 'Builder3'].map((bk, i) => (
+                        <div className="cv2-team-row" key={bk}>
+                          <Avatar name={val(bk)} />
+                          <div className="cv2-team-pick"><label>Builder {i + 1}</label><InlineSelect value={val(bk)} options={builderOptions} onChange={v => stage(bk, v)} /></div>
                         </div>
-                        {['Builder1', 'Builder2', 'Builder3'].map((bk, i) => (
-                          <div className="cv2-team-row" key={bk}>
-                            <Avatar name={val(bk)} />
-                            <div className="cv2-team-pick"><label>Builder {i + 1}</label><InlineSelect value={val(bk)} options={builderOptions} onChange={v => stage(bk, v)} /></div>
-                          </div>
-                        ))}
-                      </div>
+                      ))}
                     </div>
                   </div>
                 </div>
-              </div>
+                </div>
 
               {allPhasesDone && !(status || '').toLowerCase().includes('complet') && (
                 <div className="cv2-suggest">

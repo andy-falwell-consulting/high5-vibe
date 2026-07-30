@@ -60,7 +60,7 @@
 .cv2-main::-webkit-scrollbar-thumb { background: var(--cv2-border-2); border-radius: 3px; }
 .cv2-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--cv2-text-4); }
 .cv2-empty-icon { font-size: 58px; opacity: 0.3; }
-.cv2-canvas { padding: 16px 24px 32px; max-width: 1080px; width: 100%; margin: 0 auto; box-sizing: border-box; }
+.cv2-canvas { padding: 16px 24px 32px; max-width: 1440px; width: 100%; margin: 0 auto; box-sizing: border-box; }
 
 .cv2-crumb { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--cv2-text); padding: 4px 2px 14px; }
 .cv2-crumb-dim { color: var(--cv2-text-3); }
@@ -134,8 +134,10 @@
 .cv2-top-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
 @media (max-width: 700px) { .cv2-top-row { grid-template-columns: 1fr; } .cv2-kpis { grid-template-columns: repeat(2, 1fr); } }
 .cv2-cols { display: grid; grid-template-columns: 1.55fr 1fr; gap: 12px; align-items: start; }
-@media (max-width: 920px) { .cv2-cols { grid-template-columns: 1fr; } }
-.cv2-col-main, .cv2-col-rail { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+/* equal halves — used by the contact/team row at the foot of the record */
+.cv2-cols-even { grid-template-columns: 1fr 1fr; }
+.cv2-cols-even > .cv2-card { min-width: 0; }
+@media (max-width: 920px) { .cv2-cols, .cv2-cols-even { grid-template-columns: 1fr; } }
 
 .cv2-card { background: var(--cv2-surface); border: 1px solid var(--cv2-border); border-radius: 12px; padding: 14px 16px; }
 .cv2-card-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
