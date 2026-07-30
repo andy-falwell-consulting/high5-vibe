@@ -1,3 +1,4 @@
+import { qboLink } from '../config/qboLinks';
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { updateRecord } from '../api/filemaker';
 import './CreateInQBO.css';
@@ -149,7 +150,7 @@ export default function CreateInQBO({ type = 'estimate', env = 'production', dra
     <>
       {existingId ? (
         <a className="ciq-trigger ciq-trigger-linked" target="_blank" rel="noreferrer"
-          href={`https://app.qbo.intuit.com/app/${type === 'invoice' ? 'invoice' : 'estimate'}?txnId=${encodeURIComponent(existingId)}`}
+          href={qboLink(type === 'invoice' ? 'Invoice' : 'Estimate', existingId)}
           title="Open in QuickBooks Online">✓ In QBO #{existingId} ↗</a>
       ) : (
         <button className="ciq-trigger" onClick={openPanel}>{label || `Create QBO ${typeLabel}`}</button>

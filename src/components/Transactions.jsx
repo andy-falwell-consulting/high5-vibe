@@ -1,3 +1,4 @@
+import { qboLink } from '../config/qboLinks';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { BRAND, UI } from '../config/brandColors'
 import ListToolbar, { useListControls } from './ListControls';
@@ -16,7 +17,6 @@ const TYPE_META = {
 const TYPE_ORDER = ['Invoice', 'Estimate', 'SalesReceipt', 'CreditMemo'];
 
 // QBO web-app deep-link path per transaction type (…/app/<path>?txnId=<id>).
-const QBO_APP_PATH = { Invoice: 'invoice', Estimate: 'estimate', CreditMemo: 'creditmemo', SalesReceipt: 'salesreceipt' };
 
 const money = v => `$${Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const parseDate = v => { if (!v) return 0; const [y, m, d] = String(v).split('-'); return new Date(`${y}-${m}-${d}T00:00:00`).getTime() || 0; };
@@ -192,7 +192,7 @@ export default function Transactions({ onRecordSelect } = {}) {
                 </div>
               </div>
               <div className="txn-detail-actions">
-                <a className="txn-pdf-btn" href={`https://app.qbo.intuit.com/app/${QBO_APP_PATH[d.type] || 'invoice'}?txnId=${encodeURIComponent(d.id)}`}
+                <a className="txn-pdf-btn" href={qboLink(d.type, d.id)}
                   target="_blank" rel="noreferrer" title="Open this transaction in QuickBooks Online">Open in QBO ↗</a>
                 <button className="txn-pdf-btn" onClick={() => viewPdf(d)} disabled={pdfBusy}>{pdfBusy ? 'Loading…' : '↧ PDF'}</button>
               </div>

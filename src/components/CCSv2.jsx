@@ -7,6 +7,7 @@ import { useNaFlags } from '../hooks/useNaFlags';
 import { RCD_LAYOUT, RCD_CACHE_VERSION, RCD_FIND_QUERY, RCD_SORT } from '../config/ccsCache';
 import { getRecord, prefetchRecord, updateRecord, patchCachedRecord, invalidateRecord } from '../api/filemaker';
 import { getCurrentEnv } from '../config/fmpEnvironments';
+import { qboLink } from '../config/qboLinks';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
 import AttachmentsPanel from './AttachmentsPanel';
 import { listCcsAttachments, uploadCcsAttachment, deleteCcsAttachment, ccsAttachmentUrl } from '../api/ccsAttachments';
@@ -135,8 +136,10 @@ const postJobValues = raw => String(raw || '').split(/[\r\n]+/).map(s => s.trim(
 
 
 const num = v => { const n = Number(v); return isNaN(n) ? 0 : n; };
-const fmtMoney = v => { const n = num(v); return n ? `$${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : '—'; };
 const fmtMoneyFull = v => `$${num(v).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+// KPI variant: distinguishes "nothing linked" (null → em dash) from a real
+// zero. A $0 balance means paid in full, which fmtMoney would hide as '—'.
+const kpiMoney = v => (v == null ? '—' : `$${num(v).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`);
 
 const parseFmDate = v => {
   if (!v) return null;
@@ -150,9 +153,14 @@ const fmtDate = v => {
   const dt = parseFmDate(v);
   return dt ? dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : (v || '—');
 };
-const fmtDateShort = v => {
-  const dt = parseFmDate(v);
-  return dt ? dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
+// QBO returns ISO dates (2026-08-07), not FileMaker's MM/DD/YYYY. Parsed as
+// local parts rather than `new Date(iso)` — that would treat the value as UTC
+// and can shift the date back a day for anyone west of Greenwich.
+const fmtIsoShort = v => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || ''));
+  if (!m) return '—';
+  const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 const daysUntil = v => {
   const dt = parseFmDate(v);
@@ -240,6 +248,10 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   // Live QBO estimate(s) for the selected project — resolved from its D# via
   // /api/ccs-estimate (null = not loaded/none; array = fetched).
   const [qboEst, setQboEst]     = useState(null);
+  const [qboFin, setQboFin]     = useState(null); // { estimated, invoiced, received, balanceDue } | null
+  const [qboInvoices, setQboInvoices] = useState([]);
+  const [qboPayments, setQboPayments] = useState([]);
+  const [qboMismatch, setQboMismatch] = useState(null); // { estimates, invoices } counts
   const [woBusy, setWoBusy]     = useState(null); // 'attach' | 'download' | null
   const [woStage, setWoStage]   = useState(null);
   const [woError, setWoError]   = useState(null);
@@ -334,17 +346,24 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   }, [eventUrgent, eventCritical]);
 
 
-  // Financial roll-ups from portals
-  const portals = selected?.portalData || {};
-  const estimates = portals['Portal__Estimates 2'] || [];
-  const invoices  = portals['Portal__Invoices']    || [];
-  const payments  = portals['Portal__Payments']    || [];
-  const estTotal  = estimates.reduce((a, r) => a + num(r['cntct_ESTMT::zz__Total__xn']), 0);
-  const invTotal  = invoices.reduce((a, r) => a + num(r['cntct_INVO::zz__Total__xn']), 0);
-  const balanceDue = invoices.reduce((a, r) => a + num(r['cntct_INVO::zz__Balance_Due__cn']), 0);
-  const paid      = payments.reduce((a, r) => a + num(r['cntct_PMT::Amount']), 0);
-  const received  = paid > 0 ? paid : Math.max(0, invTotal - balanceDue);
-  const estValue  = estTotal || invTotal;
+  // Financial roll-ups.
+  //
+  // These come from QuickBooks, resolved live from the estimate/invoice
+  // references stored on the record — NOT from the FileMaker portals below.
+  // Those portals (`Portal__Invoices`, `Portal__Payments`) are filtered by
+  // GLOBAL fields, which are session state a Data API request never receives:
+  // over the API they return hollow rows (real row ids, every field blank) and
+  // no payments at all, which is why these tiles read '—' on every record.
+  // They're also contact-scoped, so even working they'd show every invoice for
+  // the client rather than this project's. See api/ccs-estimate.js.
+  //
+  // null (not 0) means "nothing linked" → the tile shows an em dash instead of
+  // a confident $0.00.
+  const estValue   = qboFin ? qboFin.estimated  : null;
+  const received   = qboFin ? qboFin.received   : null;
+  const balanceDue = qboFin ? qboFin.balanceDue : null;
+  const finLive    = !!qboFin && (estValue != null || received != null || balanceDue != null);
+  const mismatchCount = (qboMismatch?.estimates || 0) + (qboMismatch?.invoices || 0);
 
   // ── Selection / nav / cache sync ──
   async function handleSelect(r) {
@@ -357,11 +376,20 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
     getRecord(LAYOUT, r.recordId).then(detail => {
       setSelected(prev => prev?.recordId === r.recordId ? detail.response.data[0] : prev);
     }).catch(() => {});
-    // Live QBO estimate lookup (via the project's D#). No-ops on localhost
-    // (no serverless functions); leaves qboEst null so nothing renders.
+    // Live QBO financials (estimates + invoices, via the project's stored refs).
+    // No-ops on localhost (no serverless functions); leaves both null so the
+    // KPI tiles fall back to em dashes rather than showing a wrong number.
+    setQboFin(null); setQboInvoices([]); setQboPayments([]); setQboMismatch(null);
     fetch(`/api/ccs-estimate?db=${encodeURIComponent(getCurrentEnv().db)}&recordId=${r.recordId}`)
       .then(res => res.ok ? res.json() : null)
-      .then(j => { if (j) setQboEst(prev => (selectedRef.current === r.recordId ? (j.estimates || []) : prev)); })
+      .then(j => {
+        if (!j || selectedRef.current !== r.recordId) return;
+        setQboEst(j.estimates || []);
+        setQboFin(j.totals || null);
+        setQboInvoices(j.invoices || []);
+        setQboPayments(j.payments || []);
+        setQboMismatch(j.mismatched || null);
+      })
       .catch(() => {});
   }
 
@@ -551,15 +579,40 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
 
               {/* KPIs */}
               <div className="cv2-kpis">
-                <div className="cv2-kpi"><div className="cv2-kpi-label">Estimated value</div><div className="cv2-kpi-num">{fmtMoney(estValue)}</div></div>
-                <div className="cv2-kpi"><div className="cv2-kpi-label">Received</div><div className="cv2-kpi-num" style={{ color: received ? '#0f6e56' : 'inherit' }}>{fmtMoney(received)}</div></div>
-                <div className="cv2-kpi"><div className="cv2-kpi-label">Balance due</div><div className="cv2-kpi-num" style={{ color: balanceDue ? '#854f0b' : 'inherit' }}>{fmtMoney(balanceDue)}</div></div>
+                <div className="cv2-kpi">
+                  <div className="cv2-kpi-label">Estimated value</div>
+                  <div className="cv2-kpi-num">{kpiMoney(estValue)}</div>
+                  {finLive && <div className="cv2-kpi-sub">live from QuickBooks</div>}
+                </div>
+                <div className="cv2-kpi">
+                  <div className="cv2-kpi-label">Received</div>
+                  <div className="cv2-kpi-num" style={{ color: received ? '#0f6e56' : 'inherit' }}>{kpiMoney(received)}</div>
+                  {finLive && <div className="cv2-kpi-sub">live from QuickBooks</div>}
+                </div>
+                <div className="cv2-kpi">
+                  <div className="cv2-kpi-label">Balance due</div>
+                  <div className="cv2-kpi-num" style={{ color: balanceDue ? '#854f0b' : 'inherit' }}>{kpiMoney(balanceDue)}</div>
+                  {finLive && balanceDue === 0 && <div className="cv2-kpi-sub">paid in full</div>}
+                  {finLive && balanceDue !== 0 && <div className="cv2-kpi-sub">live from QuickBooks</div>}
+                </div>
                 <div className="cv2-kpi">
                   <div className="cv2-kpi-label">Event date</div>
                   <div className="cv2-kpi-num">{fmtDate(val('rcd start date'))}</div>
                   {startDays != null && <div className={`cv2-kpi-sub${eventUrgent ? ' urg' : ''}`}>{startDays < 0 ? `${-startDays}d ago` : startDays === 0 ? 'today' : `in ${startDays}d`}</div>}
                 </div>
               </div>
+
+              {/* A stored reference resolving to another client's record is common
+                  enough (roughly 3 in 4 estimate links) that it needs saying out
+                  loud — those records are excluded from the totals above. */}
+              {mismatchCount > 0 && (
+                <div className="cv2-fin-mismatch">
+                  ⚠ {mismatchCount === 1
+                    ? 'A QuickBooks record linked to this project belongs to a different customer, so it is'
+                    : `${mismatchCount} QuickBooks records linked to this project belong to a different customer, so they are`} excluded
+                  from the figures above. Check the estimate and invoice numbers on this record.
+                </div>
+              )}
 
               {/* BODY: full-width phases → details → contact/financials/contract/team cluster */}
               <div className="cv2-body">
@@ -703,15 +756,26 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                         <div className="cv2-qboest">
                           <div className="cv2-qboest-head">QuickBooks estimate{qboEst.length > 1 ? 's' : ''} · live</div>
                           {qboEst.map(e => (
-                            <div className="cv2-qboest-row" key={e.docNumber}>
-                              <span className="cv2-qboest-doc">{e.docNumber}</span>
-                              {e.missing
-                                ? <span className="cv2-qboest-missing">not found in QBO</span>
-                                : <>
-                                    <span className={`cv2-qboest-status ${String(e.status || '').toLowerCase()}`}>{e.status || '—'}</span>
-                                    <span className="cv2-qboest-total">{fmtMoneyFull(e.total)}</span>
-                                  </>}
-                            </div>
+                            // A missing estimate has no QBO id, so it stays a plain
+                            // row — there's nothing to open.
+                            e.missing ? (
+                              <div className="cv2-qboest-row" key={e.docNumber}>
+                                <span className="cv2-qboest-doc">{e.docNumber}</span>
+                                <span className="cv2-qboest-missing">not found in QBO</span>
+                              </div>
+                            ) : (
+                              <a className={`cv2-qboest-row cv2-fin-link${e.customerMatch === false ? ' cv2-fin-suspect' : ''}`} key={e.docNumber}
+                                href={qboLink('Estimate', e.qboId)} target="_blank" rel="noreferrer"
+                                title={e.customerMatch === false
+                                  ? `This QuickBooks estimate belongs to "${e.customer}", not this project — check the estimate number on the record`
+                                  : 'Open this estimate in QuickBooks Online'}>
+                                <span className="cv2-qboest-doc">{e.docNumber}</span>
+                                {e.customerMatch === false
+                                  ? <span className="cv2-fin-warn">⚠ {e.customer}</span>
+                                  : <span className={`cv2-qboest-status ${String(e.status || '').toLowerCase()}`}>{e.status || '—'}</span>}
+                                <span className="cv2-qboest-total">{fmtMoneyFull(e.total)}<span className="cv2-fin-ext">↗</span></span>
+                              </a>
+                            )
                           ))}
                         </div>
                       )}
@@ -719,18 +783,45 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                           estimates are covered by the live QBO block above). */}
                       <div className="cv2-fin-embed">
                         <div className="cv2-fin-tabs">
-                          {[['invoices', 'Invoices', invoices.length], ['payments', 'Payments', payments.length]].map(([id, lbl, n]) => (
+                          {[['invoices', 'Invoices', qboInvoices.length], ['payments', 'Payments', qboPayments.length]].map(([id, lbl, n]) => (
                             <button key={id} className={`cv2-fin-tab${finTab === id ? ' active' : ''}`} onClick={() => setFinTab(id)}>{lbl}<span>{n}</span></button>
                           ))}
                         </div>
                         <div className="cv2-fin-list">
-                          {finTab === 'invoices' && (invoices.length ? invoices.map((r, i) => (
-                            <div className="cv2-fin-row" key={i}><span className="cv2-fin-main">#{r['cntct_INVO::QuickBooks_Reference_Number'] || '—'} · {fmtDateShort(r['cntct_INVO::Date'])}</span><span className="cv2-fin-amt">{fmtMoneyFull(r['cntct_INVO::zz__Total__xn'])}</span></div>
-                          )) : <div className="cv2-fin-empty">No invoices</div>)}
-                          {finTab === 'payments' && (payments.length ? payments.map((r, i) => (
-                            <div className="cv2-fin-row" key={i}><span className="cv2-fin-main">{fmtDateShort(r['cntct_PMT::Date'])} · {r['cntct_PMT::Method'] || '—'}</span><span className="cv2-fin-amt">{fmtMoneyFull(r['cntct_PMT::Amount'])}</span></div>
-                          )) : <div className="cv2-fin-empty">No payments</div>)}
+                          {finTab === 'invoices' && (qboInvoices.length ? qboInvoices.map(r => (
+                            <a className={`cv2-fin-row cv2-fin-link${r.customerMatch === false ? ' cv2-fin-suspect' : ''}`} key={r.qboId}
+                              href={qboLink('Invoice', r.qboId)} target="_blank" rel="noreferrer"
+                              title={r.customerMatch === false
+                                ? `This QuickBooks invoice belongs to "${r.customer}", not this project — check the invoice number on the record`
+                                : 'Open this invoice in QuickBooks Online'}>
+                              <span className="cv2-fin-main">
+                                #{r.docNumber || r.qboId} · {fmtIsoShort(r.date)}
+                                {r.customerMatch === false
+                                  ? <span className="cv2-fin-warn">⚠ {r.customer}</span>
+                                  : r.balance > 0
+                                    ? <span className="cv2-fin-tag due">{fmtMoneyFull(r.balance)} due</span>
+                                    : <span className="cv2-fin-tag paid">paid</span>}
+                              </span>
+                              <span className="cv2-fin-amt">{fmtMoneyFull(r.total)}<span className="cv2-fin-ext">↗</span></span>
+                            </a>
+                          )) : <div className="cv2-fin-empty">{qboFin ? 'No invoices in QuickBooks' : 'No invoice linked to this project'}</div>)}
+                          {finTab === 'payments' && (qboPayments.length ? qboPayments.map(r => (
+                            <a className="cv2-fin-row cv2-fin-link" key={r.qboId}
+                              href={qboLink('Payment', r.qboId)} target="_blank" rel="noreferrer"
+                              title="Open this payment in QuickBooks Online">
+                              <span className="cv2-fin-main">
+                                {fmtIsoShort(r.date)} · {r.method || 'Payment'}{r.reference ? ` · ${r.reference}` : ''}
+                                {/* A payment can settle several invoices at once; show the
+                                    whole cheque only when it exceeded this project's share. */}
+                                {r.paymentTotal > r.amount && <span className="cv2-fin-tag">of {fmtMoneyFull(r.paymentTotal)}</span>}
+                              </span>
+                              <span className="cv2-fin-amt">{fmtMoneyFull(r.amount)}<span className="cv2-fin-ext">↗</span></span>
+                            </a>
+                          )) : <div className="cv2-fin-empty">{qboInvoices.length ? 'No payments received yet' : 'No invoice linked to this project'}</div>)}
                         </div>
+                        {(qboInvoices.length > 0 || qboPayments.length > 0) && (
+                          <div className="cv2-fin-src">live from QuickBooks</div>
+                        )}
                       </div>
                     </div>
                   </div>
