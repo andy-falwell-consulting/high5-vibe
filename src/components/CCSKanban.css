@@ -499,6 +499,40 @@
   white-space: pre-wrap;
 }
 
+/* Notes can run long — cap the height and scroll rather than pushing the
+   timestamps off a laptop screen. */
+.kb-detail-notes {
+  font-size: 17px;
+  color: #94a3b8;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.kb-detail-notes::-webkit-scrollbar { width: 4px; }
+.kb-detail-notes::-webkit-scrollbar-thumb { background: #2a2f45; border-radius: 2px; }
+
+.kb-detail-cost {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.kb-detail-cost-num {
+  font-family: 'Oswald', sans-serif;
+  font-size: 27px;
+  font-weight: 600;
+  color: #e2e8f0;
+  line-height: 1;
+}
+
+.kb-detail-cost-src,
+.kb-detail-cost-loading,
+.kb-detail-cost-none {
+  font-size: 14px;
+  color: #79859a;
+}
+
 .kb-detail-timestamps {
   display: flex;
   gap: 24px;
@@ -560,6 +594,12 @@
 [data-theme="light"] .kb-detail-builder-role { color: #5e6b7c; }
 [data-theme="light"] .kb-detail-builder-name { color: #334155; }
 [data-theme="light"] .kb-detail-wo { color: #475569; }
+[data-theme="light"] .kb-detail-notes { color: #475569; }
+[data-theme="light"] .kb-detail-notes::-webkit-scrollbar-thumb { background: #cbd5e1; }
+[data-theme="light"] .kb-detail-cost-num { color: #0f172a; }
+[data-theme="light"] .kb-detail-cost-src,
+[data-theme="light"] .kb-detail-cost-loading,
+[data-theme="light"] .kb-detail-cost-none { color: #5e6b7c; }
 [data-theme="light"] .kb-detail-timestamps { border-top-color: #e2e8f0; }
 [data-theme="light"] .kb-detail-ts-label { color: #cbd5e1; }
 [data-theme="light"] .kb-detail-ts-val { color: #5e6b7c; }
