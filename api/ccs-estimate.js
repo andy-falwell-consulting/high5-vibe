@@ -143,6 +143,26 @@ function slimInvoice(i) {
   };
 }
 
+// Keep one raw QBO invoice per DocNumber, in the order QBO returned them.
+//
+// An invoice DocNumber can be reused too, though far less often than an
+// estimate D#: 23 of 18,365 numbers in the ledger, and only 2 of the 505
+// references actually on CCS records — both on Rutland High School, where
+// "64930" is that project's $37,995 invoice AND an unrelated $23.99 one for
+// "Susan Blake". Every hit used to flow through, so another customer's invoice
+// (and the payments hanging off it) appeared on this project's lists.
+//
+// Uses the same customer-first rule as the estimates via selectByDoc, so there
+// is one tested implementation rather than a second copy of the comparison.
+// Invoices resolved by Id carry no DocNumber, so they are keyed by id to stop
+// them colliding with each other on an empty string.
+export function collapseInvoices(raw, org) {
+  const keyed = raw.map(slimInvoice)
+    .map(i => (i.docNumber ? i : { ...i, docNumber: `id:${i.qboId}` }));
+  const keep = new Set(Object.values(selectByDoc(keyed, org)).map(i => i.qboId));
+  return raw.filter(i => keep.has(i.Id));
+}
+
 // Payments applied to a set of invoices.
 //
 // A QBO Payment can settle several invoices at once — often across different
@@ -210,7 +230,7 @@ async function refsFromRecord(db, recordId) {
 // silently added $695 of an unrelated invoice to the project's total.
 // Returns { raw, invoices } — `raw` keeps the QBO objects so linked payments
 // can be resolved from their LinkedTxn without a second round trip.
-async function fetchInvoices(refs) {
+async function fetchInvoices(refs, org) {
   if (!refs.length) return { raw: [], invoices: [] };
   const quote = list => list.map(v => `'${v}'`).join(',');
 
@@ -225,7 +245,8 @@ async function fetchInvoices(refs) {
       if (!raw.some(f => f.Id === inv.Id)) raw.push(inv);
     }
   }
-  return { raw, invoices: raw.map(slimInvoice) };
+  const kept = collapseInvoices(raw, org);
+  return { raw: kept, invoices: kept.map(slimInvoice) };
 }
 
 export default async function handler(req, res) {
@@ -253,7 +274,7 @@ export default async function handler(req, res) {
         // Preserve the record's D# order; flag any that didn't resolve in QBO.
         return docs.map(d => byDoc[d] || { docNumber: d, missing: true });
       })(),
-      fetchInvoices(invoiceRefs),
+      fetchInvoices(invoiceRefs, org),
     ]);
     const { raw: rawInvoices, invoices: rawSlimInvoices } = invResult;
     // Payments hang off the invoices, so this can only run once they're known.
