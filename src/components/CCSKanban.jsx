@@ -12,6 +12,7 @@ import { SortableContext, horizontalListSortingStrategy, verticalListSortingStra
 import { CSS } from '@dnd-kit/utilities'
 import { useAllRecords } from '../hooks/useAllRecords'
 import { updateRecord, bustCache, patchCachedRecord } from '../api/filemaker'
+import { getCurrentEnv } from '../config/fmpEnvironments'
 import { RCD_LAYOUT, RCD_CACHE_VERSION, RCD_FIND_QUERY, RCD_SORT } from '../config/ccsCache'
 import { ACTIVE_STAGES, statusColor, mergedStatus } from '../config/ccsStatus'
 import { useKanbanBoard } from '../hooks/useKanbanBoard'
@@ -104,8 +105,43 @@ function DraggableCard({ record, saving, onOpen, dimmed, onRemove }) {
   )
 }
 
+// Project cost is NOT a FileMaker field — RCD_New carries no populated money
+// field (the two that exist, cntct_PMT/cntct_INVO, resolve through globally
+// filtered portals and come back empty over the Data API). The figure lives in
+// QuickBooks, so it is fetched per card open from the same endpoint the
+// Workspace uses. null = no usable estimate linked, which is also what shows
+// when every linked estimate belongs to a different customer.
+// `loading` is DERIVED from whether the settled result belongs to the record
+// being shown, rather than stored and reset at the top of the effect. The
+// component instance is reused when the board opens a different card, so a
+// synchronous reset there would both trip react-hooks/set-state-in-effect and
+// cascade an extra render; comparing ids covers the switch for free.
+function useProjectCost(recordId) {
+  const [result, setResult] = useState({ id: null, value: null, failed: false })
+
+  useEffect(() => {
+    let alive = true
+    fetch(`/api/ccs-estimate?db=${encodeURIComponent(getCurrentEnv().db)}&recordId=${recordId}`,
+      { credentials: 'include' })
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then(j => { if (alive) setResult({ id: recordId, value: j?.totals?.estimated ?? null, failed: false }) })
+      .catch(() => { if (alive) setResult({ id: recordId, value: null, failed: true }) })
+    return () => { alive = false }
+  }, [recordId])
+
+  const loading = result.id !== recordId
+  return {
+    loading,
+    value: loading ? null : result.value,
+    failed: loading ? false : result.failed,
+  }
+}
+
+const kbMoney = v => `$${Number(v).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+
 function KanbanDetail({ record, onClose, currentStatus, onNavigateTo }) {
   const f = record.fieldData
+  const cost = useProjectCost(record.recordId)
 
   const builders = [
     f['Lead Builder'] && { label: 'Lead', name: f['Lead Builder'] },
@@ -126,7 +162,9 @@ function KanbanDetail({ record, onClose, currentStatus, onNavigateTo }) {
     <div className="kb-overlay" onClick={onClose}>
       <div className="kb-detail" onClick={e => e.stopPropagation()}>
         <button className="kb-detail-close" onClick={onClose} aria-label="Close">✕</button>
-        <button className="kb-detail-nav-btn" onClick={() => { onNavigateTo?.('ccs', record.recordId); onClose(); }}>Open in CCS ◈</button>
+        {/* 'ccs-v2' is the Workspace (phases, financials, QuickBooks); 'ccs' is
+            the older List view. See CHILD_TO_VIEW in ProjectsWorkspace.jsx. */}
+        <button className="kb-detail-nav-btn" onClick={() => { onNavigateTo?.('ccs-v2', record.recordId); onClose(); }}>Open in CCS ◈</button>
 
         <div className="kb-detail-org">{f.zz__Display_Organization__ct || '—'}</div>
         {f.zz__Display_Contact__ct && (
@@ -150,6 +188,20 @@ function KanbanDetail({ record, onClose, currentStatus, onNavigateTo }) {
           )}
         </div>
 
+        <div className="kb-detail-section">
+          <div className="kb-detail-label">Project cost</div>
+          <div className="kb-detail-cost">
+            {cost.loading
+              ? <span className="kb-detail-cost-loading">Checking QuickBooks…</span>
+              : cost.failed
+                ? <span className="kb-detail-cost-none">Couldn’t reach QuickBooks</span>
+                : cost.value == null
+                  ? <span className="kb-detail-cost-none">No linked estimate</span>
+                  : <><span className="kb-detail-cost-num">{kbMoney(cost.value)}</span>
+                      <span className="kb-detail-cost-src">live from QuickBooks</span></>}
+          </div>
+        </div>
+
         {builders.length > 0 && (
           <div className="kb-detail-section">
             <div className="kb-detail-label">Team</div>
@@ -168,6 +220,15 @@ function KanbanDetail({ record, onClose, currentStatus, onNavigateTo }) {
           <div className="kb-detail-section">
             <div className="kb-detail-label">Work Order Notes</div>
             <div className="kb-detail-wo">{f['Work Order']}</div>
+          </div>
+        )}
+
+        {f.Notes && (
+          <div className="kb-detail-section">
+            <div className="kb-detail-label">Notes</div>
+            {/* FileMaker stores hard returns as \r; pre-wrap keeps the author's
+                paragraph breaks instead of collapsing them into one block. */}
+            <div className="kb-detail-notes">{String(f.Notes).replace(/\r/g, '\n')}</div>
           </div>
         )}
 
