@@ -325,6 +325,16 @@
   opacity: 0.3;
 }
 
+/* Operations lead on the card face — one compact line so ownership is
+   scannable across the board without opening each card. */
+.kb-card-ops {
+  display: flex; align-items: center; gap: 5px;
+  margin-top: 6px;
+  font-size: 14px;
+  color: #94a3b8;
+}
+.kb-card-ops-ic { color: #79859a; font-size: 12px; }
+
 .kb-card-wo {
   font-size: 14px;
   color: #8b97aa;
@@ -512,6 +522,12 @@
 .kb-detail-notes::-webkit-scrollbar { width: 4px; }
 .kb-detail-notes::-webkit-scrollbar-thumb { background: #2a2f45; border-radius: 2px; }
 
+.kb-detail-ops {
+  font-size: 19px;
+  color: #e2e8f0;
+}
+.kb-detail-ops-none { font-size: 17px; color: #79859a; }
+
 .kb-detail-cost {
   display: flex;
   align-items: baseline;
@@ -594,6 +610,10 @@
 [data-theme="light"] .kb-detail-builder-role { color: #5e6b7c; }
 [data-theme="light"] .kb-detail-builder-name { color: #334155; }
 [data-theme="light"] .kb-detail-wo { color: #475569; }
+[data-theme="light"] .kb-detail-ops { color: #0f172a; }
+[data-theme="light"] .kb-detail-ops-none { color: #5e6b7c; }
+[data-theme="light"] .kb-card-ops { color: #475569; }
+[data-theme="light"] .kb-card-ops-ic { color: #94a3b8; }
 [data-theme="light"] .kb-detail-notes { color: #475569; }
 [data-theme="light"] .kb-detail-notes::-webkit-scrollbar-thumb { background: #cbd5e1; }
 [data-theme="light"] .kb-detail-cost-num { color: #0f172a; }

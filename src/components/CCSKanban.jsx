@@ -17,6 +17,7 @@ import { RCD_LAYOUT, RCD_CACHE_VERSION, RCD_FIND_QUERY, RCD_SORT } from '../conf
 import { ACTIVE_STAGES, statusColor, mergedStatus } from '../config/ccsStatus'
 import { useKanbanBoard } from '../hooks/useKanbanBoard'
 import { useKanbanOrder } from '../hooks/useKanbanOrder'
+import { useOpsLeads } from '../hooks/useOpsLeads'
 import './CCSKanban.css'
 
 const LAYOUT = RCD_LAYOUT
@@ -40,7 +41,7 @@ function matchesSearch(r, q) {
   return haystack.includes(q.toLowerCase())
 }
 
-function KanbanCardView({ record, saving, dimmed }) {
+function KanbanCardView({ record, saving, dimmed, opsLead }) {
   const f = record.fieldData
   const wo = f['Work Order']
   return (
@@ -60,6 +61,9 @@ function KanbanCardView({ record, saving, dimmed }) {
           <span className="kb-card-builder">{f['Lead Builder']}</span>
         )}
       </div>
+      {opsLead && (
+        <div className="kb-card-ops"><span className="kb-card-ops-ic">◇</span>{opsLead}</div>
+      )}
       {wo && (
         <div className="kb-card-wo">{wo.length > 70 ? wo.slice(0, 70) + '…' : wo}</div>
       )}
@@ -71,7 +75,7 @@ function KanbanCardView({ record, saving, dimmed }) {
 // card reorders between them (over.id resolves to that specific card's id,
 // not just "somewhere in this column") — see handleDragEnd for how that's
 // distinguished from a cross-lane move.
-function DraggableCard({ record, saving, onOpen, dimmed, onRemove }) {
+function DraggableCard({ record, saving, onOpen, dimmed, onRemove, leadFor }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: record.recordId,
   })
@@ -95,7 +99,7 @@ function DraggableCard({ record, saving, onOpen, dimmed, onRemove }) {
         onOpen(record)
       }}
     >
-      <KanbanCardView record={record} saving={saving} dimmed={dimmed} />
+      <KanbanCardView record={record} saving={saving} dimmed={dimmed} opsLead={leadFor?.(record.recordId)} />
       {onRemove && (
         <button className="kb-card-remove" title="Remove from board"
           onPointerDown={e => e.stopPropagation()}
@@ -139,7 +143,7 @@ function useProjectCost(recordId) {
 
 const kbMoney = v => `$${Number(v).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 
-function KanbanDetail({ record, onClose, currentStatus, onNavigateTo }) {
+function KanbanDetail({ record, onClose, currentStatus, onNavigateTo, opsLead }) {
   const f = record.fieldData
   const cost = useProjectCost(record.recordId)
 
@@ -186,6 +190,14 @@ function KanbanDetail({ record, onClose, currentStatus, onNavigateTo }) {
               {col.label}
             </span>
           )}
+        </div>
+
+        <div className="kb-detail-section">
+          <div className="kb-detail-label">Operations lead</div>
+          {/* Vibe-only field held in Redis (api/ops-lead.js), not FileMaker.
+              Read-only here to keep this panel a summary — it is edited on the
+              CCS record itself. */}
+          <div className="kb-detail-ops">{opsLead || <span className="kb-detail-ops-none">Unassigned</span>}</div>
         </div>
 
         <div className="kb-detail-section">
@@ -251,7 +263,7 @@ function KanbanDetail({ record, onClose, currentStatus, onNavigateTo }) {
   )
 }
 
-function KanbanColumn({ column, records, saving, onOpen, collapsed, onToggleCollapse, search, onRemove }) {
+function KanbanColumn({ column, records, saving, onOpen, collapsed, onToggleCollapse, search, onRemove, leadFor }) {
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: column.id })
   const { attributes, listeners, setNodeRef: setSortRef, transform, transition, isDragging: isColDragging } = useSortable({
     id: `col::${column.id}`,
@@ -302,6 +314,7 @@ function KanbanColumn({ column, records, saving, onOpen, collapsed, onToggleColl
                   onOpen={onOpen}
                   dimmed={search && !matches}
                   onRemove={onRemove}
+                  leadFor={leadFor}
                 />
               )
             })}
@@ -379,6 +392,7 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
   })
   const board = useKanbanBoard()
   const order = useKanbanOrder()
+  const opsLead = useOpsLeads(getCurrentEnv().db)
   const [showAdd, setShowAdd] = useState(false)
 
   // Stale-while-refreshing: show last complete fetch while a new one is in flight.
@@ -585,6 +599,7 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
           <div className="kb-board">
             {orderedColumns.map(col => (
               <KanbanColumn
+                leadFor={opsLead.leadFor}
                 key={col.id}
                 column={col}
                 records={byColumn[col.id] || []}
@@ -604,6 +619,7 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
       </DndContext>
       {detailRecord && (
         <KanbanDetail
+          opsLead={opsLead.leadFor(detailRecord.recordId)}
           record={detailRecord}
           currentStatus={localStatusRef.current[detailRecord.recordId] ?? mergedStatus(detailRecord.fieldData)}
           onClose={() => setDetailRecord(null)}

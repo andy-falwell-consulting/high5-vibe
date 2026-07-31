@@ -4,6 +4,7 @@ import { useValueLists } from '../hooks/useValueLists';
 import { MERGED_STATUSES, PIPELINE_STAGES, PIPELINE_SHORT, statusColor, mergedStatus } from '../config/ccsStatus';
 import { useKanbanBoard } from '../hooks/useKanbanBoard';
 import { useNaFlags } from '../hooks/useNaFlags';
+import { useOpsLeads } from '../hooks/useOpsLeads';
 import { RCD_LAYOUT, RCD_CACHE_VERSION, RCD_FIND_QUERY, RCD_SORT } from '../config/ccsCache';
 import { getRecord, prefetchRecord, updateRecord, patchCachedRecord, invalidateRecord } from '../api/filemaker';
 import { getCurrentEnv } from '../config/fmpEnvironments';
@@ -236,6 +237,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   const projectTypes = valueLists[VL_PROJECT_TYPE] ?? PROJECT_TYPES;
   // Builders get a leading blank so a wrongly-assigned builder can be cleared.
   const builderOptions = useMemo(() => ['', ...(valueLists[VL_BUILDER] ?? BUILDER_OPTIONS)], [valueLists]);
+  const opsLead = useOpsLeads(getCurrentEnv().db);
 
   const [selected, setSelected] = useState(null);
   const naFlags = useNaFlags(selected?.recordId);
@@ -882,6 +884,20 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                   <div className="cv2-card">
                     <div className="cv2-card-head"><span>Team</span></div>
                     <div className="cv2-team">
+                      {/* Operations Lead is a Vibe-only field held in Redis, not
+                          FileMaker — so it saves immediately on change rather
+                          than going through stage()/the record's Save button. */}
+                      <div className="cv2-team-row">
+                        <Avatar name={opsLead.leadFor(selected.recordId)} lead />
+                        <div className="cv2-team-pick">
+                          <label>Operations lead</label>
+                          <InlineSelect
+                            value={opsLead.leadFor(selected.recordId)}
+                            options={['', ...opsLead.roster]}
+                            onChange={v => opsLead.assign(selected.recordId, v)}
+                          />
+                        </div>
+                      </div>
                       <div className="cv2-team-row">
                         <Avatar name={val('Lead Builder')} lead />
                         <div className="cv2-team-pick"><label>Lead builder</label><InlineSelect value={val('Lead Builder')} options={builderOptions} onChange={v => stage('Lead Builder', v)} /></div>
