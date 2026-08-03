@@ -220,6 +220,22 @@
 .cv2-team-pick label { display: block; font-size: 13px; color: var(--cv2-text-4); text-transform: uppercase; letter-spacing: 0.04em; }
 
 /* ── Contact ───────────────────────────────────────────────────── */
+/* "Change"/"Assign" sits in the Contact card header. .cv2-card-head is already
+   flex + space-between (see above), so no layout override is needed here. */
+.cv2-contact-change {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid var(--cv2-border-2);
+  border-radius: 6px;
+  color: var(--cv2-text-2);
+  font-size: 14px;
+  font-family: inherit;
+  padding: 2px 9px;
+  cursor: pointer;
+}
+.cv2-contact-change:hover:not(:disabled) { color: var(--cv2-text); border-color: var(--cv2-text-3); }
+.cv2-contact-change:disabled { opacity: 0.5; cursor: default; }
+
 .cv2-contact { display: flex; flex-direction: column; gap: 9px; font-size: 17px; }
 .cv2-contact-row { display: flex; gap: 9px; color: var(--cv2-text); }
 .cv2-contact-row .cv2-ic { flex-shrink: 0; margin-top: 2px; }

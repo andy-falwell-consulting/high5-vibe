@@ -10,6 +10,7 @@ import { getCurrentEnv } from '../config/fmpEnvironments';
 import { qboLink } from '../config/qboLinks';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
 import AttachmentsPanel from './AttachmentsPanel';
+import ContactPicker from './ContactPicker';
 import { listCcsAttachments, uploadCcsAttachment, deleteCcsAttachment, ccsAttachmentUrl } from '../api/ccsAttachments';
 import { generateAndAttachWorkOrder, downloadWorkOrder } from '../api/ccsWorkOrder';
 import './CCSv2.css';
@@ -256,6 +257,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   const [woStage, setWoStage]   = useState(null);
   const [woError, setWoError]   = useState(null);
   const [attReload, setAttReload] = useState(0); // bump to make AttachmentsPanel re-list
+  const [contactPicker, setContactPicker] = useState(false);
   const isResizing = useRef(false);
   const selectedRef = useRef(null); // guards async estimate fetch against stale selections
 
@@ -416,6 +418,41 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   }, [navTarget, records]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDiscard = () => { setEdits({}); setSaveStatus(null); setSaveErrorMsg(null); };
+
+  // Reassign the CCS record's contact.
+  //
+  // Saved immediately rather than staged: _kft__Contact_ID drives a whole set
+  // of derived values — zz__Display_Contact__ct, the billing address block and
+  // the related phone/email all resolve through the contact relationship — so
+  // the record is re-read afterwards instead of patched locally from the id we
+  // sent. Staging it would leave the panel showing the old contact's details
+  // next to the new name until Save.
+  //
+  // NOTE: this sets the CONTACT only. A CCS record's Organization comes from a
+  // second link that is not writable over the Data API (nothing on any
+  // API-visible layout sets it, and _kmt__Contact_ID is auto-enter — it gets
+  // rebuilt from _kft__Contact_ID and discards anything written to it). So
+  // picking an organization-type contact here shows it as the Contact and
+  // leaves Organization blank. Fixing that needs a FileMaker-side script.
+  const handleContactChange = async (contactRecord) => {
+    setContactPicker(false);
+    const contactId = String(contactRecord?.fieldData?._kpt__Contact_ID || '').trim();
+    if (!selected || !contactId) return;
+    setSaving(true); setSaveStatus(null); setSaveErrorMsg(null);
+    try {
+      const res = await updateRecord(LAYOUT, selected.recordId, { _kft__Contact_ID: contactId });
+      if (res.messages?.[0]?.code !== '0') { setSaveStatus('error'); return; }
+      invalidateRecord(LAYOUT, selected.recordId);
+      const fresh = (await getRecord(LAYOUT, selected.recordId))?.response?.data?.[0];
+      if (fresh) {
+        setSelected(fresh);
+        patchCachedRecord(RCD_LAYOUT, RCD_CACHE_VERSION, selected.recordId, fresh.fieldData);
+      }
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus(null), 2500);
+    } catch (e) { setSaveStatus('error'); setSaveErrorMsg(e?.message || null); }
+    finally { setSaving(false); }
+  };
   const handleSave = async () => {
     if (!selected || !Object.keys(edits).length) return;
     setSaving(true); setSaveStatus(null); setSaveErrorMsg(null);
@@ -827,7 +864,12 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                 <div className="cv2-cols cv2-cols-even">
                   {/* contact */}
                   <div className="cv2-card">
-                    <div className="cv2-card-head"><span>Contact</span></div>
+                    <div className="cv2-card-head">
+                      <span>Contact</span>
+                      <button className="cv2-contact-change" onClick={() => setContactPicker(true)} disabled={saving}>
+                        {f.zz__Display_Contact__ct && f.zz__Display_Contact__ct !== '<unassigned>' ? 'Change' : 'Assign'}
+                      </button>
+                    </div>
                     <div className="cv2-contact">
                       {f.Address_Block_Billing && <div className="cv2-contact-row"><span className="cv2-ic">⌖</span><span style={{ whiteSpace: 'pre-wrap' }}>{f.Address_Block_Billing.replace(/\r/g, '\n')}</span></div>}
                       {f['rcd_cntct_INADR__email::zz__Address__ct'] && <div className="cv2-contact-row"><span className="cv2-ic">✉</span><a href={`mailto:${f['rcd_cntct_INADR__email::zz__Address__ct']}`}>{f['rcd_cntct_INADR__email::zz__Address__ct']}</a></div>}
@@ -882,6 +924,14 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
           </>
         )}
       </main>
+
+      {contactPicker && (
+        <ContactPicker
+          title="Assign a contact to this project"
+          onSelect={handleContactChange}
+          onClose={() => setContactPicker(false)}
+        />
+      )}
     </div>
   );
 }
