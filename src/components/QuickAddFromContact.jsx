@@ -4,6 +4,8 @@ import { RCD_LAYOUT, RCD_CACHE_VERSION } from '../config/ccsCache';
 import { copyProfileFields } from '../config/inspectionCopy';
 import { copyLines } from '../api/inspectionLines';
 import { markCarriedLines } from '../api/naFlags';
+import { autoAssignOpsLead } from '../api/opsLead';
+import { getCurrentEnv } from '../config/fmpEnvironments';
 import './QuickAddFromContact.css';
 
 // Shared "+ New" button for a contact: create a CCS project, Inspection, or
@@ -123,6 +125,14 @@ export default function QuickAddFromContact({ contact, onNavigateTo }) {
       const res = await createRecord(cfg.layout, fieldData);
       if (res.messages?.[0]?.code !== '0') throw new Error(res.messages?.[0]?.message || 'Create failed');
       const recordId = res.response?.recordId;
+      // Stamp the Operations Lead from the creator's own session. Vibe-only
+      // field (Redis, see api/ops-lead.js), so it can't ride along in
+      // fieldData — it's a second call, and a best-effort one: the project
+      // exists either way and the lead is editable on the record. The server
+      // decides the name and leaves it blank for anyone off the roster.
+      if (type === 'ccs' && recordId) {
+        await autoAssignOpsLead(getCurrentEnv().db, recordId).catch(() => {});
+      }
       // Copy the source's line items. This has to happen after the create —
       // portal writes need the new record to exist and carry its own
       // _kpt__Inspection_ID first (a copy onto a record without one fails
