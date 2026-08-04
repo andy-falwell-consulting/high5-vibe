@@ -557,6 +557,11 @@
 [data-theme="light"] .ct-unlink:hover { color: #fff; background: #ef4444; }
 .ct-kv { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-top: 1px solid #1a1d2e; font-size: 15px; }
 .ct-kv:first-of-type { border-top: none; }
+/* Separates the record's own fields from the portal-sourced contact methods
+   inside the single About card. Slightly stronger than the per-row rule so the
+   two groups read as distinct without needing a second header. */
+.ct-kv-split { margin-top: 11px; border-top: 1px solid #2a2f45; }
+
 .ct-kv-k { color: #8b97aa; flex-shrink: 0; }
 .ct-kv-v { color: #cbd5e1; text-align: right; min-width: 0; overflow-wrap: anywhere; }
 .ct-kv-v.mono { font-family: 'SF Mono', 'Fira Mono', monospace; color: #86efac; font-size: 14px; }
@@ -617,6 +622,7 @@
 [data-theme="light"] .ct-metric-v, [data-theme="light"] .ct-hero-name { color: #0f172a; }
 [data-theme="light"] .ct-metric-l, [data-theme="light"] .ct-kv-k, [data-theme="light"] .ct-card-title { color: #5e6b7c; }
 [data-theme="light"] .ct-kv { border-top-color: #f1f5f9; }
+[data-theme="light"] .ct-kv-split { border-top-color: #e2e8f0; }
 [data-theme="light"] .ct-kv-v { color: #334155; }
 [data-theme="light"] .ct-kv-v.mono { color: #15803d; }
 [data-theme="light"] .ct-tabs { border-bottom-color: #e2e8f0; }

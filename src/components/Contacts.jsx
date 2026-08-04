@@ -19,8 +19,6 @@ const CONTACT_CREATE_FIELDS = [
   { key: 'Name_Organization', label: 'Name / Organization', type: 'text', required: true },
   { key: 'Organization', label: 'Type', type: 'select', options: [{ value: '1', label: 'Organization' }, { value: '0', label: 'Individual' }], default: '1' },
   { key: 'Status', label: 'Status', type: 'select', options: ['Active', 'Inactive', 'Prospect'], default: 'Active' },
-  { key: 'Industry', label: 'Industry', type: 'text' },
-  { key: 'Source', label: 'Source', type: 'text' },
   { key: 'Notes', label: 'Notes', type: 'textarea', wide: true },
 ];
 
@@ -75,12 +73,13 @@ const hasClientAlert = fd => String(fd?.Client_Alert) === '1';
 
 const FIELD_LABELS = {
   Name_Organization: 'Name / Organization', Organization: 'Type', Title: 'Title', Status: 'Status',
-  Industry: 'Industry', Department: 'Department', Source: 'Source',
-  Spouse: 'Spouse', Birthdate: 'Birthdate',
   Client_Alert: 'Client alert', Keywords: 'Keywords', Notes: 'Notes',
 };
 
-const ABOUT_FIELDS = ['Name_Organization', 'Title', 'Organization', 'Status', 'Industry', 'Department', 'Source', 'Spouse', 'Birthdate'];
+// Industry, Department, Source, Spouse and Birthdate were dropped from the
+// About card on request — they are still stored in FileMaker and untouched by
+// the app, just no longer surfaced here.
+const ABOUT_FIELDS = ['Name_Organization', 'Title', 'Organization', 'Status'];
 const NOTE_FIELDS  = ['Client_Alert', 'Keywords', 'Notes'];
 
 // FileMaker portal occurrence names, keyed by our logical id.
@@ -565,8 +564,20 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
             {/* ── Body: rail + tabs ── */}
             <div className="ct-body">
               <div className="ct-rail">
+                {/* About and the contact methods are one card: same key/value
+                    rows, and splitting them meant two headers for what reads as
+                    a single block. The add buttons move into the shared header;
+                    a rule separates the record's own fields from the phone /
+                    email / address rows that come from portals. */}
                 <div className="ct-card ct-card-fields">
-                  <div className="ct-card-title">About</div>
+                  <div className="ct-card-title">
+                    About
+                    <span className="ct-card-add">
+                      <button onClick={() => setAddMethod('phone')} title="Add phone">＋ Phone</button>
+                      <button onClick={() => setAddMethod('email')} title="Add email or website">＋ Email/Web</button>
+                      <button onClick={() => setAddMethod('address')} title="Add address">＋ Address</button>
+                    </span>
+                  </div>
                   {ABOUT_FIELDS.map(fk => (
                     <div className="ct-kv" key={fk}>
                       <span className="ct-kv-k">{FIELD_LABELS[fk] || fk}</span>
@@ -576,26 +587,18 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
                   {f._kaf__qbo_id && (
                     <div className="ct-kv"><span className="ct-kv-k">QuickBooks id</span><span className="ct-kv-v mono">{f._kaf__qbo_id}</span></div>
                   )}
-                </div>
 
-                <div className="ct-card">
-                  <div className="ct-card-title">
-                    Contact
-                    <span className="ct-card-add">
-                      <button onClick={() => setAddMethod('phone')} title="Add phone">＋ Phone</button>
-                      <button onClick={() => setAddMethod('email')} title="Add email or website">＋ Email/Web</button>
-                      <button onClick={() => setAddMethod('address')} title="Add address">＋ Address</button>
-                    </span>
+                  <div className="ct-kv-split">
+                    {rowsOf(p, 'phone').map((r, i) => <div className="ct-kv" key={'p' + i}><span className="ct-kv-k">{r['cntct_PHONE::Type'] || 'Phone'}</span><span className="ct-kv-v mono">{r['cntct_PHONE::Number']}</span></div>)}
+                    {rowsOf(p, 'email').map((r, i) => <div className="ct-kv" key={'e' + i}><span className="ct-kv-k">{r['cntct_INADR::Type'] || 'Email'}</span><a className="ct-kv-v link" href={`mailto:${r['cntct_INADR::Address']}`}>{r['cntct_INADR::Address']}</a></div>)}
+                    {rowsOf(p, 'address').map((r, i) => (
+                      <div className="ct-kv" key={'a' + i}><span className="ct-kv-k">{r['cntct_ADDR::Type'] || 'Address'}</span>
+                        <span className="ct-kv-v">{[r['cntct_ADDR::Street'], [r['cntct_ADDR::City'], r['cntct_ADDR::State']].filter(Boolean).join(', '), r['cntct_ADDR::Zip']].filter(Boolean).join(' · ')}</span></div>
+                    ))}
+                    {rowsOf(p, 'phone').length === 0 && rowsOf(p, 'email').length === 0 && rowsOf(p, 'address').length === 0 && (
+                      <div className="ct-kv"><span className="ct-kv-v" style={{ color: '#64748b' }}>No contact methods yet</span></div>
+                    )}
                   </div>
-                  {rowsOf(p, 'phone').map((r, i) => <div className="ct-kv" key={'p' + i}><span className="ct-kv-k">{r['cntct_PHONE::Type'] || 'Phone'}</span><span className="ct-kv-v mono">{r['cntct_PHONE::Number']}</span></div>)}
-                  {rowsOf(p, 'email').map((r, i) => <div className="ct-kv" key={'e' + i}><span className="ct-kv-k">{r['cntct_INADR::Type'] || 'Email'}</span><a className="ct-kv-v link" href={`mailto:${r['cntct_INADR::Address']}`}>{r['cntct_INADR::Address']}</a></div>)}
-                  {rowsOf(p, 'address').map((r, i) => (
-                    <div className="ct-kv" key={'a' + i}><span className="ct-kv-k">{r['cntct_ADDR::Type'] || 'Address'}</span>
-                      <span className="ct-kv-v">{[r['cntct_ADDR::Street'], [r['cntct_ADDR::City'], r['cntct_ADDR::State']].filter(Boolean).join(', '), r['cntct_ADDR::Zip']].filter(Boolean).join(' · ')}</span></div>
-                  ))}
-                  {rowsOf(p, 'phone').length === 0 && rowsOf(p, 'email').length === 0 && rowsOf(p, 'address').length === 0 && (
-                    <div className="ct-kv"><span className="ct-kv-v" style={{ color: '#64748b' }}>No contact methods yet</span></div>
-                  )}
                 </div>
 
                 {hasClientAlert(f) && (
