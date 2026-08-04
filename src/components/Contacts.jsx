@@ -19,8 +19,6 @@ const CONTACT_CREATE_FIELDS = [
   { key: 'Name_Organization', label: 'Name / Organization', type: 'text', required: true },
   { key: 'Organization', label: 'Type', type: 'select', options: [{ value: '1', label: 'Organization' }, { value: '0', label: 'Individual' }], default: '1' },
   { key: 'Status', label: 'Status', type: 'select', options: ['Active', 'Inactive', 'Prospect'], default: 'Active' },
-  { key: 'Industry', label: 'Industry', type: 'text' },
-  { key: 'Source', label: 'Source', type: 'text' },
   { key: 'Notes', label: 'Notes', type: 'textarea', wide: true },
 ];
 
