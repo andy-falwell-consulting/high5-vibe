@@ -4,6 +4,7 @@ import { useValueLists } from '../hooks/useValueLists';
 import { MERGED_STATUSES, PIPELINE_STAGES, PIPELINE_SHORT, statusColor, mergedStatus } from '../config/ccsStatus';
 import { useKanbanBoard } from '../hooks/useKanbanBoard';
 import { useNaFlags } from '../hooks/useNaFlags';
+import { useCcsOrgs } from '../hooks/useCcsOrgs';
 import { useOpsLeads } from '../hooks/useOpsLeads';
 import { RCD_LAYOUT, RCD_CACHE_VERSION, RCD_FIND_QUERY, RCD_SORT } from '../config/ccsCache';
 import { getRecord, prefetchRecord, updateRecord, patchCachedRecord, invalidateRecord } from '../api/filemaker';
@@ -238,6 +239,19 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   const projectTypes = valueLists[VL_PROJECT_TYPE] ?? PROJECT_TYPES;
   // Builders get a leading blank so a wrongly-assigned builder can be cleared.
   const builderOptions = useMemo(() => ['', ...(valueLists[VL_BUILDER] ?? BUILDER_OPTIONS)], [valueLists]);
+
+  // Organization is a Vibe-only assignment held in Redis — FileMaker's own
+  // organization field is a calculation and cannot be written (see
+  // api/ccs-org.js). The Vibe value wins when set; otherwise FileMaker's own
+  // value still shows, so the ~4,500 records that already have one are
+  // untouched until somebody deliberately reassigns.
+  const ccsOrgs = useCcsOrgs(getCurrentEnv().db);
+  const { records: contactRecords } = useAllRecords('Contacts_New', { cacheVersion: 2 });
+  const contactsById = useMemo(() => {
+    const m = new Map();
+    for (const c of contactRecords) m.set(String(c.fieldData?._kpt__Contact_ID), c.fieldData);
+    return m;
+  }, [contactRecords]);
   const opsLead = useOpsLeads(getCurrentEnv().db);
 
   const [selected, setSelected] = useState(null);
@@ -261,6 +275,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   const [woError, setWoError]   = useState(null);
   const [attReload, setAttReload] = useState(0); // bump to make AttachmentsPanel re-list
   const [contactPicker, setContactPicker] = useState(false);
+  const [orgPicker, setOrgPicker] = useState(false);
   const isResizing = useRef(false);
   const selectedRef = useRef(null); // guards async estimate fetch against stale selections
 
@@ -508,7 +523,12 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
 
   const dirtyCount = Object.keys(edits).length;
   const sc = statusColor(merged);
-  const org = f.zz__Display_Organization__ct || '—';
+  // Vibe's assignment wins when present; otherwise FileMaker's calculated
+  // value still shows, so records that already have one are unaffected.
+  const vibeOrgId = selected ? ccsOrgs.orgIdFor(selected.recordId) : '';
+  const vibeOrgName = vibeOrgId ? (contactsById.get(String(vibeOrgId))?.Name_Organization || '') : '';
+  const org = vibeOrgName || f.zz__Display_Organization__ct || '—';
+  const orgIsFromVibe = !!vibeOrgName;
 
   return (
     <div className="cv2-root">
@@ -576,9 +596,20 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                 <div className="cv2-hero-top">
                   <div className="cv2-hero-id">
                     <div className="cv2-hero-type">{projectTypeSelected.join(' · ') || 'Project'}</div>
-                    <h1 className="cv2-hero-org">{org}</h1>
+                    <h1 className="cv2-hero-org">
+                      {org}
+                      <button className="cv2-pick-btn" onClick={() => setOrgPicker(true)} title="Assign this project to an organization">
+                        {orgIsFromVibe || f.zz__Display_Organization__ct ? 'Change' : 'Assign'}
+                      </button>
+                    </h1>
                     <div className="cv2-hero-contact">
-                      {f.zz__Display_Contact__ct && <><span className="cv2-ic">◉</span>{f.zz__Display_Contact__ct}</>}
+                      <span className="cv2-ic">◉</span>
+                      {f.zz__Display_Contact__ct && f.zz__Display_Contact__ct !== '<unassigned>'
+                        ? f.zz__Display_Contact__ct
+                        : <span className="cv2-hero-none">No contact</span>}
+                      <button className="cv2-pick-btn" onClick={() => setContactPicker(true)} title="Choose the contact for this project">
+                        {f.zz__Display_Contact__ct && f.zz__Display_Contact__ct !== '<unassigned>' ? 'Change' : 'Assign'}
+                      </button>
                     </div>
                   </div>
                   <select className="cv2-status" style={{ color: sc, borderColor: sc + '55', background: sc + '14' }}
@@ -949,9 +980,28 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
         )}
       </main>
 
+      {orgPicker && (
+        <ContactPicker
+          title="Assign this project to an organization"
+          filter={c => String(c.Organization) === '1'}
+          filterLabel="organizations"
+          onSelect={r => { ccsOrgs.assign(selected.recordId, r?.fieldData?._kpt__Contact_ID); setOrgPicker(false); }}
+          onClose={() => setOrgPicker(false)}
+        />
+      )}
+
+      {/* Scoped to the chosen organization's people — the whole point of the
+          two-step pick. Contacts carry no organization id, only the calculated
+          NAME, so the roster is joined on that. The picker's "search all"
+          escape hatch matters here: a brand-new organization has no staff yet
+          and the list would otherwise be a dead end. */}
       {contactPicker && (
         <ContactPicker
-          title="Assign a contact to this project"
+          title={org && org !== '—' ? `Contact at ${org}` : 'Assign a contact to this project'}
+          filter={org && org !== '—'
+            ? (c => String(c.Organization) === '0' && c.zz__Display_Organization__ct === org)
+            : undefined}
+          filterLabel={org && org !== '—' ? `at ${org}` : undefined}
           onSelect={handleContactChange}
           onClose={() => setContactPicker(false)}
         />

@@ -78,6 +78,24 @@
 .cv2-hero-type { font-size: 14px; color: var(--cv2-text-3); text-transform: uppercase; letter-spacing: 0.06em; }
 .cv2-hero-org { margin: 3px 0 4px; font-family: 'Oswald', sans-serif; font-size: 31px; font-weight: 600; color: var(--cv2-text); line-height: 1.15; }
 .cv2-hero-contact { font-size: 17px; color: var(--cv2-text-2); display: flex; align-items: center; gap: 6px; }
+/* Inline Assign/Change beside the org and contact in the hero. Quiet, and
+   nudged down a touch so it sits on the text baseline rather than the cap. */
+.cv2-pick-btn {
+  margin-left: 10px;
+  vertical-align: middle;
+  padding: 2px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--cv2-border-2);
+  background: transparent;
+  color: var(--cv2-text-2);
+  font-size: 14px;
+  font-family: inherit;
+  font-weight: 400;
+  cursor: pointer;
+}
+.cv2-pick-btn:hover { color: var(--cv2-text); border-color: var(--cv2-text-3); }
+.cv2-hero-none { color: var(--cv2-text-4); font-style: italic; }
+
 .cv2-ic { color: var(--cv2-text-4); font-size: 15px; }
 .cv2-status { flex-shrink: 0; border: 1px solid; border-radius: 20px; padding: 5px 12px; font-size: 15px; font-weight: 600; outline: none; cursor: pointer; font-family: inherit; appearance: none; }
 

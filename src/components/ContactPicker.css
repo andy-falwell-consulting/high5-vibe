@@ -37,6 +37,18 @@
 .cp-item-sub { font-size: 12px; color: #64748b; }
 .cp-empty { padding: 24px 18px; text-align: center; color: #64748b; font-size: 14px; }
 
+.cp-scope {
+  width: 100%; box-sizing: border-box;
+  padding: 7px 12px;
+  background: transparent;
+  border: none; border-top: 1px solid #1e2130;
+  color: #8b97aa; font-size: 14px; font-family: inherit;
+  text-align: left; cursor: pointer;
+}
+.cp-scope:hover { color: #cbd5e1; background: #1a1d2e; }
+[data-theme="light"] .cp-scope { border-top-color: #e2e8f0; color: #5e6b7c; }
+[data-theme="light"] .cp-scope:hover { color: #334155; background: #f8fafc; }
+
 .cp-foot { padding: 8px 18px; border-top: 1px solid #1e2130; font-size: 12px; color: #64748b; flex-shrink: 0; }
 
 /* Light theme */
