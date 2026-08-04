@@ -11,6 +11,7 @@ import { toLine, addLines, updateLine, deleteLine, copyLines } from '../api/insp
 import { fetchCarriedLines, markCarriedLines, clearCarriedLine } from '../api/naFlags';
 import { copyProfileFields } from '../config/inspectionCopy';
 import './Inspections.css';
+import DeleteRecordButton from './DeleteRecordButton'
 
 const LAYOUT = 'Inspections_New';
 const CACHE_VERSION = 1;
@@ -492,6 +493,14 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
                     {f['inspt_CNTCT__site::Site Number'] && <span className="insp-chip type">{f['inspt_CNTCT__site::Site Number']}</span>}
                   </div>
                 </div>
+              </div>
+              <div className="insp-topbar-actions">
+                <DeleteRecordButton
+                  layout={LAYOUT} cacheVersion={CACHE_VERSION}
+                  recordId={selected.recordId}
+                  name={f.Organization || f['inspt_CNTCT__site::Name_Organization']}
+                  onDeleted={() => setSelected(null)}
+                />
               </div>
             </div>
 

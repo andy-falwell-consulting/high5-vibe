@@ -14,6 +14,7 @@ import {
 } from '../api/estimateLines'
 import { BRAND, UI } from '../config/brandColors'
 import './Estimates.css'
+import DeleteRecordButton from './DeleteRecordButton'
 
 // FileMaker MM/DD/YYYY → QBO YYYY-MM-DD
 const toIsoDate = v => { if (!v) return undefined; const [m, d, y] = String(v).split(' ')[0].split('/'); return y ? `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}` : undefined }
@@ -396,6 +397,14 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
                       .catch(() => {})
                     setSelected(s => ({ ...s, fieldData: { ...s.fieldData, qbo_estimate_id: String(qboId) } }))
                   }}
+                />
+              </div>
+              <div className="est-topbar-actions">
+                <DeleteRecordButton
+                  layout={LAYOUT} cacheVersion={CACHE_VERSION}
+                  recordId={selected.recordId}
+                  name={f.Title || f.zz__Display_Contact__ct}
+                  onDeleted={() => setSelected(null)}
                 />
               </div>
             </div>

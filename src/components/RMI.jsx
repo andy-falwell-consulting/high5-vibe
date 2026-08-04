@@ -6,6 +6,7 @@ import ListToolbar, { useListControls, ListBody } from './ListControls'
 import RecordSaveBar from './RecordSaveBar'
 import RecordFormModal from './RecordFormModal'
 import './RMI.css'
+import DeleteRecordButton from './DeleteRecordButton'
 
 const LAYOUT = 'RMI_New'
 const CACHE_VERSION = 1
@@ -314,6 +315,14 @@ export default function RMI({ navTarget, onClearNav, onRecordSelect } = {}) {
                   {f.zz__Display_Contact__ct && <span className="rmi-chip muted">{f.zz__Display_Contact__ct}</span>}
                   {f._kpt__RMI_ID && <span className="rmi-chip id">#{f._kpt__RMI_ID}</span>}
                 </div>
+              </div>
+              <div className="rmi-topbar-actions">
+                <DeleteRecordButton
+                  layout={LAYOUT} cacheVersion={CACHE_VERSION}
+                  recordId={selected.recordId}
+                  name={orgName(f)}
+                  onDeleted={() => setSelected(null)}
+                />
               </div>
             </div>
 
