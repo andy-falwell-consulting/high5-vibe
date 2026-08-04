@@ -9,10 +9,11 @@ import './DeleteRecordButton.css';
 // trash and no undo, in the app or in FileMaker's API. Hence the typed
 // confirmation rather than a plain OK.
 //
-// What happens to related records (a contact's CCS projects, inspections,
-// estimates…) is decided by "Delete related records" on the FileMaker
-// relationship graph, which is not visible over the Data API. This component
-// cannot know or control it — deleting a parent may take its children with it.
+// This deletes exactly ONE record — there is deliberately no cascade logic here.
+// FileMaker may still remove children on its own side: "Delete related records"
+// on the relationship graph is not visible over the Data API, so the app can
+// neither see nor override it. The dialog says so rather than implying Vibe
+// does the cascading.
 //
 // After a successful delete it also tells /api/replica-delete, because the
 // Redis replica is populated by an incremental sync that only ever upserts
@@ -89,8 +90,9 @@ export default function DeleteRecordButton({
           <div className="drb-panel" role="dialog" aria-modal="true">
             <div className="drb-title">Delete {name ? <strong>{name}</strong> : 'this record'}?</div>
             <p className="drb-warn">
-              This permanently deletes the record in FileMaker. It cannot be undone,
-              and related records may be removed with it.
+              This permanently deletes this one record in FileMaker. It cannot be undone.
+              Related records are not deleted by Vibe, but FileMaker may remove them
+              if the relationship is set to cascade.
             </p>
             <label className="drb-label" htmlFor="drb-confirm">Type <strong>DELETE</strong> to confirm</label>
             <input
