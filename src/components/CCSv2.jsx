@@ -15,6 +15,7 @@ import ContactPicker from './ContactPicker';
 import { listCcsAttachments, uploadCcsAttachment, deleteCcsAttachment, ccsAttachmentUrl } from '../api/ccsAttachments';
 import { generateAndAttachWorkOrder, downloadWorkOrder } from '../api/ccsWorkOrder';
 import './CCSv2.css';
+import DeleteRecordButton from './DeleteRecordButton';
 
 const LAYOUT = RCD_LAYOUT;
 const CCS_ATT_API = { list: listCcsAttachments, upload: uploadCcsAttachment, remove: deleteCcsAttachment, freshUrl: ccsAttachmentUrl };
@@ -561,6 +562,13 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                 })()}
                 <button className="cv2-ghost-btn" onClick={() => onNavigateTo?.('ccs-kanban', selected.recordId)}>Board →</button>
                 <span className="cv2-crumb-id">#{f._kpt__RCD_ID || selected.recordId}</span>
+                <DeleteRecordButton
+                  layout={LAYOUT} cacheVersion={RCD_CACHE_VERSION}
+                  recordId={selected.recordId}
+                  name={org}
+                  replicaKey="projects"
+                  onDeleted={() => setSelected(null)}
+                />
               </div>
 
               {/* HERO */}

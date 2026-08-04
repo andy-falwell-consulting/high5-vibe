@@ -11,6 +11,7 @@ import ReminderModal from './ReminderModal';
 import QuickAddFromContact from './QuickAddFromContact';
 import { invoiceRowInfo } from './InvoicePane';
 import './Contacts.css';
+import DeleteRecordButton from './DeleteRecordButton';
 
 const LAYOUT = 'Contacts_New';
 const CACHE_VERSION = 2;
@@ -549,6 +550,12 @@ export default function Contacts({ navTarget, onClearNav, onNavigateTo, onRecord
                 <button className="ct-btn-email" onClick={() => setComposeOpen(true)}>✉ Email</button>
                 <button className="ct-btn-email" onClick={() => setRemindOpen(true)}>⏰ Remind</button>
                 <QuickAddFromContact contact={selected} onNavigateTo={onNavigateTo} />
+                <DeleteRecordButton
+                  layout={LAYOUT} cacheVersion={CACHE_VERSION}
+                  recordId={selected.recordId}
+                  name={f.zz__Display__ct || f.Name_Organization}
+                  onDeleted={() => setSelected(null)}
+                />
               </div>
             </div>
 

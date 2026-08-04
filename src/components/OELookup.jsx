@@ -4,6 +4,7 @@ import { BRAND } from '../config/brandColors'
 import { useAllRecords } from '../hooks/useAllRecords'
 import ListToolbar, { useListControls, ListBody } from './ListControls'
 import './OELookup.css'
+import DeleteRecordButton from './DeleteRecordButton'
 
 const LAYOUT = 'OELookup_New'
 const CACHE_VERSION = 1
@@ -161,6 +162,14 @@ export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {})
                     )}
                   </div>
                 </div>
+              </div>
+              <div className="oe-topbar-actions">
+                <DeleteRecordButton
+                  layout={LAYOUT} cacheVersion={CACHE_VERSION}
+                  recordId={selected.recordId}
+                  name={val(f, 'Program Type')}
+                  onDeleted={() => setSelected(null)}
+                />
               </div>
             </div>
 

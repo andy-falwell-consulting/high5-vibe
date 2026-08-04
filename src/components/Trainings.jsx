@@ -8,6 +8,7 @@ import AttachmentsPanel from './AttachmentsPanel';
 import { trainingAttachments } from '../api/trainingAttachments';
 import { generateAndAttachWorkOrder, downloadWorkOrder } from '../api/trainingWorkOrder';
 import './Trainings.css';
+import DeleteRecordButton from './DeleteRecordButton'
 
 const LAYOUT = 'trainings_New';
 const CACHE_VERSION = 1;
@@ -385,6 +386,14 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
                     {f['Start Date'] && <span className="trn-chip muted">{f['Start Date']}{f['End Date'] && f['End Date'] !== f['Start Date'] ? ` – ${f['End Date']}` : ''}</span>}
                   </div>
                 </div>
+              </div>
+              <div className="trn-topbar-actions">
+                <DeleteRecordButton
+                  layout={LAYOUT} cacheVersion={CACHE_VERSION}
+                  recordId={selected.recordId}
+                  name={f.zz__Display_Organization__ct}
+                  onDeleted={() => setSelected(null)}
+                />
               </div>
             </div>
 

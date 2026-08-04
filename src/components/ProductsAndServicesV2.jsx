@@ -11,6 +11,7 @@ import { useAllRecords } from '../hooks/useAllRecords';
 import { CATEGORIES, TYPES, VENDORS, QBO_INCOME, QBO_CLASS } from '../config/productOptions';
 import { BRAND } from '../config/brandColors';
 import './ProductsAndServicesV2.css';
+import DeleteRecordButton from './DeleteRecordButton';
 
 const LAYOUT = 'Products & Services_New';
 // Must match the cacheVersion passed to useAllRecords below — patchCachedRecord
@@ -632,6 +633,12 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
                     <button className="v2-btn ghost" onClick={handleDiscard}>Discard</button>
                   </>
                 )}
+                <DeleteRecordButton
+                  layout={LAYOUT} cacheVersion={CACHE_VERSION}
+                  recordId={selected.recordId}
+                  name={f.Name}
+                  onDeleted={() => setSelected(null)}
+                />
               </div>
             </div>
 

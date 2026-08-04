@@ -411,6 +411,25 @@ export function addCachedRecord(layout, cacheVersion, record) {
   }
 }
 
+// Drop a deleted record from the cache and notify subscribers, so the list it
+// was in updates without a refetch. Mirrors addCachedRecord.
+export function removeCachedRecord(layout, cacheVersion, recordId) {
+  const mk = memKey(layout, cacheVersion);
+  const rid = String(recordId);
+  if (!memCache[mk]?.records) return;
+  const before = memCache[mk].records.length;
+  memCache[mk].records = memCache[mk].records.filter(r => String(r.recordId) !== rid);
+  const removed = before - memCache[mk].records.length;
+  if (!removed) return;
+  if (typeof memCache[mk].total === 'number') memCache[mk].total -= removed;
+  idbSet(idbKey(layout, cacheVersion), { ...memCache[mk] }).catch(() => {});
+  const subs = cacheSubscribers.get(mk);
+  if (subs?.size) {
+    const { records, total } = memCache[mk];
+    subs.forEach(cb => cb(records, total));
+  }
+}
+
 // Patch a record into every cached version of a layout and notify subscribers.
 // Lets a fresh single-record fetch (hover/click) update the displayed list row
 // without the caller needing to know its cacheVersion. When portalData is given
