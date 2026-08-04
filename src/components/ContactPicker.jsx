@@ -8,9 +8,14 @@ const CACHE_VERSION = 2
 // Searchable Contacts picker. Calls onSelect(contactRecord) with the raw record
 // ({ recordId, fieldData }); the caller extracts whatever key it needs (usually
 // _kpt__Contact_ID for a foreign key). Reuses the already-cached Contacts data.
-export default function ContactPicker({ onSelect, onClose, title = 'Select a contact' }) {
+// `filter` narrows the list to a subset (organizations only, or one org's
+// people). It is always escapable — an empty subset would otherwise be a dead
+// end, and rosters legitimately come back empty (a brand-new organization has
+// no staff yet).
+export default function ContactPicker({ onSelect, onClose, title = 'Select a contact', filter, filterLabel }) {
   const { records, loading } = useAllRecords(LAYOUT, { cacheVersion: CACHE_VERSION })
   const [q, setQ] = useState('')
+  const [showAll, setShowAll] = useState(false)
   const inputRef = useRef(null)
 
   useEffect(() => { inputRef.current?.focus() }, [])
@@ -20,14 +25,19 @@ export default function ContactPicker({ onSelect, onClose, title = 'Select a con
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  const scoped = useMemo(
+    () => (filter && !showAll ? records.filter(r => filter(r.fieldData || {})) : records),
+    [records, filter, showAll]
+  )
+
   const results = useMemo(() => {
     const term = q.trim().toLowerCase()
-    if (!term) return records.slice(0, 60)
+    if (!term) return scoped.slice(0, 60)
     const keys = ['zz__Display__ct', 'Name_Organization', 'zz__Display_Organization__ct', 'Site Number']
-    return records
+    return scoped
       .filter(r => keys.some(k => String(r.fieldData?.[k] ?? '').toLowerCase().includes(term)))
       .slice(0, 60)
-  }, [records, q])
+  }, [scoped, q])
 
   return (
     <div className="cp-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
@@ -58,7 +68,20 @@ export default function ContactPicker({ onSelect, onClose, title = 'Select a con
             })
           )}
         </div>
-        <div className="cp-foot">{q.trim() ? `${results.length} shown` : `${records.length.toLocaleString()} contacts`}</div>
+        {filter && (
+          <button className="cp-scope" onClick={() => setShowAll(v => !v)}>
+            {showAll
+              ? '↩ Back to the shorter list'
+              : `⌕ Search all ${records.length.toLocaleString()} contacts`}
+          </button>
+        )}
+        <div className="cp-foot">
+          {q.trim()
+            ? `${results.length} shown`
+            : filter && !showAll
+              ? `${scoped.length.toLocaleString()} ${filterLabel || 'match'}`
+              : `${records.length.toLocaleString()} contacts`}
+        </div>
       </div>
     </div>
   )
