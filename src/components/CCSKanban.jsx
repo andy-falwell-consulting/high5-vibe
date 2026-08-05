@@ -440,8 +440,24 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
   )
 
+  // A dragged card shows its new lane immediately, before FileMaker confirms.
+  // That optimistic override used to be cleared ONLY by the Refresh button, so
+  // for the rest of the session the card ignored the record entirely: change the
+  // status in the CCS record panel and the card stayed where it had been dropped.
+  //
+  // Each override therefore remembers the status the record had at drag time
+  // (`base`). The moment the record itself reports something else — our own
+  // write landing via patchCachedRecord, or an edit made in the record panel or
+  // another tab — the record is the truth and the override is dropped.
   const getStatus = useCallback((r) => {
-    return localStatusRef.current[r.recordId] ?? mergedStatus(r.fieldData)
+    const override = localStatusRef.current[r.recordId]
+    if (!override) return mergedStatus(r.fieldData)
+    const current = mergedStatus(r.fieldData)
+    if (current !== override.base) {
+      delete localStatusRef.current[r.recordId]
+      return current
+    }
+    return override.to
   }, [])
 
   // Board membership is curated by the team (a shared Redis set), AND the card's
@@ -524,17 +540,21 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
 
     if (sourceColumn === targetColumn) return // pure reorder — no status change
 
-    const oldStatus = localStatusRef.current[active.id] ?? mergedStatus(record.fieldData)
-    localStatusRef.current[active.id] = targetColumn
+    // `base` is what the RECORD says right now, not what the card is showing —
+    // it's the value getStatus watches for a change against.
+    const base = mergedStatus(record.fieldData)
+    localStatusRef.current[active.id] = { to: targetColumn, base }
     setLocalStatus(p => ({ ...p, [active.id]: targetColumn }))
     setSaving(p => ({ ...p, [active.id]: true }))
 
     try {
       await updateRecord(LAYOUT, active.id, { Status: targetColumn })
+      // Patching the cache moves fieldData off `base`, which retires the
+      // override — from here the card follows the record.
       patchCachedRecord(LAYOUT, CACHE_VERSION, active.id, { Status: targetColumn })
     } catch {
-      localStatusRef.current[active.id] = oldStatus
-      setLocalStatus(p => ({ ...p, [active.id]: oldStatus }))
+      delete localStatusRef.current[active.id]
+      setLocalStatus(p => { const n = { ...p }; delete n[active.id]; return n })
     } finally {
       setSaving(p => { const n = { ...p }; delete n[active.id]; return n })
     }
@@ -621,7 +641,7 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
         <KanbanDetail
           opsLead={opsLead.leadFor(detailRecord.recordId)}
           record={detailRecord}
-          currentStatus={localStatusRef.current[detailRecord.recordId] ?? mergedStatus(detailRecord.fieldData)}
+          currentStatus={getStatus(detailRecord)}
           onClose={() => setDetailRecord(null)}
           onNavigateTo={onNavigateTo}
         />

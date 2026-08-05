@@ -1,4 +1,4 @@
-import { getCurrentEnv } from '../config/fmpEnvironments';
+import { getCurrentEnv, FMP_ENVIRONMENTS } from '../config/fmpEnvironments';
 
 // Priority fetch scheduler — two tiers (HIGH=0, LOW=1).
 // Single-record fetches use HIGH; bulk batch pages use LOW.
@@ -278,11 +278,21 @@ const memCache = {};
 // interactive calls. Flip to false to restore eager background refresh.
 const LAZY_REFRESH = true;
 
-function idbKey(layout, cacheVersion) {
-  return cacheVersion ? `fmp_cache__${layout}__v${cacheVersion}` : `fmp_cache__${layout}`;
-}
+// Cache keys are scoped by FileMaker DATABASE as well as layout+version.
+//
+// Without the database in the key, switching environments served the previous
+// environment's records under the new environment's name — the switcher only
+// reloads the page, and an IndexedDB entry lives IDB_TTL_MS (a week). Observed
+// live: after Development → Production the app reported 6,180 "Production"
+// projects (Dev's exact count) and the CCS Kanban showed 8 cards instead of 35,
+// because production board recordIds were being matched against Dev records.
+// Records created in production after the Dev clone had no match and vanished.
 function memKey(layout, cacheVersion) {
-  return cacheVersion ? `${layout}__v${cacheVersion}` : layout;
+  const db = getCurrentEnv().db;
+  return cacheVersion ? `${db}__${layout}__v${cacheVersion}` : `${db}__${layout}`;
+}
+function idbKey(layout, cacheVersion) {
+  return `fmp_cache__${memKey(layout, cacheVersion)}`;
 }
 
 // ── IndexedDB helpers ─────────────────────────────────────────────
@@ -321,6 +331,28 @@ async function idbDelete(key) {
     tx.oncomplete = resolve;
     tx.onerror = () => reject(tx.error);
   });
+}
+
+// One-time sweep of pre-database-scoping cache entries (`fmp_cache__<layout>__vN`).
+// Nothing reads those keys any more, and nothing else would ever delete them —
+// the TTL is only checked on read — so without this they'd sit in IndexedDB
+// indefinitely. Runs once per page load, after first use, and is best-effort.
+let _purgedLegacy = false;
+function purgeLegacyCacheKeys() {
+  if (_purgedLegacy) return;
+  _purgedLegacy = true;
+  const dbPrefixes = FMP_ENVIRONMENTS.map(e => `fmp_cache__${e.db}__`);
+  getDb().then(db => {
+    const req = db.transaction('records', 'readonly').objectStore('records').getAllKeys();
+    req.onsuccess = () => {
+      for (const k of req.result || []) {
+        const key = String(k);
+        if (!key.startsWith('fmp_cache__')) continue;
+        if (dbPrefixes.some(p => key.startsWith(p))) continue;
+        idbDelete(key).catch(() => {});
+      }
+    };
+  }).catch(() => { /* IDB unavailable */ });
 }
 
 // ── Cache read/write ──────────────────────────────────────────────
@@ -375,10 +407,51 @@ export function subscribeCacheUpdates(layout, cacheVersion, callback) {
   return () => cacheSubscribers.get(key)?.delete(callback);
 }
 
+// ── Pending local writes ──────────────────────────────────────────
+// The Redis replica trails FileMaker by up to one sync interval (5 min in
+// production), so a record just edited in the app reads STALE from the replica
+// for a short window. Any replica re-read in that window — the board's Refresh
+// button, or the background stale-while-revalidate that fires on the next
+// module load — would otherwise write the pre-edit value back over the correct
+// one. Observed live: two CCS cards moved and saved, then Refresh put both back
+// in their original lanes.
+//
+// So every local patch is remembered briefly and re-applied on top of whatever
+// the replica returns. An entry clears as soon as the replica agrees (the sync
+// caught up) or after PENDING_WRITE_MS, whichever comes first — it can only
+// ever re-assert what this client itself last wrote.
+const PENDING_WRITE_MS = 10 * 60 * 1000;
+const pendingWrites = new Map(); // `${memKey}:${recordId}` → { fieldData, at }
+
+function rememberWrite(mk, recordId, fieldData) {
+  pendingWrites.set(`${mk}:${recordId}`, { fieldData: { ...fieldData }, at: Date.now() });
+}
+
+function applyPendingWrites(mk, records) {
+  if (!pendingWrites.size) return records;
+  const now = Date.now();
+  let touched = false;
+  const out = records.map(r => {
+    const k = `${mk}:${r.recordId}`;
+    const pending = pendingWrites.get(k);
+    if (!pending) return r;
+    if (now - pending.at > PENDING_WRITE_MS) { pendingWrites.delete(k); return r; }
+    // Replica has caught up — stop shadowing it.
+    if (Object.entries(pending.fieldData).every(([f, v]) => r.fieldData?.[f] === v)) {
+      pendingWrites.delete(k);
+      return r;
+    }
+    touched = true;
+    return { ...r, fieldData: { ...r.fieldData, ...pending.fieldData } };
+  });
+  return touched ? out : records;
+}
+
 // Patch a single record in memCache + IDB and notify subscribers.
 export function patchCachedRecord(layout, cacheVersion, recordId, fieldData) {
   const mk = memKey(layout, cacheVersion);
   const rid = String(recordId);
+  rememberWrite(mk, rid, fieldData);
 
   if (memCache[mk]) {
     memCache[mk].records = memCache[mk].records.map(r =>
@@ -437,9 +510,13 @@ export function removeCachedRecord(layout, cacheVersion, recordId) {
 // (e.g. BOM add/remove) don't linger in the list cache across reloads.
 function patchCachedRecordAcrossVersions(layout, recordId, fieldData, portalData) {
   const rid = String(recordId);
-  const prefix = `${layout}__v`;
+  // Scoped to the CURRENT database — cache keys carry it (see memKey), so a
+  // record fetched here can never leak into another environment's cache.
+  const db = getCurrentEnv().db;
+  const bare = `${db}__${layout}`;
+  const prefix = `${bare}__v`;
   for (const mk of Object.keys(memCache)) {
-    if (mk !== layout && !mk.startsWith(prefix)) continue;
+    if (mk !== bare && !mk.startsWith(prefix)) continue;
     const entry = memCache[mk];
     if (!entry?.records) continue;
     let changed = false;
@@ -581,7 +658,9 @@ async function revalidateFromReplica(layout, cacheVersion) {
   try {
     const repl = await fetchFromReplica(layout, null);
     if (repl) {
-      await writeCache(layout, repl.records, repl.total, true, cacheVersion);
+      // Keep just-made local edits on top — the replica may not have synced them yet.
+      const records = applyPendingWrites(mk, repl.records);
+      await writeCache(layout, records, repl.total, true, cacheVersion);
       notifySubscribers(mk);
     }
   } catch { /* ignore — keep serving cache */ }
@@ -589,6 +668,8 @@ async function revalidateFromReplica(layout, cacheVersion) {
 }
 
 export async function getAllRecords(layout, { onProgress, batchSize = 100, slimForStorage, cacheVersion, findQuery, sort } = {}) {
+  purgeLegacyCacheKeys();
+  const mk = memKey(layout, cacheVersion);
   const cached = await readCacheAsync(layout, cacheVersion);
 
   if (cached?.fresh && cached?.complete) {
@@ -611,11 +692,15 @@ export async function getAllRecords(layout, { onProgress, batchSize = 100, slimF
   }
 
   // No local cache: try the fast Redis replica before the slow FMP pagination.
+  // This is also the path a board/list Refresh takes (bustCache, then re-fetch),
+  // so the pending-write overlay matters here too — without it, pressing Refresh
+  // within a sync interval of an edit rolls the edit back on screen.
   const repl = await fetchFromReplica(layout, findQuery, onProgress);
   if (repl) {
-    await writeCache(layout, repl.records, repl.total, true, cacheVersion);
-    if (onProgress) onProgress({ records: repl.records, total: repl.total, done: true });
-    return { records: repl.records, total: repl.total };
+    const records = applyPendingWrites(mk, repl.records);
+    await writeCache(layout, records, repl.total, true, cacheVersion);
+    if (onProgress) onProgress({ records, total: repl.total, done: true });
+    return { records, total: repl.total };
   }
 
   return fetchAllFromServer(layout, { onProgress, batchSize, cacheVersion, findQuery, sort });
