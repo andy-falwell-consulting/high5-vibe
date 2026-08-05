@@ -15,7 +15,7 @@ import { useAllRecords } from '../hooks/useAllRecords'
 import { updateRecord, bustCache, patchCachedRecord } from '../api/filemaker'
 import { getCurrentEnv } from '../config/fmpEnvironments'
 import { RCD_LAYOUT, RCD_CACHE_VERSION, RCD_FIND_QUERY, RCD_SORT } from '../config/ccsCache'
-import { ACTIVE_STAGES, statusColor, mergedStatus } from '../config/ccsStatus'
+import { ACTIVE_STAGES, PIPELINE_STAGES, PIPELINE_SHORT, statusColor, mergedStatus } from '../config/ccsStatus'
 import { useKanbanBoard } from '../hooks/useKanbanBoard'
 import { useKanbanOrder } from '../hooks/useKanbanOrder'
 import { useOpsLeads } from '../hooks/useOpsLeads'
@@ -26,7 +26,14 @@ const CACHE_VERSION = RCD_CACHE_VERSION
 
 // Board columns = the merged active/in-flight stages (Completed / No Go / Other
 // are valid statuses but not columns — a card set to one leaves the board).
-const COLUMNS = ACTIVE_STAGES.map(id => ({ id, label: id, color: statusColor(id) }))
+// Headers use the SHORT stage labels the pipeline dots and Home funnel already
+// use. At 180px a lane can't fit "Proposed Dates, Sent Contract & DI" without
+// wrapping to three lines and shoving the cards down.
+const COLUMNS = ACTIVE_STAGES.map(id => ({
+  id,
+  label: PIPELINE_SHORT[PIPELINE_STAGES.indexOf(id)] ?? id,
+  color: statusColor(id),
+}))
 const ACTIVE_STATUSES = new Set(ACTIVE_STAGES)
 
 function matchesSearch(r, q) {
