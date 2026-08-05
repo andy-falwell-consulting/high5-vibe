@@ -414,6 +414,7 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
   const [localStatus, setLocalStatus] = useState({})
   const [saving, setSaving] = useState({})
   const [activeId, setActiveId] = useState(null)
+  const [saveError, setSaveError] = useState(null) // { org, why } — a refused move
   const [detailRecord, setDetailRecord] = useState(null)
   const localStatusRef = useRef({})
 
@@ -592,13 +593,27 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
     setSaving(p => ({ ...p, [active.id]: true }))
 
     try {
-      await updateRecord(LAYOUT, active.id, { Status: targetColumn })
+      // updateRecord only throws on a network error or a missing write session —
+      // a FileMaker-level rejection comes back as a normal response with a
+      // non-zero message code. Without this check the drag treated a refused
+      // write as success: it patched the cache and armed the pending-write
+      // guard, so the board confidently showed a lane FileMaker had never
+      // accepted. CCSv2's save has always checked this; the board did not.
+      const res = await updateRecord(LAYOUT, active.id, { Status: targetColumn })
+      const code = res?.messages?.[0]?.code
+      if (code !== '0') throw new Error(res?.messages?.[0]?.message || `FileMaker error ${code}`)
       // Patching the cache moves fieldData off `base`, which retires the
       // override — from here the card follows the record.
       patchCachedRecord(LAYOUT, CACHE_VERSION, active.id, { Status: targetColumn })
-    } catch {
+    } catch (err) {
       delete localStatusRef.current[active.id]
       setLocalStatus(p => { const n = { ...p }; delete n[active.id]; return n })
+      // A card that silently slides back is what made this look like "drag
+      // doesn't work" rather than "the save was refused". Say which one.
+      setSaveError({
+        org: record.fieldData.zz__Display_Organization__ct || 'That project',
+        why: err?.message || 'Save failed',
+      })
     } finally {
       setSaving(p => { const n = { ...p }; delete n[active.id]; return n })
     }
@@ -646,6 +661,13 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
         </div>
         <button className="kb-add-btn" onClick={() => setShowAdd(true)} title="Add projects to the board">＋ Add projects</button>
       </div>
+      {saveError && (
+        <div className="kb-save-error" role="alert">
+          <span className="kb-save-error-ic">⚠</span>
+          <span><strong>{saveError.org}</strong> stayed where it was — {saveError.why}</span>
+          <button className="kb-save-error-x" onClick={() => setSaveError(null)} aria-label="Dismiss">✕</button>
+        </div>
+      )}
       {showAdd && (
         <AddToBoardPanel
           candidates={displayRecords.filter(r => ACTIVE_STATUSES.has(getStatus(r)) && !board.ids.has(String(r.recordId)))}
