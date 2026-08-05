@@ -451,7 +451,14 @@ function rememberWrite(mk, recordId, fieldData) {
   savePendingWrites();
 }
 
-function applyPendingWrites(mk, records) {
+// `fromReplica` decides whether an entry may be RETIRED here, and it matters.
+// A guard entry is only spent once the REPLICA proves it has caught up. The
+// local cache already contains our own write, so retiring against it always
+// looks like agreement: on reload the IndexedDB copy matched, the entry was
+// dropped, and the background revalidate then clobbered the value with an
+// unguarded stale replica read — the exact bug this guard exists to prevent.
+// Cached reads therefore overlay without retiring.
+function applyPendingWrites(mk, records, fromReplica = false) {
   if (!pendingWrites.size) return records;
   const now = Date.now();
   let touched = false;
@@ -461,8 +468,7 @@ function applyPendingWrites(mk, records) {
     const pending = pendingWrites.get(k);
     if (!pending) return r;
     if (now - pending.at > PENDING_WRITE_MS) { pendingWrites.delete(k); retired = true; return r; }
-    // Replica has caught up — stop shadowing it.
-    if (Object.entries(pending.fieldData).every(([f, v]) => r.fieldData?.[f] === v)) {
+    if (fromReplica && Object.entries(pending.fieldData).every(([f, v]) => r.fieldData?.[f] === v)) {
       pendingWrites.delete(k);
       retired = true;
       return r;
@@ -686,7 +692,7 @@ async function revalidateFromReplica(layout, cacheVersion) {
     const repl = await fetchFromReplica(layout, null);
     if (repl) {
       // Keep just-made local edits on top — the replica may not have synced them yet.
-      const records = applyPendingWrites(mk, repl.records);
+      const records = applyPendingWrites(mk, repl.records, true);
       await writeCache(layout, records, repl.total, true, cacheVersion);
       notifySubscribers(mk);
     }
@@ -731,7 +737,7 @@ export async function getAllRecords(layout, { onProgress, batchSize = 100, slimF
   // within a sync interval of an edit rolls the edit back on screen.
   const repl = await fetchFromReplica(layout, findQuery, onProgress);
   if (repl) {
-    const records = applyPendingWrites(mk, repl.records);
+    const records = applyPendingWrites(mk, repl.records, true);
     await writeCache(layout, records, repl.total, true, cacheVersion);
     if (onProgress) onProgress({ records, total: repl.total, done: true });
     return { records, total: repl.total };
