@@ -14,10 +14,35 @@ import { ALLOWED_DBS } from './_fmp.js';
 const redis = Redis.fromEnv();
 const SYNC_KEY = process.env.QBO_SYNC_KEY;
 // Mirrors ACTIVE_STAGES in src/config/ccsStatus.js — the active/in-flight CCS
-// statuses that are Kanban board columns. Duplicated rather than imported:
-// no api/*.js file imports from src/ anywhere else in this codebase, and this
-// list changes rarely enough that keeping both in sync by hand is fine.
-const ACTIVE_STAGES = ['Inquiry', 'In Process', 'Proposed', 'Approved', 'Sent Contract & DI', 'Confirmed/Scheduled'];
+// statuses that are Kanban board columns.
+//
+// Still duplicated rather than imported, and now for a concrete reason: modules
+// under src/ use extensionless relative imports (ccsStatus.js does
+// `from './brandColors'`), which Vite resolves at build time but Node's ESM
+// loader will not. Importing it here would break this function at runtime.
+//
+// KEEP IN SYNC WITH src/config/ccsStatus.js. This list silently drifted once,
+// at the v1.0.256 status rename: it kept the retired vocabulary while the board
+// moved on, so POSTing an order for three of the six lanes 404'd on the name
+// check and every save of a card's position in those lanes was rejected (the
+// client swallows the error). Reordering appeared to work and was gone on
+// reload. If you rename a stage, change it in BOTH files and add the old name
+// to LEGACY_COLUMNS below.
+const ACTIVE_STAGES = [
+  'Inquiry', 'In Process', 'Approved', 'Proposed Dates, Sent Contract & DI',
+  'Confirmed/ Job Prep by Date', 'Confirmed/ Ready to go',
+];
+
+// Orders saved under a stage's PREVIOUS name, read as a fallback so the rename
+// doesn't throw away ordering the team already set (production still holds 11
+// records under the retired 'Proposed' key). Read-only and non-destructive: the
+// legacy list is used only while the current key is empty, and the first
+// reorder of that lane writes the new key, which then wins. Two stages merged
+// into one in v1.0.256, so a stage can have more than one predecessor.
+const LEGACY_COLUMNS = {
+  'Proposed Dates, Sent Contract & DI': ['Proposed', 'Sent Contract & DI'],
+  'Confirmed/ Job Prep by Date': ['Confirmed/Scheduled'],
+};
 const keyFor = (db, columnId) => `kanban:order:${db}:${columnId}`;
 const asList = v => (Array.isArray(v) ? v.map(String) : []);
 
@@ -26,8 +51,21 @@ async function authorized(req) {
   return !!(await getGoogleSession(req));
 }
 
+async function orderFor(db, col) {
+  const current = asList(await redis.lrange(keyFor(db, col), 0, -1));
+  if (current.length) return current;
+  // Nothing under the current name — fall back to the stage's previous name(s).
+  const merged = [];
+  for (const legacy of LEGACY_COLUMNS[col] || []) {
+    for (const id of asList(await redis.lrange(keyFor(db, legacy), 0, -1))) {
+      if (!merged.includes(id)) merged.push(id);
+    }
+  }
+  return merged;
+}
+
 async function allOrders(db) {
-  const entries = await Promise.all(ACTIVE_STAGES.map(async col => [col, asList(await redis.lrange(keyFor(db, col), 0, -1))]));
+  const entries = await Promise.all(ACTIVE_STAGES.map(async col => [col, await orderFor(db, col)]));
   return Object.fromEntries(entries);
 }
 
