@@ -3,6 +3,7 @@ import {
   DndContext,
   DragOverlay,
   closestCenter,
+  MeasuringStrategy,
   PointerSensor,
   useSensor,
   useSensors,
@@ -440,6 +441,42 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
   )
 
+  // Auto-scroll the board while a card is held near its left or right edge.
+  //
+  // The board scrolls horizontally, but dnd-kit's built-in auto-scroll does not
+  // engage on this container — measured: holding a dragged card against the
+  // right edge for 1.6s left scrollLeft at 0 with 572px still off screen. Any
+  // lane outside the viewport was therefore impossible to drop onto. The
+  // narrower columns (see CCSKanban.css) mean six lanes usually fit; this covers
+  // the windows where they don't.
+  const boardRef = useRef(null)
+  const scrollDir = useRef(0)
+
+  useEffect(() => {
+    if (!activeId) return
+    const EDGE_PX = 80, STEP_PX = 16
+    const onMove = e => {
+      const el = boardRef.current
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      scrollDir.current = e.clientX > r.right - EDGE_PX ? 1
+        : e.clientX < r.left + EDGE_PX ? -1 : 0
+    }
+    let raf = 0
+    const tick = () => {
+      const el = boardRef.current
+      if (el && scrollDir.current) el.scrollLeft += scrollDir.current * STEP_PX
+      raf = requestAnimationFrame(tick)
+    }
+    window.addEventListener('pointermove', onMove)
+    raf = requestAnimationFrame(tick)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      cancelAnimationFrame(raf)
+      scrollDir.current = 0
+    }
+  }, [activeId])
+
   // A dragged card shows its new lane immediately, before FileMaker confirms.
   // That optimistic override used to be cleared ONLY by the Refresh button, so
   // for the rest of the session the card ignored the record entirely: change the
@@ -614,9 +651,14 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
         collisionDetection={closestCenter}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
+        // Re-measure droppables continuously. Default measuring happens once at
+        // drag start, so a lane scrolled into view mid-drag would keep its old
+        // (off-screen) rect and reject the drop — which would undo the whole
+        // point of the auto-scroll above.
+        measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
       >
         <SortableContext items={orderedColumns.map(c => `col::${c.id}`)} strategy={horizontalListSortingStrategy}>
-          <div className="kb-board">
+          <div className="kb-board" ref={boardRef}>
             {orderedColumns.map(col => (
               <KanbanColumn
                 leadFor={opsLead.leadFor}

@@ -132,11 +132,17 @@
   padding: 16px;
 }
 
-/* Column */
+/* Column
+   min-width is 180 rather than 260 so all six lanes fit on a normal laptop.
+   At 260 the board was 1,652px wide inside a 1,080px viewport — two lanes
+   permanently off screen, and since a drag can't scroll the board on its own
+   (see the auto-scroll effect in CCSKanban.jsx), those lanes were unreachable:
+   you simply could not drag a card to them. Lanes still grow to 300 when
+   there's room, and the board still scrolls on genuinely narrow windows. */
 .kb-col {
   display: flex;
   flex-direction: column;
-  min-width: 260px;
+  min-width: 180px;
   max-width: 300px;
   flex: 1;
   background: #111320;

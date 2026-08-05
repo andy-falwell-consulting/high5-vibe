@@ -420,30 +420,57 @@ export function subscribeCacheUpdates(layout, cacheVersion, callback) {
 // the replica returns. An entry clears as soon as the replica agrees (the sync
 // caught up) or after PENDING_WRITE_MS, whichever comes first — it can only
 // ever re-assert what this client itself last wrote.
+// PERSISTED, because the window this guards spans a page RELOAD. v1.0.275 kept
+// this map in memory only, which protected the current session and nothing
+// else: change a status, reload, and the very first thing the new page does is
+// re-read the still-stale replica with an empty guard — putting the old value
+// straight back. That is the "status isn't honored after I refresh" report.
 const PENDING_WRITE_MS = 10 * 60 * 1000;
-const pendingWrites = new Map(); // `${memKey}:${recordId}` → { fieldData, at }
+const PENDING_WRITE_KEY = 'fmp_pending_writes';
+
+function loadPendingWrites() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PENDING_WRITE_KEY) || '{}');
+    const now = Date.now();
+    // Drop anything already expired rather than carrying it forward.
+    return new Map(Object.entries(raw).filter(([, v]) => v?.at && now - v.at <= PENDING_WRITE_MS));
+  } catch { return new Map(); }
+}
+
+const pendingWrites = loadPendingWrites(); // `${memKey}:${recordId}` → { fieldData, at }
+
+function savePendingWrites() {
+  try {
+    if (!pendingWrites.size) localStorage.removeItem(PENDING_WRITE_KEY);
+    else localStorage.setItem(PENDING_WRITE_KEY, JSON.stringify(Object.fromEntries(pendingWrites)));
+  } catch { /* quota — the in-memory copy still guards this session */ }
+}
 
 function rememberWrite(mk, recordId, fieldData) {
   pendingWrites.set(`${mk}:${recordId}`, { fieldData: { ...fieldData }, at: Date.now() });
+  savePendingWrites();
 }
 
 function applyPendingWrites(mk, records) {
   if (!pendingWrites.size) return records;
   const now = Date.now();
   let touched = false;
+  let retired = false;
   const out = records.map(r => {
     const k = `${mk}:${r.recordId}`;
     const pending = pendingWrites.get(k);
     if (!pending) return r;
-    if (now - pending.at > PENDING_WRITE_MS) { pendingWrites.delete(k); return r; }
+    if (now - pending.at > PENDING_WRITE_MS) { pendingWrites.delete(k); retired = true; return r; }
     // Replica has caught up — stop shadowing it.
     if (Object.entries(pending.fieldData).every(([f, v]) => r.fieldData?.[f] === v)) {
       pendingWrites.delete(k);
+      retired = true;
       return r;
     }
     touched = true;
     return { ...r, fieldData: { ...r.fieldData, ...pending.fieldData } };
   });
+  if (retired) savePendingWrites();
   return touched ? out : records;
 }
 
@@ -672,13 +699,20 @@ export async function getAllRecords(layout, { onProgress, batchSize = 100, slimF
   const mk = memKey(layout, cacheVersion);
   const cached = await readCacheAsync(layout, cacheVersion);
 
+  // Pending writes are re-applied on EVERY read path, not just the replica
+  // ones. After a reload the guard is restored from localStorage but the
+  // in-memory cache is gone, so the first render comes from IndexedDB — which
+  // is also where a patch could be missing (patchCachedRecord only writes
+  // through when the layout's cache is already populated).
   if (cached?.fresh && cached?.complete) {
-    if (onProgress) onProgress({ records: cached.records, total: cached.total, done: true });
-    return cached;
+    const records = applyPendingWrites(mk, cached.records);
+    if (onProgress) onProgress({ records, total: cached.total, done: true });
+    return { ...cached, records };
   }
 
   if (cached) {
-    if (onProgress) onProgress({ records: cached.records, total: cached.total, done: true });
+    const records = applyPendingWrites(mk, cached.records);
+    if (onProgress) onProgress({ records, total: cached.total, done: true });
     // Serve the cache instantly, then refresh in the background so separate
     // browsers/tabs converge within seconds instead of waiting out the cache TTL.
     if (REPLICA_LAYOUTS[layout] && !findQuery) {
@@ -688,7 +722,7 @@ export async function getAllRecords(layout, { onProgress, batchSize = 100, slimF
       // would starve interactive calls.
       fetchAllFromServer(layout, { batchSize, cacheVersion, findQuery, sort }).catch(() => {});
     }
-    return cached;
+    return { ...cached, records };
   }
 
   // No local cache: try the fast Redis replica before the slow FMP pagination.
