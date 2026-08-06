@@ -213,3 +213,29 @@
 [data-theme="light"] .admin-backup-result.ok { background: #f0fdf4; border-color: #bbf7d0; }
 [data-theme="light"] .admin-backup-result.warn { background: #fef2f2; border-color: #fecaca; }
 [data-theme="light"] .admin-backup-result strong { color: #0f172a; }
+
+.admin-day-input {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #2d3148;
+  background: #1e2130;
+  color: #e2e8f0;
+  font-size: 15px;
+  font-family: inherit;
+  width: 140px;
+}
+.admin-tiny-btn {
+  padding: 3px 9px;
+  border-radius: 6px;
+  border: 1px solid #2d3148;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.admin-tiny-btn:hover:not(:disabled) { border-color: #3a3f60; color: #cbd5e1; }
+.admin-tiny-btn:disabled { opacity: 0.4; cursor: default; }
+
+[data-theme="light"] .admin-day-input { background: #fff; border-color: #e2e8f0; color: #0f172a; }
+[data-theme="light"] .admin-tiny-btn { border-color: #e2e8f0; color: #475569; }
