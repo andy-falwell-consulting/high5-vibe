@@ -387,6 +387,132 @@ function BackupTab() {
   );
 }
 
+
+// Restore — the half of Phase 0 that makes the other half mean something.
+// Deliberately read-only by default: "Check" downloads each file, verifies its
+// checksum and diffs it against live without writing. The rehearsal button
+// writes one key to a scratch prefix so the write path is proven too.
+function RestoreSection() {
+  const today = new Date().toISOString().slice(0, 10);
+  const [day, setDay] = useState(today);
+  const [plan, setPlan] = useState(null);
+  const [checks, setChecks] = useState({});
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  const call = async (qs, method = 'GET') => {
+    const r = await fetch(`/api/backup?${qs}`, { method });
+    const b = await r.json();
+    if (!r.ok) throw new Error(b.error || `Failed (${r.status})`);
+    return b;
+  };
+
+  async function loadPlan() {
+    setBusy(true); setError(null); setPlan(null); setChecks({});
+    try { setPlan(await call(`mode=restore-plan&day=${encodeURIComponent(day)}`)); }
+    catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+
+  async function checkAll() {
+    if (!plan) return;
+    setBusy(true); setError(null);
+    const next = {};
+    for (const f of plan.files) {
+      setChecks({ ...next, [f.key]: { pending: true } });
+      try { next[f.key] = await call(`mode=restore-check&day=${encodeURIComponent(day)}&key=${encodeURIComponent(f.key)}`); }
+      catch (e) { next[f.key] = { error: e.message }; }
+    }
+    setChecks(next);
+    setBusy(false);
+  }
+
+  async function rehearse(key) {
+    setBusy(true); setError(null);
+    try {
+      const r = await call(`mode=restore-write&day=${encodeURIComponent(day)}&key=${encodeURIComponent(key)}&target=scratch`, 'POST');
+      setChecks(c => ({ ...c, [key]: { ...(c[key] || {}), rehearsal: r } }));
+    } catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+
+  const results = plan ? plan.files.map(f => ({ f, c: checks[f.key] })) : [];
+  const checked = results.filter(r => r.c && !r.c.pending && !r.c.error);
+  const identical = checked.filter(r => {
+    const d = r.c.diff || {};
+    return !d.missingFromLive && !d.onlyInLive && !d.valuesDiffer;
+  }).length;
+
+  return (
+    <section className="admin-section">
+      <h2 className="admin-section-title">Restore</h2>
+      <p className="admin-sub" style={{ marginBottom: 16, maxWidth: 640 }}>
+        <strong>Check</strong> downloads each file, verifies it against the checksum recorded when
+        it was written, and compares it to what is live — <em>writing nothing</em>.
+        <strong> Rehearse</strong> writes one key into a scratch prefix and reads it back, which
+        proves the write path without touching live data. Overwriting a live key is possible only
+        via the API, with an explicit confirmation string.
+      </p>
+      <p className="admin-sub" style={{ marginBottom: 16, maxWidth: 640 }}>
+        Differences are not automatically faults: the replica re-syncs from FileMaker every five
+        minutes, so <code>repl:</code> keys legitimately drift from a backup taken earlier.
+      </p>
+
+      <div className="admin-backup-actions">
+        <input className="admin-day-input" value={day} onChange={e => setDay(e.target.value)} placeholder="YYYY-MM-DD" />
+        <button className="admin-run-btn" onClick={loadPlan} disabled={busy}>Load that day</button>
+        {plan && <button className="admin-run-btn admin-run-btn--alt" onClick={checkAll} disabled={busy}>Check every file</button>}
+      </div>
+      {error && <div className="admin-email-error" style={{ marginTop: 12 }}>{error}</div>}
+
+      {plan && (
+        <div className="admin-backup">
+          <div className="admin-backup-totals">
+            <span><strong>{plan.files.length}</strong> files</span>
+            <span>taken <strong>{new Date(plan.takenAt).toLocaleString()}</strong></span>
+            <span>by <strong>{plan.by}</strong></span>
+            {!plan.manifestComplete && <span style={{ color: '#f59e0b' }}>manifest reports gaps</span>}
+            {checked.length > 0 && <span><strong>{identical}/{checked.length}</strong> identical to live</span>}
+          </div>
+          {plan.liveKeysNotInBackup?.length > 0 && (
+            <div className="admin-backup-list admin-backup-warn" style={{ marginBottom: 10 }}>
+              {plan.liveKeysNotInBackup.length} live key(s) are not in this backup — created since it ran.
+            </div>
+          )}
+          <table className="admin-backup-table">
+            <thead><tr><th>Key</th><th>Entries</th><th>Checksum</th><th>vs live</th><th /></tr></thead>
+            <tbody>
+              {results.map(({ f, c }) => {
+                const d = c?.diff;
+                const same = d && !d.missingFromLive && !d.onlyInLive && !d.valuesDiffer;
+                return (
+                  <tr key={f.key}>
+                    <td className="admin-backup-fam">{f.key}</td>
+                    <td>{f.entries?.toLocaleString?.() ?? f.entries}</td>
+                    <td>{c?.pending ? '…' : c?.error ? '✗' : c ? (c.checksumOk ? '✓' : '✗') : '—'}</td>
+                    <td>
+                      {c?.error ? <span style={{ color: '#fca5a5' }}>{c.error}</span>
+                        : !d ? '—'
+                        : !c.existsLive ? 'not live'
+                        : same ? 'identical'
+                        : `−${d.missingFromLive ?? 0} +${d.onlyInLive ?? 0} ~${d.valuesDiffer ?? 0}`}
+                    </td>
+                    <td>
+                      {c?.rehearsal
+                        ? <span title={`wrote ${c.rehearsal.written} to ${c.rehearsal.dest}`}>rehearsed ✓</span>
+                        : <button className="admin-tiny-btn" onClick={() => rehearse(f.key)} disabled={busy}>Rehearse</button>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
 // Admin / settings hub. Add future integration + system cards here.
 export default function Admin() {
   const [tab, setTab] = useState('integrations');
@@ -409,7 +535,7 @@ export default function Admin() {
       {tab === 'integrations' && <IntegrationsTab />}
       {tab === 'preview' && <PreviewAccessTab />}
       {tab === 'fmp' && <FmpTab />}
-      {tab === 'backup' && <BackupTab />}
+      {tab === 'backup' && <><BackupTab /><RestoreSection /></>}
     </main>
   );
 }

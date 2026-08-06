@@ -8,9 +8,13 @@
 //   POST /api/backup?mode=export-start              → creates a dated Drive folder, returns runId + key list
 //   POST /api/backup?mode=export-key&run=&key=      → exports ONE key: read, gzip, upload, verify
 //   POST /api/backup?mode=export-finish&run=        → uploads manifest.json, reports completeness
+//   GET  /api/backup?mode=restore-plan&day=         → reads a day's manifest, compares it to the live keyspace
+//   GET  /api/backup?mode=restore-check&day=&key=   → downloads ONE file, verifies checksum, diffs against live; writes nothing
+//   POST /api/backup?mode=restore-write&day=&key=   → writes it back, to a scratch prefix unless target=live
 //
-// RESTORE IS NOT BUILT. A backup nobody has restored from is not yet a backup —
-// that is the next change, and Phase 0 is not done until it has been rehearsed.
+// The restore side is READ-ONLY by default and lands in a scratch prefix when
+// it does write. Overwriting live keys requires target=live AND confirm=, so
+// nothing can clobber production data by a mistyped URL.
 //
 // Admin-only.
 //
@@ -127,6 +131,10 @@ async function measure(key, type) {
 //
 // Run state lives in `backup:run:{id}` (excluded from future exports above),
 // and is what `export-finish` turns into the manifest.
+// Defaulted rather than required so this works without a Vercel env change.
+// A Drive folder id is not a secret — it appears in the folder's own URL — and
+// the override exists so the destination can be moved without a deploy.
+const DEFAULT_BACKUP_FOLDER = '1xW3xXxRzUnSGKM5pG1dCibFAEQUyHLsi';
 const RUN_TTL = 7 * 24 * 60 * 60;
 const runKey = id => `backup:run:${id}`;
 
@@ -174,7 +182,7 @@ async function handleExport(req, res, session, mode) {
   // A Drive folder id is not a secret — it appears in the folder's own URL —
   // and the override exists so the destination can be moved (notably to a
   // Shared Drive, which the scheduled run will need) without a deploy.
-  const parentId = process.env.BACKUP_DRIVE_FOLDER_ID || '1xW3xXxRzUnSGKM5pG1dCibFAEQUyHLsi';
+  const parentId = process.env.BACKUP_DRIVE_FOLDER_ID || DEFAULT_BACKUP_FOLDER;
 
   if (mode === 'export-start') {
     const all = await scanAll();
@@ -277,6 +285,165 @@ async function handleExport(req, res, session, mode) {
   return res.status(400).json({ error: `unknown mode ${mode}` });
 }
 
+
+// ── Restore ───────────────────────────────────────────────────────
+//
+// A backup nobody has restored from is not a backup. These modes exist to
+// rehearse it, and they are deliberately timid: `restore-check` writes nothing
+// at all, and `restore-write` lands in a scratch prefix unless explicitly told
+// otherwise.
+//
+// Note when reading a diff: the replica re-syncs from FileMaker every 5 minutes
+// in production, so `repl:` keys legitimately differ from a backup taken
+// earlier. Differences are information, not necessarily faults.
+const SCRATCH = day => `restore:${day}:`;
+
+async function loadManifest(token, day, parentId) {
+  const { findFolder, listFolder, downloadFile } = await import('./_backupDrive.js');
+  const folder = await findFolder(token, day, parentId);
+  if (!folder) throw new Error(`No backup folder named ${day}`);
+  const files = await listFolder(token, folder.id);
+  const mf = files.find(f => f.name === 'manifest.json');
+  if (!mf) throw new Error(`${day} has no manifest.json — that run did not finish`);
+  const manifest = JSON.parse((await downloadFile(token, mf.id)).toString('utf8'));
+  return { folder, files, manifest };
+}
+
+// Compare a restored value against what is live right now.
+function diffValues(type, restored, live) {
+  if (type === 'hash') {
+    const rk = Object.keys(restored), lk = Object.keys(live || {});
+    const liveSet = new Set(lk);
+    const missingLive = rk.filter(k => !liveSet.has(k));
+    const restoredSet = new Set(rk);
+    const extraLive = lk.filter(k => !restoredSet.has(k));
+    const changed = rk.filter(k => liveSet.has(k) && live[k] !== restored[k]);
+    return {
+      inBackup: rk.length, live: lk.length,
+      missingFromLive: missingLive.length, onlyInLive: extraLive.length, valuesDiffer: changed.length,
+      samples: { missingFromLive: missingLive.slice(0, 3), onlyInLive: extraLive.slice(0, 3), valuesDiffer: changed.slice(0, 3) },
+    };
+  }
+  if (type === 'set' || type === 'list') {
+    const r = restored || [], l = live || [];
+    const ls = new Set(l), rs = new Set(r);
+    return {
+      inBackup: r.length, live: l.length,
+      missingFromLive: r.filter(x => !ls.has(x)).length,
+      onlyInLive: l.filter(x => !rs.has(x)).length,
+      orderDiffers: type === 'list' ? JSON.stringify(r) !== JSON.stringify(l) : undefined,
+    };
+  }
+  return { inBackup: 1, live: live == null ? 0 : 1, valuesDiffer: JSON.stringify(restored) !== JSON.stringify(live) ? 1 : 0 };
+}
+
+async function writeKey(target, type, data) {
+  await redis.del(target);
+  if (type === 'string') { if (data != null) await redis.set(target, data); return 1; }
+  if (type === 'hash') {
+    const entries = Object.entries(data || {});
+    for (let i = 0; i < entries.length; i += 500) {
+      await redis.hset(target, Object.fromEntries(entries.slice(i, i + 500)));
+    }
+    return entries.length;
+  }
+  if (type === 'set') {
+    const arr = data || [];
+    for (let i = 0; i < arr.length; i += 500) if (arr.slice(i, i + 500).length) await redis.sadd(target, ...arr.slice(i, i + 500));
+    return arr.length;
+  }
+  if (type === 'list') {
+    const arr = data || [];
+    for (let i = 0; i < arr.length; i += 500) if (arr.slice(i, i + 500).length) await redis.rpush(target, ...arr.slice(i, i + 500));
+    return arr.length;
+  }
+  throw new Error(`unsupported type ${type}`);
+}
+
+async function handleRestore(req, res, session, mode) {
+  const { downloadFile } = await import('./_backupDrive.js');
+  const { gunzipSync } = await import('node:zlib');
+  const { createHash } = await import('node:crypto');
+  const token = session.accessToken;
+  if (!token) return res.status(400).json({ error: 'No Google access token on this session.' });
+  const parentId = process.env.BACKUP_DRIVE_FOLDER_ID || DEFAULT_BACKUP_FOLDER;
+
+  const day = String(req.query?.day || '');
+  if (!day) return res.status(400).json({ error: 'day is required, e.g. day=2026-08-06' });
+
+  if (mode === 'restore-plan') {
+    const { folder, files, manifest } = await loadManifest(token, day, parentId);
+    const liveKeys = new Set(await scanAll());
+    const rows = (manifest.files || []).map(f => ({
+      key: f.key, type: f.type, entries: f.entries,
+      file: f.file, gzBytes: f.gzBytes,
+      presentInDrive: files.some(d => d.name === f.file),
+      existsLive: liveKeys.has(f.key),
+    }));
+    return res.status(200).json({
+      day, folderId: folder.id, manifestComplete: manifest.complete,
+      takenAt: manifest.finishedAt, by: manifest.by,
+      files: rows,
+      liveKeysNotInBackup: [...liveKeys].filter(k => !EXCLUDED_PREFIXES.some(e => k.startsWith(e.prefix)) && !rows.some(r => r.key === k)),
+    });
+  }
+
+  const key = String(req.query?.key || '');
+  if (!key) return res.status(400).json({ error: 'key is required' });
+  const { files, manifest } = await loadManifest(token, day, parentId);
+  const entry = (manifest.files || []).find(f => f.key === key);
+  if (!entry) return res.status(404).json({ error: `${key} is not in the ${day} manifest` });
+  const driveFile = files.find(f => f.name === entry.file);
+  if (!driveFile) return res.status(404).json({ error: `${entry.file} is missing from Drive` });
+
+  const gz = await downloadFile(token, driveFile.id);
+  const sha256 = createHash('sha256').update(gz).digest('hex');
+  const checksumOk = sha256 === entry.sha256;
+  // Refuse to go further on a corrupt file rather than restoring garbage.
+  if (!checksumOk) {
+    return res.status(422).json({ error: 'Checksum mismatch — the file in Drive is not the file that was uploaded.', key, expected: entry.sha256, got: sha256 });
+  }
+
+  const payload = JSON.parse(gunzipSync(gz).toString('utf8'));
+  if (payload.key !== key) return res.status(422).json({ error: `File contains ${payload.key}, expected ${key}` });
+
+  if (mode === 'restore-check') {
+    const liveType = await redis.type(key);
+    const live = liveType === 'none' ? null : await readKey(key, liveType);
+    return res.status(200).json({
+      key, type: payload.type, checksumOk, exportedAt: payload.exportedAt,
+      existsLive: liveType !== 'none',
+      diff: diffValues(payload.type, payload.data, live),
+      wrote: false,
+    });
+  }
+
+  if (mode === 'restore-write') {
+    const target = String(req.query?.target || 'scratch');
+    if (target === 'live') {
+      // Two independent things must both be true. A mistyped URL cannot
+      // overwrite production data; it has to be meant.
+      if (String(req.query?.confirm || '') !== `overwrite ${key}`) {
+        return res.status(400).json({ error: `Refusing to overwrite a live key. Pass confirm=overwrite ${key} if that is genuinely intended.` });
+      }
+    } else if (target !== 'scratch') {
+      return res.status(400).json({ error: "target must be 'scratch' or 'live'" });
+    }
+    const dest = target === 'live' ? key : `${SCRATCH(day)}${key}`;
+    const written = await writeKey(dest, payload.type, payload.data);
+    const readBack = await readKey(dest, payload.type);
+    return res.status(200).json({
+      key, target, dest, written,
+      // Diff the thing we just wrote against the backup: proves the write path
+      // round-trips, which is the part a read-only check cannot show.
+      roundTrip: diffValues(payload.type, payload.data, readBack),
+      wrote: true,
+    });
+  }
+
+  return res.status(400).json({ error: `unknown mode ${mode}` });
+}
+
 export default async function handler(req, res) {
   const session = await getGoogleSession(req);
   if (!session) return res.status(401).json({ error: 'Not authenticated' });
@@ -293,8 +460,18 @@ export default async function handler(req, res) {
     }
   }
 
+  if (mode.startsWith('restore-')) {
+    // Only the mode that writes needs POST; plan and check are reads.
+    if (mode === 'restore-write' && req.method !== 'POST') return res.status(405).json({ error: 'POST required' });
+    try {
+      return await handleRestore(req, res, session, mode);
+    } catch (e) {
+      return res.status(502).json({ error: String(e?.message || e).slice(0, 400) });
+    }
+  }
+
   if (mode !== 'inventory') {
-    return res.status(400).json({ error: `Unknown mode "${mode}". Restore is not built yet.` });
+    return res.status(400).json({ error: `Unknown mode "${mode}".` });
   }
 
   try {

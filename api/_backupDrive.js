@@ -100,3 +100,36 @@ export async function uploadFile(token, { name, parentId, bytes, mimeType = 'app
   const file = await driveJson(put, 'upload');
   return { ...file, replaced: !!existing };
 }
+
+// ── Read side (restore) ───────────────────────────────────────────
+
+export async function findFolder(token, name, parentId) {
+  return findByName(token, name, parentId, 'application/vnd.google-apps.folder');
+}
+
+// Every file in a backup folder, with the size and checksum Drive holds — so a
+// restore can be checked against the manifest before anything is decompressed.
+export async function listFolder(token, folderId) {
+  const files = [];
+  let pageToken;
+  do {
+    const q = `'${esc(folderId)}' in parents and trashed = false`;
+    const url = `${DRIVE}/files?q=${encodeURIComponent(q)}&fields=nextPageToken,files(id,name,size,md5Checksum)`
+      + `&pageSize=200&${ALL_DRIVES}${pageToken ? `&pageToken=${pageToken}` : ''}`;
+    const body = await driveJson(await fetch(url, { headers: { Authorization: `Bearer ${token}` } }), 'list');
+    files.push(...(body.files || []));
+    pageToken = body.nextPageToken;
+  } while (pageToken);
+  return files;
+}
+
+export async function downloadFile(token, fileId) {
+  const res = await fetch(`${DRIVE}/files/${fileId}?alt=media&${ALL_DRIVES}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Drive download failed: HTTP ${res.status} ${body.slice(0, 120)}`);
+  }
+  return Buffer.from(await res.arrayBuffer());
+}
