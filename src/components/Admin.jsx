@@ -229,6 +229,7 @@ function BackupTab() {
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [exp, setExp] = useState(null); // { phase, done, total, current, result, failures }
 
   async function run() {
     setBusy(true); setError(null);
@@ -241,18 +242,92 @@ function BackupTab() {
     finally { setBusy(false); }
   }
 
+  // Drives the export one key at a time. The loop lives here rather than on the
+  // server so a 137MB estate can't run into the function timeout, and so
+  // progress is real rather than a spinner.
+  async function runExport() {
+    if (!window.confirm('Export every backed-up key to Google Drive? This writes files to the vibe_backups folder.')) return;
+    setBusy(true); setError(null); setExp({ phase: 'starting', done: 0, total: 0, failures: [] });
+    const post = async (qs) => {
+      const r = await fetch(`/api/backup?${qs}`, { method: 'POST' });
+      const b = await r.json();
+      if (!r.ok) throw new Error(b.error || `Failed (${r.status})`);
+      return b;
+    };
+    try {
+      const start = await post('mode=export-start');
+      const failures = [];
+      for (let i = 0; i < start.keys.length; i++) {
+        const key = start.keys[i];
+        setExp({ phase: 'exporting', done: i, total: start.keys.length, current: key, failures: [...failures] });
+        try {
+          const entry = await post(`mode=export-key&run=${encodeURIComponent(start.runId)}&key=${encodeURIComponent(key)}`);
+          if (!entry.verified) failures.push(`${key} — checksum not confirmed by Drive`);
+        } catch (e) {
+          // Keep going: a partial run with a manifest that names the gaps is
+          // more useful than stopping at the first bad key.
+          failures.push(`${key} — ${e.message}`);
+        }
+      }
+      setExp({ phase: 'finishing', done: start.keys.length, total: start.keys.length, failures: [...failures] });
+      const result = await post(`mode=export-finish&run=${encodeURIComponent(start.runId)}`);
+      setExp({ phase: 'done', done: start.keys.length, total: start.keys.length, result, failures, folderName: start.folderName });
+    } catch (e) {
+      setError(e.message);
+      setExp(p => (p ? { ...p, phase: 'failed' } : null));
+    } finally { setBusy(false); }
+  }
+
   return (
     <section className="admin-section">
       <h2 className="admin-section-title">Backup — dry run</h2>
       <p className="admin-sub" style={{ marginBottom: 16 }}>
-        Lists everything a backup would capture. Writes nothing, uploads nothing,
-        deletes nothing. Run this to agree the scope before the exporter is built.
+        <strong>Scan</strong> lists what a backup would capture and writes nothing.
+        <strong> Export</strong> reads every one of those keys, gzips it, uploads it to the
+        <code>vibe_backups</code> Drive folder, and verifies each file against the checksum
+        Drive computed on receipt. Restore is not built yet — until it has been rehearsed,
+        treat this as untested.
       </p>
 
-      <button className="admin-run-btn" onClick={run} disabled={busy}>
-        {busy ? 'Scanning…' : 'Scan the keyspace'}
-      </button>
+      <div className="admin-backup-actions">
+        <button className="admin-run-btn" onClick={run} disabled={busy}>
+          {busy && !exp ? 'Scanning…' : 'Scan the keyspace'}
+        </button>
+        <button className="admin-run-btn admin-run-btn--alt" onClick={runExport} disabled={busy}>
+          {exp && busy ? 'Exporting…' : 'Export to Drive'}
+        </button>
+      </div>
       {error && <div className="admin-email-error" style={{ marginTop: 12 }}>{error}</div>}
+
+      {exp && (
+        <div className="admin-backup-progress">
+          {exp.phase === 'exporting' && (
+            <>
+              <div className="admin-backup-bar"><span style={{ width: `${Math.round((exp.done / Math.max(1, exp.total)) * 100)}%` }} /></div>
+              <div className="admin-backup-progress-txt">{exp.done} / {exp.total} — {exp.current}</div>
+            </>
+          )}
+          {exp.phase === 'starting' && <div className="admin-backup-progress-txt">Creating the Drive folder…</div>}
+          {exp.phase === 'finishing' && <div className="admin-backup-progress-txt">Writing the manifest…</div>}
+          {exp.phase === 'done' && exp.result && (
+            <div className={`admin-backup-result${exp.result.complete ? ' ok' : ' warn'}`}>
+              <strong>{exp.result.complete ? '✓ Backup complete and verified' : '⚠ Backup finished with gaps'}</strong>
+              <div>
+                {exp.result.fileCount} files · {exp.result.totals.entries.toLocaleString()} entries ·{' '}
+                {fmtBytes(exp.result.totals.gzBytes)} compressed (from {fmtBytes(exp.result.totals.rawBytes)})
+              </div>
+              <div className="admin-backup-progress-txt">Folder: {exp.folderName}</div>
+              {exp.result.missing?.length > 0 && <div>Missing: {exp.result.missing.join(', ')}</div>}
+              {exp.result.unverified?.length > 0 && <div>Unverified: {exp.result.unverified.join(', ')}</div>}
+            </div>
+          )}
+          {exp.failures?.length > 0 && (
+            <ul className="admin-backup-list admin-backup-warn" style={{ marginTop: 8 }}>
+              {exp.failures.map((f, i) => <li key={i}>{f}</li>)}
+            </ul>
+          )}
+        </div>
+      )}
 
       {data && (
         <div className="admin-backup">

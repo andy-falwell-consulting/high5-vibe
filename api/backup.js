@@ -1,15 +1,16 @@
-// Backup — DRY RUN ONLY.
+// Backup — inventory (dry run) and export.
 //
 // Phase 0 of the decoupling plan (docs/vibe-owns-the-record.md). The moment
 // Vibe owns a record, Upstash Redis is the only copy of the business, so a
 // verified backup and a rehearsed restore come before anything else.
 //
-// This endpoint deliberately does NOT write, upload, or delete. It enumerates
-// the keyspace and reports what a real backup WOULD capture, so the scope can
-// be agreed before a single byte leaves Redis. Export and restore land in
-// separate, reviewable changes.
+//   GET  /api/backup?mode=inventory                 → what a backup WOULD capture; writes nothing
+//   POST /api/backup?mode=export-start              → creates a dated Drive folder, returns runId + key list
+//   POST /api/backup?mode=export-key&run=&key=      → exports ONE key: read, gzip, upload, verify
+//   POST /api/backup?mode=export-finish&run=        → uploads manifest.json, reports completeness
 //
-//   GET /api/backup?mode=inventory   → { families, totals, excluded, warnings }
+// RESTORE IS NOT BUILT. A backup nobody has restored from is not yet a backup —
+// that is the next change, and Phase 0 is not done until it has been rehearsed.
 //
 // Admin-only.
 //
@@ -42,6 +43,7 @@ const EXCLUDED_PREFIXES = [
   { prefix: 'qbo_refresh_token', why: 'live QuickBooks credential' },
   { prefix: 'qbo_sandbox_refresh_token', why: 'live QuickBooks sandbox credential' },
   { prefix: 'shopify_token', why: 'live Shopify credential' },
+  { prefix: 'backup:run:', why: 'this exporter\'s own bookkeeping — transient' },
 ];
 
 // Everything else is grouped into a family so the report reads as a shape
@@ -115,16 +117,178 @@ async function measure(key, type) {
   return out;
 }
 
+// ── Export ────────────────────────────────────────────────────────
+//
+// Driven ONE KEY PER REQUEST by the client rather than as a single long job.
+// Contacts alone is ~52MB and the whole estate ~137MB; a single invocation
+// would sit near the 300s ceiling with no way to resume a failure. Per-key
+// calls are naturally resumable, show real progress, and keep peak memory to
+// one key at a time.
+//
+// Run state lives in `backup:run:{id}` (excluded from future exports above),
+// and is what `export-finish` turns into the manifest.
+const RUN_TTL = 7 * 24 * 60 * 60;
+const runKey = id => `backup:run:${id}`;
+
+const safeName = k => k.replace(/[^A-Za-z0-9._-]+/g, '_').slice(0, 120);
+
+// Read a key in full, paged. Hash values are already JSON strings (see
+// _replica.js slim()), and are kept verbatim so a restore is byte-for-byte
+// rather than a re-serialisation that might differ.
+async function readKey(key, type) {
+  if (type === 'string') return await redis.get(key);
+  if (type === 'list') return await redis.lrange(key, 0, -1);
+  if (type === 'set') {
+    const out = [];
+    let cursor = '0';
+    do {
+      const [next, batch] = await redis.sscan(key, cursor, { count: 1000 });
+      out.push(...batch);
+      cursor = String(next);
+    } while (cursor !== '0');
+    return out;
+  }
+  if (type === 'hash') {
+    const out = {};
+    let cursor = '0';
+    // HSCAN, not HGETALL: a 31,000-field hash in one response blows past both
+    // Upstash's response limits and Vercel's body limit.
+    do {
+      const [next, flat] = await redis.hscan(key, cursor, { count: 1000 });
+      for (let i = 0; i < flat.length; i += 2) out[flat[i]] = flat[i + 1];
+      cursor = String(next);
+    } while (cursor !== '0');
+    return out;
+  }
+  throw new Error(`unsupported type ${type} for ${key}`);
+}
+
+async function handleExport(req, res, session, mode) {
+  const { createFolder, uploadFile } = await import('./_backupDrive.js');
+  const { gzipSync } = await import('node:zlib');
+  const { createHash } = await import('node:crypto');
+  const token = session.accessToken;
+  if (!token) return res.status(400).json({ error: 'No Google access token on this session.' });
+
+  // Defaulted rather than required so this works without a Vercel env change.
+  // A Drive folder id is not a secret — it appears in the folder's own URL —
+  // and the override exists so the destination can be moved (notably to a
+  // Shared Drive, which the scheduled run will need) without a deploy.
+  const parentId = process.env.BACKUP_DRIVE_FOLDER_ID || '1fkjp3qpzQ7OGZxx0nb1hDOCWZgoAgT86';
+
+  if (mode === 'export-start') {
+    const all = await scanAll();
+    const keys = all.filter(k => !EXCLUDED_PREFIXES.some(e => k.startsWith(e.prefix))).sort();
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const runId = stamp;
+    const folder = await createFolder(token, `vibe-backup-${stamp}`, parentId);
+    await redis.hset(runKey(runId), {
+      meta: JSON.stringify({ runId, folderId: folder.id, startedAt: new Date().toISOString(), by: session.email, keys }),
+    });
+    await redis.expire(runKey(runId), RUN_TTL);
+    return res.status(200).json({ runId, folderId: folder.id, folderName: folder.name, keys });
+  }
+
+  const runId = String(req.query?.run || '');
+  if (!runId) return res.status(400).json({ error: 'run is required' });
+  const metaRaw = await redis.hget(runKey(runId), 'meta');
+  if (!metaRaw) return res.status(404).json({ error: 'Unknown or expired run' });
+  const meta = typeof metaRaw === 'string' ? JSON.parse(metaRaw) : metaRaw;
+
+  if (mode === 'export-key') {
+    const key = String(req.query?.key || '');
+    if (!key) return res.status(400).json({ error: 'key is required' });
+    if (!meta.keys.includes(key)) return res.status(400).json({ error: 'key is not part of this run' });
+
+    const type = await redis.type(key);
+    const data = await readKey(key, type);
+    const entries = type === 'hash' ? Object.keys(data).length
+      : Array.isArray(data) ? data.length : 1;
+
+    const payload = Buffer.from(JSON.stringify({
+      key, type, entries, exportedAt: new Date().toISOString(), data,
+    }), 'utf8');
+    const gz = gzipSync(payload, { level: 9 });
+
+    const sha256 = createHash('sha256').update(gz).digest('hex');
+    const md5 = createHash('md5').update(gz).digest('hex');
+
+    const file = await uploadFile(token, { name: `${safeName(key)}.json.gz`, parentId: meta.folderId, bytes: gz });
+
+    // Drive computes md5Checksum from what it actually received, so this is a
+    // real end-to-end check rather than us marking our own homework.
+    const verified = !!file.md5Checksum && file.md5Checksum === md5;
+    const entry = {
+      key, type, entries,
+      file: file.name, driveId: file.id,
+      rawBytes: payload.length, gzBytes: gz.length,
+      sha256, md5, driveMd5: file.md5Checksum || null, verified,
+    };
+    await redis.hset(runKey(runId), { [`file:${key}`]: JSON.stringify(entry) });
+    return res.status(200).json(entry);
+  }
+
+  if (mode === 'export-finish') {
+    const all = await redis.hgetall(runKey(runId)) || {};
+    const files = Object.entries(all)
+      .filter(([f]) => f.startsWith('file:'))
+      .map(([, v]) => (typeof v === 'string' ? JSON.parse(v) : v))
+      .sort((a, b) => a.key.localeCompare(b.key));
+
+    const missing = meta.keys.filter(k => !files.some(f => f.key === k));
+    const unverified = files.filter(f => !f.verified).map(f => f.key);
+
+    const manifest = {
+      runId,
+      startedAt: meta.startedAt,
+      finishedAt: new Date().toISOString(),
+      by: meta.by,
+      folderId: meta.folderId,
+      complete: missing.length === 0 && unverified.length === 0,
+      missing,
+      unverified,
+      excluded: EXCLUDED_PREFIXES.map(e => ({ prefix: e.prefix, why: e.why })),
+      totals: {
+        files: files.length,
+        entries: files.reduce((n, f) => n + f.entries, 0),
+        rawBytes: files.reduce((n, f) => n + f.rawBytes, 0),
+        gzBytes: files.reduce((n, f) => n + f.gzBytes, 0),
+      },
+      files,
+    };
+
+    // The manifest goes up LAST and uncompressed, so its presence is the signal
+    // that a run finished and it can be read without tooling.
+    const body = Buffer.from(JSON.stringify(manifest, null, 2), 'utf8');
+    const mf = await uploadFile(token, {
+      name: 'manifest.json', parentId: meta.folderId, bytes: body, mimeType: 'application/json',
+    });
+
+    await redis.del(runKey(runId));
+    return res.status(200).json({ ...manifest, manifestDriveId: mf.id, files: undefined, fileCount: files.length });
+  }
+
+  return res.status(400).json({ error: `unknown mode ${mode}` });
+}
+
 export default async function handler(req, res) {
   const session = await getGoogleSession(req);
   if (!session) return res.status(401).json({ error: 'Not authenticated' });
   if (!(await isAdminEmail(session.email))) return res.status(403).json({ error: 'Admins only.' });
 
   const mode = String(req.query?.mode || 'inventory');
+
+  if (mode.startsWith('export-')) {
+    if (req.method !== 'POST') return res.status(405).json({ error: 'POST required' });
+    try {
+      return await handleExport(req, res, session, mode);
+    } catch (e) {
+      return res.status(502).json({ error: String(e?.message || e).slice(0, 400) });
+    }
+  }
+
   if (mode !== 'inventory') {
-    // Guard rail while this is dry-run only, so a stray ?mode=export can't be
-    // read as "it ran and there's a backup".
-    return res.status(400).json({ error: 'Only mode=inventory exists yet. Export and restore are not built.' });
+    return res.status(400).json({ error: `Unknown mode "${mode}". Restore is not built yet.` });
   }
 
   try {
