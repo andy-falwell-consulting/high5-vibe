@@ -133,3 +133,16 @@ export async function downloadFile(token, fileId) {
   }
   return Buffer.from(await res.arrayBuffer());
 }
+
+// Move a file to the trash by name. Used to retire a stale manifest when a
+// day's folder is reused — recoverable from Drive's bin rather than destroyed.
+export async function trashFileByName(token, name, parentId) {
+  const existing = await findByName(token, name, parentId);
+  if (!existing) return null;
+  const res = await fetch(`${DRIVE}/files/${existing.id}?fields=id,trashed&${ALL_DRIVES}`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ trashed: true }),
+  });
+  return driveJson(res, 'trash');
+}

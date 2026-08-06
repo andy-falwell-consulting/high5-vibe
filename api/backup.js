@@ -140,9 +140,13 @@ const runKey = id => `backup:run:${id}`;
 
 const safeName = k => k.replace(/[^A-Za-z0-9._-]+/g, '_').slice(0, 120);
 
-// Read a key in full, paged. Hash values are already JSON strings (see
-// _replica.js slim()), and are kept verbatim so a restore is byte-for-byte
-// rather than a re-serialisation that might differ.
+// Read a key in full, paged.
+//
+// Note _replica.js stores each record as a JSON string, but the Upstash REST
+// client parses anything JSON-shaped on the way back out — so what lands here
+// is an object, and the export re-serialises it. Round-trip fidelity is
+// therefore structural rather than byte-for-byte, which is why the restore
+// diff compares serialised forms rather than raw values.
 async function readKey(key, type) {
   if (type === 'string') return await redis.get(key);
   if (type === 'list') return await redis.lrange(key, 0, -1);
@@ -172,7 +176,7 @@ async function readKey(key, type) {
 }
 
 async function handleExport(req, res, session, mode) {
-  const { ensureFolder, uploadFile } = await import('./_backupDrive.js');
+  const { ensureFolder, uploadFile, trashFileByName } = await import('./_backupDrive.js');
   const { gzipSync } = await import('node:zlib');
   const { createHash } = await import('node:crypto');
   const token = session.accessToken;
@@ -195,6 +199,13 @@ async function handleExport(req, res, session, mode) {
     const day = now.toISOString().slice(0, 10);
     const runId = now.toISOString().replace(/[:.]/g, '-');
     const folder = await ensureFolder(token, day, parentId);
+    // Reusing a day's folder means the files in it are about to be replaced,
+    // which makes the existing manifest a description of contents that will no
+    // longer exist. Retire it up front: if this run is abandoned the folder has
+    // NO manifest, which restore-plan already treats as "that run did not
+    // finish". Better to have no manifest than one that lies. Found by
+    // re-exporting a single key and watching restore refuse the checksum.
+    if (folder.reused) await trashFileByName(token, 'manifest.json', folder.id);
     await redis.hset(runKey(runId), {
       meta: JSON.stringify({ runId, day, folderId: folder.id, startedAt: now.toISOString(), by: session.email, keys }),
     });
@@ -310,6 +321,14 @@ async function loadManifest(token, day, parentId) {
 }
 
 // Compare a restored value against what is live right now.
+//
+// Values are compared by SERIALISED form, not by ===. The Upstash REST client
+// auto-deserialises anything that parses as JSON, so hash values come back as
+// objects rather than the strings _replica.js stored — and === on two
+// structurally identical objects is always false. The first run of this
+// reported every one of 15,589 contacts as changed for exactly that reason.
+const sameValue = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
 function diffValues(type, restored, live) {
   if (type === 'hash') {
     const rk = Object.keys(restored), lk = Object.keys(live || {});
@@ -317,7 +336,7 @@ function diffValues(type, restored, live) {
     const missingLive = rk.filter(k => !liveSet.has(k));
     const restoredSet = new Set(rk);
     const extraLive = lk.filter(k => !restoredSet.has(k));
-    const changed = rk.filter(k => liveSet.has(k) && live[k] !== restored[k]);
+    const changed = rk.filter(k => liveSet.has(k) && !sameValue(live[k], restored[k]));
     return {
       inBackup: rk.length, live: lk.length,
       missingFromLive: missingLive.length, onlyInLive: extraLive.length, valuesDiffer: changed.length,
@@ -325,16 +344,17 @@ function diffValues(type, restored, live) {
     };
   }
   if (type === 'set' || type === 'list') {
-    const r = restored || [], l = live || [];
+    const r = (restored || []).map(x => JSON.stringify(x));
+    const l = (live || []).map(x => JSON.stringify(x));
     const ls = new Set(l), rs = new Set(r);
     return {
       inBackup: r.length, live: l.length,
       missingFromLive: r.filter(x => !ls.has(x)).length,
       onlyInLive: l.filter(x => !rs.has(x)).length,
-      orderDiffers: type === 'list' ? JSON.stringify(r) !== JSON.stringify(l) : undefined,
+      orderDiffers: type === 'list' ? r.join('\u0000') !== l.join('\u0000') : undefined,
     };
   }
-  return { inBackup: 1, live: live == null ? 0 : 1, valuesDiffer: JSON.stringify(restored) !== JSON.stringify(live) ? 1 : 0 };
+  return { inBackup: 1, live: live == null ? 0 : 1, valuesDiffer: sameValue(restored, live) ? 0 : 1 };
 }
 
 async function writeKey(target, type, data) {
