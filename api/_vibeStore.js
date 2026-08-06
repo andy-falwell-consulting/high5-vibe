@@ -147,6 +147,11 @@ export async function recordShadowed(db, layout, incoming, previous, overlay) {
       const was = before.fieldData?.[field];
       const now = rec.fieldData?.[field];
       if (JSON.stringify(was) === JSON.stringify(now)) continue;  // FMP didn't touch it
+      // FileMaker changed, but landed on the value Vibe already shows — the two
+      // agree, so nothing is being hidden and there is nothing to report.
+      // Without this the list fills with entries whose fmpNow and vibeShows are
+      // identical, and a signal that cries wolf gets ignored.
+      if (JSON.stringify(now) === JSON.stringify(vibeShows)) continue;
       changed.push({ field, fmpWas: was ?? null, fmpNow: now ?? null, vibeShows });
     }
     if (changed.length) entries[id] = JSON.stringify({ at: new Date().toISOString(), fields: changed });
