@@ -8,6 +8,7 @@ import { useCcsOrgs } from '../hooks/useCcsOrgs';
 import { useOpsLeads } from '../hooks/useOpsLeads';
 import { RCD_LAYOUT, RCD_CACHE_VERSION, RCD_FIND_QUERY, RCD_SORT } from '../config/ccsCache';
 import { getRecord, prefetchRecord, updateRecord, patchCachedRecord, invalidateRecord } from '../api/filemaker';
+import { updateVibeRecord } from '../api/vibeRecords';
 import { getCurrentEnv } from '../config/fmpEnvironments';
 import { qboLink } from '../config/qboLinks';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
@@ -446,6 +447,14 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   // sent. Staging it would leave the panel showing the old contact's details
   // next to the new name until Save.
   //
+  // STILL WRITES TO FILEMAKER — the one exception left on this layout after
+  // Phase 1c, and deliberately so. Reassigning the contact re-derives a whole
+  // family of FileMaker calcs (zz__Display_Contact__ct, the billing address
+  // block, the related phone and email). Writing just _kft__Contact_ID to a Vibe
+  // fragment would change the id and leave every one of those showing the
+  // previous contact. Moving it needs a decision about which of those fields
+  // Vibe stores itself — see Phase 1d.
+  //
   // NOTE: this sets the CONTACT only. A CCS record's Organization comes from a
   // second link that is not writable over the Data API (nothing on any
   // API-visible layout sets it, and _kmt__Contact_ID is auto-enter — it gets
@@ -471,18 +480,24 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
     } catch (e) { setSaveStatus('error'); setSaveErrorMsg(e?.message || null); }
     finally { setSaving(false); }
   };
+  // Saves to VIBE, not FileMaker. CCS projects are Vibe-owned as of Phase 1c
+  // (docs/vibe-owns-the-record.md) — FileMaker is a read-only source for them
+  // now, and the sync only ever refreshes the FileMaker half.
+  //
+  // Two consequences worth knowing. It needs only a Google session, so the
+  // "no FileMaker account in this environment" failure that blocked production
+  // writes is gone. And the value cannot be reverted by the replica catching
+  // up, which is what the whole optimistic-guard apparatus existed to prevent.
   const handleSave = async () => {
     if (!selected || !Object.keys(edits).length) return;
     setSaving(true); setSaveStatus(null); setSaveErrorMsg(null);
     try {
-      const res = await updateRecord(LAYOUT, selected.recordId, edits);
-      if (res.messages?.[0]?.code === '0') {
-        setSelected(p => ({ ...p, fieldData: { ...p.fieldData, ...edits } }));
-        patchCachedRecord(RCD_LAYOUT, RCD_CACHE_VERSION, selected.recordId, edits);
-        invalidateRecord(LAYOUT, selected.recordId);
-        setEdits({}); setSaveStatus('saved');
-        setTimeout(() => setSaveStatus(null), 2500);
-      } else setSaveStatus('error');
+      await updateVibeRecord(LAYOUT, selected.recordId, edits);
+      setSelected(p => ({ ...p, fieldData: { ...p.fieldData, ...edits } }));
+      patchCachedRecord(RCD_LAYOUT, RCD_CACHE_VERSION, selected.recordId, edits);
+      invalidateRecord(LAYOUT, selected.recordId);
+      setEdits({}); setSaveStatus('saved');
+      setTimeout(() => setSaveStatus(null), 2500);
     } catch (e) { setSaveStatus('error'); setSaveErrorMsg(e?.message || null); }
     finally { setSaving(false); }
   };
