@@ -513,6 +513,63 @@ function RestoreSection() {
   );
 }
 
+
+// Service-account connectivity test. Wiring the backup credential involves
+// several things that can each fail quietly — a malformed PEM, the Drive API
+// off, the account not added to the Shared Drive — so this walks the whole
+// path and names the step that broke rather than leaving it to trial and error.
+function SaTestSection() {
+  const [result, setResult] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  async function run() {
+    setBusy(true); setResult(null);
+    try {
+      const r = await fetch('/api/backup?mode=sa-test');
+      setResult(await r.json());
+    } catch (e) {
+      setResult({ ok: false, steps: [{ name: 'Request', ok: false, detail: e.message }] });
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <section className="admin-section">
+      <h2 className="admin-section-title">Backup credential</h2>
+      <p className="admin-sub" style={{ marginBottom: 16, maxWidth: 640 }}>
+        The nightly backup will run as a service account rather than as whoever is signed in,
+        because this app's Google client is still in Testing mode and those refresh tokens expire
+        every 7 days. This checks that credential end to end — it writes a small probe file into
+        the backup folder and removes it again.
+      </p>
+
+      <button className="admin-run-btn" onClick={run} disabled={busy}>
+        {busy ? 'Testing…' : 'Test the service account'}
+      </button>
+
+      {result && (
+        <div className="admin-backup" style={{ marginTop: 16 }}>
+          <div className={`admin-backup-result${result.ok ? ' ok' : ' warn'}`}>
+            <strong>{result.ok ? '✓ The service account can read and write the backup folder' : '✗ Not ready yet'}</strong>
+            {result.error && <div>{result.error}</div>}
+          </div>
+          <ul className="admin-sa-steps">
+            {(result.steps || []).map((s, i) => (
+              <li key={i} className={s.ok ? 'ok' : 'bad'}>
+                <span className="admin-sa-mark">{s.ok ? '✓' : '✗'}</span>
+                <span>
+                  <strong>{s.name}</strong>
+                  {s.detail && <div className="admin-sa-detail">{s.detail}</div>}
+                  {!s.ok && s.hint && <div className="admin-sa-hint">{s.hint}</div>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+}
+
 // Admin / settings hub. Add future integration + system cards here.
 export default function Admin() {
   const [tab, setTab] = useState('integrations');
@@ -535,7 +592,7 @@ export default function Admin() {
       {tab === 'integrations' && <IntegrationsTab />}
       {tab === 'preview' && <PreviewAccessTab />}
       {tab === 'fmp' && <FmpTab />}
-      {tab === 'backup' && <><BackupTab /><RestoreSection /></>}
+      {tab === 'backup' && <><SaTestSection /><BackupTab /><RestoreSection /></>}
     </main>
   );
 }

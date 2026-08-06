@@ -1,18 +1,58 @@
 {
   "rewrites": [
-    { "source": "/fmi/:path*", "destination": "/api/proxy?prefix=fmi&path=:path*" },
-    { "source": "/Streaming_SSL/:path*", "destination": "/api/proxy?prefix=Streaming_SSL&path=:path*" },
-    { "source": "/oauth/:path*", "destination": "/api/proxy?prefix=oauth&path=:path*" },
-    { "source": "/fmws/:path*", "destination": "/api/proxy?prefix=fmws&path=:path*" }
+    {
+      "source": "/fmi/:path*",
+      "destination": "/api/proxy?prefix=fmi&path=:path*"
+    },
+    {
+      "source": "/Streaming_SSL/:path*",
+      "destination": "/api/proxy?prefix=Streaming_SSL&path=:path*"
+    },
+    {
+      "source": "/oauth/:path*",
+      "destination": "/api/proxy?prefix=oauth&path=:path*"
+    },
+    {
+      "source": "/fmws/:path*",
+      "destination": "/api/proxy?prefix=fmws&path=:path*"
+    }
   ],
   "crons": [
-    { "path": "/api/sync?db=High5_Core4", "schedule": "*/5 * * * *" },
-    { "path": "/api/qbo-invoice-sync?db=High5_Core4", "schedule": "*/15 * * * *" },
-    { "path": "/api/replica-reconcile?db=High5_Core4", "schedule": "0 * * * *" },
-    { "path": "/api/txn-sync?db=High5_Core4", "schedule": "0 * * * *" },
-    { "path": "/api/qbo-estimate-sync?db=High5_Core4", "schedule": "*/15 * * * *" },
-    { "path": "/api/distance-sync?db=High5_Core4&layout=rcd", "schedule": "0 6 * * *" },
-    { "path": "/api/distance-sync?db=High5_Core4&layout=trainings", "schedule": "30 6 * * *" },
-    { "path": "/api/qbo-health?env=production", "schedule": "0 7 * * *" }
+    {
+      "path": "/api/sync?db=High5_Core4",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/qbo-invoice-sync?db=High5_Core4",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/replica-reconcile?db=High5_Core4",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/txn-sync?db=High5_Core4",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/qbo-estimate-sync?db=High5_Core4",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/distance-sync?db=High5_Core4&layout=rcd",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/distance-sync?db=High5_Core4&layout=trainings",
+      "schedule": "30 6 * * *"
+    },
+    {
+      "path": "/api/qbo-health?env=production",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/backup?mode=cron",
+      "schedule": "0 8 * * *"
+    }
   ]
 }

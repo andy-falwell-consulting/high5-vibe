@@ -11,6 +11,8 @@
 //   GET  /api/backup?mode=restore-plan&day=         → reads a day's manifest, compares it to the live keyspace
 //   GET  /api/backup?mode=restore-check&day=&key=   → downloads ONE file, verifies checksum, diffs against live; writes nothing
 //   POST /api/backup?mode=restore-write&day=&key=   → writes it back, to a scratch prefix unless target=live
+//   GET  /api/backup?mode=sa-test                   → end-to-end check of the service-account credential
+//   GET  /api/backup?mode=cron                      → the nightly run (Vercel Cron, or an admin by hand)
 //
 // The restore side is READ-ONLY by default and lands in a scratch prefix when
 // it does write. Overwriting live keys requires target=live AND confirm=, so
@@ -176,42 +178,129 @@ async function readKey(key, type) {
   throw new Error(`unsupported type ${type} for ${key}`);
 }
 
-async function handleExport(req, res, session, mode) {
-  const { ensureFolder, uploadFile, trashFileByName } = await import('./_backupDrive.js');
+// Prefer the service account, fall back to the caller's own Google token.
+//
+// Preferred because files it writes belong to the Shared Drive rather than to
+// whoever happened to click, and because it is the only credential that works
+// unattended. The fallback keeps the manual buttons usable if the service
+// account is ever misconfigured — but which one was used is always reported,
+// so a silent downgrade can't hide a broken credential.
+async function driveCredential(session) {
+  const { getServiceAccountToken, serviceAccountConfigured } = await import('./_gsa.js');
+  if (serviceAccountConfigured()) {
+    try {
+      return { token: await getServiceAccountToken(), as: 'service-account' };
+    } catch (e) {
+      if (!session?.accessToken) throw e;
+      return { token: session.accessToken, as: 'caller (service account failed)', warning: String(e.message) };
+    }
+  }
+  if (!session?.accessToken) throw new Error('No Google credential available.');
+  return { token: session.accessToken, as: 'caller' };
+}
+
+// Defaulted rather than required so this works without a Vercel env change.
+// A Drive folder id is not a secret — it appears in the folder's own URL — and
+// the override exists so the destination can be moved without a deploy.
+const backupParent = () => process.env.BACKUP_DRIVE_FOLDER_ID || DEFAULT_BACKUP_FOLDER;
+
+async function startRun(token, by) {
+  const { ensureFolder, trashFileByName } = await import('./_backupDrive.js');
+  const all = await scanAll();
+  const keys = all.filter(k => !EXCLUDED_PREFIXES.some(e => k.startsWith(e.prefix))).sort();
+  const now = new Date();
+  // One folder per DAY, named by date. A second run on the same day reuses it
+  // and replaces the files inside, so "today's backup" is one thing rather than
+  // a pile of near-identical folders. runId keeps the full timestamp so two
+  // runs cannot collide over the same Redis bookkeeping.
+  const day = now.toISOString().slice(0, 10);
+  const runId = now.toISOString().replace(/[:.]/g, '-');
+  const folder = await ensureFolder(token, day, backupParent());
+  // Reusing a day's folder means its files are about to be replaced, which
+  // makes the existing manifest a description of contents that will no longer
+  // exist. Retire it up front: an abandoned run then leaves NO manifest, which
+  // restore-plan already reads as "that run did not finish". Better nothing
+  // than something that lies.
+  if (folder.reused) await trashFileByName(token, 'manifest.json', folder.id);
+  const meta = { runId, day, folderId: folder.id, startedAt: now.toISOString(), by, keys };
+  await redis.hset(runKey(runId), { meta: JSON.stringify(meta) });
+  await redis.expire(runKey(runId), RUN_TTL);
+  return { meta, folder };
+}
+
+async function exportOneKey(token, meta, key) {
+  const { uploadFile } = await import('./_backupDrive.js');
   const { gzipSync } = await import('node:zlib');
   const { createHash } = await import('node:crypto');
-  const token = session.accessToken;
-  if (!token) return res.status(400).json({ error: 'No Google access token on this session.' });
 
-  // Defaulted rather than required so this works without a Vercel env change.
-  // A Drive folder id is not a secret — it appears in the folder's own URL —
-  // and the override exists so the destination can be moved (notably to a
-  // Shared Drive, which the scheduled run will need) without a deploy.
-  const parentId = process.env.BACKUP_DRIVE_FOLDER_ID || DEFAULT_BACKUP_FOLDER;
+  const type = await redis.type(key);
+  const data = await readKey(key, type);
+  const entries = type === 'hash' ? Object.keys(data).length : Array.isArray(data) ? data.length : 1;
+
+  const payload = Buffer.from(JSON.stringify({ key, type, entries, exportedAt: new Date().toISOString(), data }), 'utf8');
+  const gz = gzipSync(payload, { level: 9 });
+  const sha256 = createHash('sha256').update(gz).digest('hex');
+  const md5 = createHash('md5').update(gz).digest('hex');
+
+  const file = await uploadFile(token, { name: `${safeName(key)}.json.gz`, parentId: meta.folderId, bytes: gz });
+  // Drive computes md5Checksum from what it actually received, so this is a
+  // real end-to-end check rather than us marking our own homework.
+  const verified = !!file.md5Checksum && file.md5Checksum === md5;
+  const entry = {
+    key, type, entries, file: file.name, driveId: file.id,
+    rawBytes: payload.length, gzBytes: gz.length, sha256, md5,
+    driveMd5: file.md5Checksum || null, verified,
+  };
+  await redis.hset(runKey(meta.runId), { [`file:${key}`]: JSON.stringify(entry) });
+  return entry;
+}
+
+async function finishRun(token, meta) {
+  const { uploadFile } = await import('./_backupDrive.js');
+  const all = await redis.hgetall(runKey(meta.runId)) || {};
+  const files = Object.entries(all)
+    .filter(([f]) => f.startsWith('file:'))
+    .map(([, v]) => (typeof v === 'string' ? JSON.parse(v) : v))
+    .sort((a, b) => a.key.localeCompare(b.key));
+
+  const missing = meta.keys.filter(k => !files.some(f => f.key === k));
+  const unverified = files.filter(f => !f.verified).map(f => f.key);
+
+  const manifest = {
+    runId: meta.runId, day: meta.day,
+    startedAt: meta.startedAt, finishedAt: new Date().toISOString(),
+    by: meta.by, folderId: meta.folderId,
+    complete: missing.length === 0 && unverified.length === 0,
+    missing, unverified,
+    excluded: EXCLUDED_PREFIXES.map(e => ({ prefix: e.prefix, why: e.why })),
+    totals: {
+      files: files.length,
+      entries: files.reduce((n, f) => n + f.entries, 0),
+      rawBytes: files.reduce((n, f) => n + f.rawBytes, 0),
+      gzBytes: files.reduce((n, f) => n + f.gzBytes, 0),
+    },
+    files,
+  };
+
+  // The manifest goes up LAST and uncompressed, so its presence is the signal a
+  // run finished and it can be read without tooling.
+  const body = Buffer.from(JSON.stringify(manifest, null, 2), 'utf8');
+  const mf = await uploadFile(token, { name: 'manifest.json', parentId: meta.folderId, bytes: body, mimeType: 'application/json' });
+  await redis.del(runKey(meta.runId));
+  return { manifest, manifestDriveId: mf.id };
+}
+
+async function handleExport(req, res, session, mode) {
+  const cred = await driveCredential(session);
+  const token = cred.token;
+  const parentId = backupParent();
 
   if (mode === 'export-start') {
-    const all = await scanAll();
-    const keys = all.filter(k => !EXCLUDED_PREFIXES.some(e => k.startsWith(e.prefix))).sort();
-    const now = new Date();
-    // One folder per DAY, named by date. A second run on the same day reuses
-    // it and replaces the files inside, so "today's backup" is one thing rather
-    // than a pile of near-identical folders. runId still carries the full
-    // timestamp so two runs can't collide over the same Redis bookkeeping.
-    const day = now.toISOString().slice(0, 10);
-    const runId = now.toISOString().replace(/[:.]/g, '-');
-    const folder = await ensureFolder(token, day, parentId);
-    // Reusing a day's folder means the files in it are about to be replaced,
-    // which makes the existing manifest a description of contents that will no
-    // longer exist. Retire it up front: if this run is abandoned the folder has
-    // NO manifest, which restore-plan already treats as "that run did not
-    // finish". Better to have no manifest than one that lies. Found by
-    // re-exporting a single key and watching restore refuse the checksum.
-    if (folder.reused) await trashFileByName(token, 'manifest.json', folder.id);
-    await redis.hset(runKey(runId), {
-      meta: JSON.stringify({ runId, day, folderId: folder.id, startedAt: now.toISOString(), by: session.email, keys }),
+    const { meta, folder } = await startRun(token, session.email);
+    return res.status(200).json({
+      runId: meta.runId, folderId: folder.id, folderName: folder.name,
+      reusedFolder: folder.reused, keys: meta.keys, credential: cred.as, credentialWarning: cred.warning,
     });
-    await redis.expire(runKey(runId), RUN_TTL);
-    return res.status(200).json({ runId, folderId: folder.id, folderName: folder.name, reusedFolder: folder.reused, keys });
   }
 
   const runId = String(req.query?.run || '');
@@ -224,74 +313,12 @@ async function handleExport(req, res, session, mode) {
     const key = String(req.query?.key || '');
     if (!key) return res.status(400).json({ error: 'key is required' });
     if (!meta.keys.includes(key)) return res.status(400).json({ error: 'key is not part of this run' });
-
-    const type = await redis.type(key);
-    const data = await readKey(key, type);
-    const entries = type === 'hash' ? Object.keys(data).length
-      : Array.isArray(data) ? data.length : 1;
-
-    const payload = Buffer.from(JSON.stringify({
-      key, type, entries, exportedAt: new Date().toISOString(), data,
-    }), 'utf8');
-    const gz = gzipSync(payload, { level: 9 });
-
-    const sha256 = createHash('sha256').update(gz).digest('hex');
-    const md5 = createHash('md5').update(gz).digest('hex');
-
-    const file = await uploadFile(token, { name: `${safeName(key)}.json.gz`, parentId: meta.folderId, bytes: gz });
-
-    // Drive computes md5Checksum from what it actually received, so this is a
-    // real end-to-end check rather than us marking our own homework.
-    const verified = !!file.md5Checksum && file.md5Checksum === md5;
-    const entry = {
-      key, type, entries,
-      file: file.name, driveId: file.id,
-      rawBytes: payload.length, gzBytes: gz.length,
-      sha256, md5, driveMd5: file.md5Checksum || null, verified,
-    };
-    await redis.hset(runKey(runId), { [`file:${key}`]: JSON.stringify(entry) });
-    return res.status(200).json(entry);
+    return res.status(200).json(await exportOneKey(token, meta, key));
   }
 
   if (mode === 'export-finish') {
-    const all = await redis.hgetall(runKey(runId)) || {};
-    const files = Object.entries(all)
-      .filter(([f]) => f.startsWith('file:'))
-      .map(([, v]) => (typeof v === 'string' ? JSON.parse(v) : v))
-      .sort((a, b) => a.key.localeCompare(b.key));
-
-    const missing = meta.keys.filter(k => !files.some(f => f.key === k));
-    const unverified = files.filter(f => !f.verified).map(f => f.key);
-
-    const manifest = {
-      runId,
-      day: meta.day,
-      startedAt: meta.startedAt,
-      finishedAt: new Date().toISOString(),
-      by: meta.by,
-      folderId: meta.folderId,
-      complete: missing.length === 0 && unverified.length === 0,
-      missing,
-      unverified,
-      excluded: EXCLUDED_PREFIXES.map(e => ({ prefix: e.prefix, why: e.why })),
-      totals: {
-        files: files.length,
-        entries: files.reduce((n, f) => n + f.entries, 0),
-        rawBytes: files.reduce((n, f) => n + f.rawBytes, 0),
-        gzBytes: files.reduce((n, f) => n + f.gzBytes, 0),
-      },
-      files,
-    };
-
-    // The manifest goes up LAST and uncompressed, so its presence is the signal
-    // that a run finished and it can be read without tooling.
-    const body = Buffer.from(JSON.stringify(manifest, null, 2), 'utf8');
-    const mf = await uploadFile(token, {
-      name: 'manifest.json', parentId: meta.folderId, bytes: body, mimeType: 'application/json',
-    });
-
-    await redis.del(runKey(runId));
-    return res.status(200).json({ ...manifest, manifestDriveId: mf.id, files: undefined, fileCount: files.length });
+    const { manifest, manifestDriveId } = await finishRun(token, meta);
+    return res.status(200).json({ ...manifest, manifestDriveId, files: undefined, fileCount: manifest.files.length });
   }
 
   return res.status(400).json({ error: `unknown mode ${mode}` });
@@ -390,9 +417,8 @@ async function handleRestore(req, res, session, mode) {
   const { downloadFile } = await import('./_backupDrive.js');
   const { gunzipSync } = await import('node:zlib');
   const { createHash } = await import('node:crypto');
-  const token = session.accessToken;
-  if (!token) return res.status(400).json({ error: 'No Google access token on this session.' });
-  const parentId = process.env.BACKUP_DRIVE_FOLDER_ID || DEFAULT_BACKUP_FOLDER;
+  const { token } = await driveCredential(session);
+  const parentId = backupParent();
 
   const day = String(req.query?.day || '');
   if (!day) return res.status(400).json({ error: 'day is required, e.g. day=2026-08-06' });
@@ -472,7 +498,198 @@ async function handleRestore(req, res, session, mode) {
   return res.status(400).json({ error: `unknown mode ${mode}` });
 }
 
+
+// ── Service-account connectivity test ─────────────────────────────
+//
+// The nightly backup will authenticate as a service account rather than as
+// whoever happens to be signed in (see _gsa.js for why). Getting that wired up
+// involves several things that can each fail silently — a malformed PEM, the
+// Drive API not enabled, the account not added to the Shared Drive, Workspace
+// policy blocking external members — and Google's errors are not always plain
+// about which.
+//
+// So rather than guess, this walks the whole path and reports each step: mint a
+// token, resolve the folder, list it, write a probe file, read it back, and
+// remove the probe. It leaves nothing behind, and on failure it says which step
+// broke and what to do about it.
+async function handleSaTest(req, res) {
+  const { getServiceAccountToken, serviceAccountConfigured } = await import('./_gsa.js');
+  const { listFolder, uploadFile, downloadFile, trashFileByName } = await import('./_backupDrive.js');
+  const parentId = process.env.BACKUP_DRIVE_FOLDER_ID || DEFAULT_BACKUP_FOLDER;
+
+  const steps = [];
+  const step = (name, ok, detail, hint) => { steps.push({ name, ok, detail, hint }); return ok; };
+
+  if (!serviceAccountConfigured()) {
+    step('Credential present', false, 'GDRIVE_SA_EMAIL / GDRIVE_SA_PRIVATE_KEY are not both set',
+      'Add both in the Vercel project settings, then redeploy — env changes need a new deployment to take effect.');
+    return res.status(200).json({ ok: false, folderId: parentId, steps });
+  }
+  step('Credential present', true, `${process.env.GDRIVE_SA_EMAIL}${process.env.GDRIVE_SA_SUBJECT ? ` impersonating ${process.env.GDRIVE_SA_SUBJECT}` : ''}`);
+
+  let token;
+  try {
+    token = await getServiceAccountToken({ force: true });
+    step('Mint access token', true, 'Google accepted the signed assertion');
+  } catch (e) {
+    const msg = String(e.message);
+    step('Mint access token', false, msg,
+      /sign with GDRIVE_SA_PRIVATE_KEY/.test(msg)
+        ? 'The private key did not parse. Paste the whole PEM including the BEGIN/END lines.'
+        : /unauthorized_client/.test(msg)
+          ? 'If GDRIVE_SA_SUBJECT is set, domain-wide delegation is not authorised for this client ID and scope in the Admin console.'
+          : 'Check the service account still exists and its key has not been revoked.');
+    return res.status(200).json({ ok: false, folderId: parentId, steps });
+  }
+
+  // Listing proves both that the Drive API is on and that the account can
+  // actually see the folder — the step that fails when sharing was missed.
+  let existing;
+  try {
+    existing = await listFolder(token, parentId);
+    step('See the backup folder', true, `${existing.length} item(s) visible`);
+  } catch (e) {
+    const msg = String(e.message);
+    step('See the backup folder', false, msg,
+      /has not been used|disabled/i.test(msg)
+        ? 'Enable the Google Drive API for this Cloud project (APIs & Services → Library).'
+        : /404|notFound/i.test(msg)
+          ? 'The service account cannot see this folder. Add its email as a Content Manager on the Shared Drive — it will not autocomplete, type the full address and press Enter.'
+          : 'Check the folder id and that the account has at least reader access.');
+    return res.status(200).json({ ok: false, folderId: parentId, steps });
+  }
+
+  const probeName = `connectivity-test-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+  const body = Buffer.from('Vibe backup connectivity test. Safe to delete.\n', 'utf8');
+  let file;
+  try {
+    file = await uploadFile(token, { name: probeName, parentId, bytes: body, mimeType: 'text/plain' });
+    step('Write a file', true, `created ${probeName}`);
+  } catch (e) {
+    step('Write a file', false, String(e.message),
+      'The account can see the folder but not write to it — its role is probably Viewer or Commenter. Content Manager is what it needs.');
+    return res.status(200).json({ ok: false, folderId: parentId, steps });
+  }
+
+  try {
+    const back = await downloadFile(token, file.id);
+    const same = back.equals(body);
+    step('Read it back', same, same ? `${back.length} bytes, byte-identical` : 'content did not match what was written',
+      same ? undefined : 'Downloads are being altered in transit — unexpected; do not rely on this backup until understood.');
+  } catch (e) {
+    step('Read it back', false, String(e.message), 'Written but not readable — check the account has more than write-only access.');
+  }
+
+  try {
+    await trashFileByName(token, probeName, parentId);
+    step('Clean up', true, 'probe file moved to the bin');
+  } catch (e) {
+    step('Clean up', false, String(e.message), `Harmless, but ${probeName} is still in the folder — delete it by hand.`);
+  }
+
+  const ok = steps.every(s => s.ok);
+  return res.status(200).json({ ok, folderId: parentId, steps });
+}
+
+
+// ── Nightly run ───────────────────────────────────────────────────
+//
+// The manual export is driven one key per request from the browser, which a
+// cron cannot do — so this is the server-side equivalent, bounded by a deadline
+// well inside Vercel's 300s ceiling. A measured full run takes ~115s for 51
+// keys, so there is real headroom; if a run ever does overrun, it still writes
+// a manifest, which records exactly what it did and did not capture. A backup
+// that is honest about its gaps beats one that silently truncates.
+//
+// Redis cost is about 150 commands per night — negligible against the daily
+// budget, unlike the 5-minute crons that exhausted the quota on 2026-07-19.
+const CRON_BUDGET_MS = 240_000;
+
+// Keep every day for KEEP_DAYS, then the first of each month forever. Without
+// this the folder grows by ~15MB a night indefinitely. Folders are TRASHED
+// rather than deleted, so a mistake here is recoverable from Drive's bin.
+const KEEP_DAYS = Number(process.env.BACKUP_KEEP_DAYS || 30);
+
+async function pruneOldBackups(token, parentId, todayIso) {
+  const { listFolder, trashFileById } = await import('./_backupDrive.js');
+  const cutoff = new Date(todayIso);
+  cutoff.setUTCDate(cutoff.getUTCDate() - KEEP_DAYS);
+  const cutoffIso = cutoff.toISOString().slice(0, 10);
+
+  const items = await listFolder(token, parentId);
+  const trashed = [];
+  for (const f of items) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(f.name)) continue;   // only dated folders
+    if (f.name >= cutoffIso) continue;                     // inside the window
+    if (f.name.endsWith('-01')) continue;                  // month marker, kept
+    try { await trashFileById(token, f.id); trashed.push(f.name); } catch { /* leave it */ }
+  }
+  return trashed;
+}
+
+async function handleCron(req, res) {
+  const started = Date.now();
+  const { token, as } = await driveCredential(null);
+  const { meta } = await startRun(token, `cron (${as})`);
+
+  const failures = [];
+  let done = 0;
+  for (const key of meta.keys) {
+    if (Date.now() - started > CRON_BUDGET_MS) {
+      failures.push(`ran out of time after ${done}/${meta.keys.length} keys`);
+      break;
+    }
+    try {
+      const entry = await exportOneKey(token, meta, key);
+      if (!entry.verified) failures.push(`${key}: Drive did not confirm the checksum`);
+    } catch (e) {
+      // Keep going. A partial backup whose manifest names the gaps is worth
+      // more than stopping at the first bad key.
+      failures.push(`${key}: ${String(e.message).slice(0, 160)}`);
+    }
+    done++;
+  }
+
+  const { manifest } = await finishRun(token, meta);
+  let pruned = [];
+  if (manifest.complete) pruned = await pruneOldBackups(token, backupParent(), meta.day);
+
+  return res.status(200).json({
+    day: meta.day,
+    credential: as,
+    complete: manifest.complete,
+    files: manifest.totals.files,
+    entries: manifest.totals.entries,
+    gzBytes: manifest.totals.gzBytes,
+    missing: manifest.missing.length,
+    unverified: manifest.unverified.length,
+    failures,
+    // Pruning only runs after a complete backup — never trim history on the
+    // strength of a run that did not finish.
+    pruned,
+    elapsedMs: Date.now() - started,
+  });
+}
+
 export default async function handler(req, res) {
+  const mode0 = String(req.query?.mode || 'inventory');
+
+  // Vercel Cron sends Authorization: Bearer $CRON_SECRET. Checked before the
+  // session lookup because a cron has no login and never will.
+  if (mode0 === 'cron') {
+    const secret = process.env.CRON_SECRET;
+    const authed = secret && req.headers.authorization === `Bearer ${secret}`;
+    if (!authed) {
+      const s = await getGoogleSession(req);
+      if (!s || !(await isAdminEmail(s.email))) return res.status(401).json({ error: 'unauthorized' });
+    }
+    try {
+      return await handleCron(req, res);
+    } catch (e) {
+      return res.status(502).json({ error: String(e?.message || e).slice(0, 400) });
+    }
+  }
+
   const session = await getGoogleSession(req);
   if (!session) return res.status(401).json({ error: 'Not authenticated' });
   if (!(await isAdminEmail(session.email))) return res.status(403).json({ error: 'Admins only.' });
@@ -483,6 +700,14 @@ export default async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'POST required' });
     try {
       return await handleExport(req, res, session, mode);
+    } catch (e) {
+      return res.status(502).json({ error: String(e?.message || e).slice(0, 400) });
+    }
+  }
+
+  if (mode === 'sa-test') {
+    try {
+      return await handleSaTest(req, res);
     } catch (e) {
       return res.status(502).json({ error: String(e?.message || e).slice(0, 400) });
     }

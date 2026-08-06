@@ -146,3 +146,12 @@ export async function trashFileByName(token, name, parentId) {
   });
   return driveJson(res, 'trash');
 }
+
+export async function trashFileById(token, fileId) {
+  const res = await fetch(`${DRIVE}/files/${fileId}?fields=id,trashed&${ALL_DRIVES}`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ trashed: true }),
+  });
+  return driveJson(res, 'trash');
+}
