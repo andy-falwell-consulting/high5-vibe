@@ -11,8 +11,15 @@
 //
 //   GET /api/backup?mode=inventory   → { families, totals, excluded, warnings }
 //
-// Admin-only, and a real login — not the preview fallback identity, which is a
-// shared credential and shouldn't be able to enumerate the estate.
+// Admin-only.
+//
+// It does NOT additionally require a non-fallback login, unlike
+// admin-set-fallback-session.js. That check would buy nothing here: the
+// fallback identity can only exist on the preview deployment (it is gated on
+// VERCEL_ENV === 'preview' && VERCEL_GIT_COMMIT_REF === 'preview'), so
+// rejecting it protects production not at all while making this endpoint
+// impossible to exercise before it ships. What it returns is metadata — key
+// names, counts and sizes — never record contents, and admin is still required.
 import { Redis } from '@upstash/redis';
 import { getGoogleSession } from './_googleSession.js';
 import { isAdminEmail } from './_admin.js';
@@ -72,9 +79,7 @@ async function measure(key, type) {
 
 export default async function handler(req, res) {
   const session = await getGoogleSession(req);
-  if (!session || session.isFallback) {
-    return res.status(401).json({ error: 'Sign in with your own Google account first.' });
-  }
+  if (!session) return res.status(401).json({ error: 'Not authenticated' });
   if (!(await isAdminEmail(session.email))) return res.status(403).json({ error: 'Admins only.' });
 
   const mode = String(req.query?.mode || 'inventory');
