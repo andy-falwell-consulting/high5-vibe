@@ -29,10 +29,19 @@ const redis = Redis.fromEnv();
 // Live auth material. Never backed up: restoring it is worthless (sessions are
 // short-lived and re-mintable) and a copy sitting in Drive is a standing
 // credential leak. Matched as prefixes against the scanned key list.
+// Found by running this: the QuickBooks and Shopify tokens live in the same
+// keyspace as the business data, so a naive "back up everything" would have
+// written live API credentials into Google Drive in plaintext. They are also
+// pointless to restore — both are refreshed by their OAuth flows, and a
+// restored stale token is worse than none.
 const EXCLUDED_PREFIXES = [
   { prefix: 'session:', why: 'live login sessions — credential material' },
   { prefix: 'oauth_state:', why: 'in-flight OAuth nonces, 10 min TTL' },
   { prefix: 'fallback_session', why: 'shared preview identity — credential material' },
+  { prefix: 'qbo_access_token', why: 'live QuickBooks credential' },
+  { prefix: 'qbo_refresh_token', why: 'live QuickBooks credential' },
+  { prefix: 'qbo_sandbox_refresh_token', why: 'live QuickBooks sandbox credential' },
+  { prefix: 'shopify_token', why: 'live Shopify credential' },
 ];
 
 // Everything else is grouped into a family so the report reads as a shape
@@ -49,8 +58,9 @@ function familyOf(key) {
 async function scanAll() {
   const keys = [];
   let cursor = '0';
-  // Cursor-paged rather than KEYS: `na:flags:{db}:{recordId}` is one key PER
-  // RECORD, so this list can run to thousands and KEYS would block the server.
+  // Cursor-paged rather than KEYS, which blocks the server. The per-record
+  // flag keys (`carried:flags:{db}:{recordId}`) are the family most likely to
+  // grow this list.
   do {
     const [next, batch] = await redis.scan(cursor, { count: 500 });
     keys.push(...batch);
@@ -59,21 +69,49 @@ async function scanAll() {
   return keys;
 }
 
-// Size without transferring the payload. MEMORY USAGE is an estimate including
-// Redis overhead — good enough to size a backup, and far cheaper than reading
-// every hash just to measure it.
+// Size by SAMPLING, not by reading everything.
+//
+// MEMORY USAGE is unavailable on this Upstash plan, so the first version of
+// this reported no sizes at all — useless for deciding how the exporter should
+// chunk its files. Instead: read one page of a collection, measure the JSON
+// those entries serialise to, and scale by the true entry count. Reading all
+// 105k entries just to weigh them would cost far more than the answer is worth.
+//
+// Sizes are therefore estimates (marked as such), and entry counts are exact.
+const SAMPLE = 100;
+const jsonBytes = v => (v == null ? 0 : Buffer.byteLength(typeof v === 'string' ? v : JSON.stringify(v), 'utf8'));
+
 async function measure(key, type) {
-  const out = { bytes: null, entries: null };
+  const out = { bytes: null, entries: null, estimated: false };
   try {
-    if (type === 'hash') out.entries = await redis.hlen(key);
-    else if (type === 'set') out.entries = await redis.scard(key);
-    else if (type === 'list') out.entries = await redis.llen(key);
-    else if (type === 'string') out.entries = 1;
+    if (type === 'string') {
+      out.entries = 1;
+      out.bytes = jsonBytes(await redis.get(key));
+      return out;
+    }
+
+    let sampleBytes = 0, sampled = 0;
+    if (type === 'hash') {
+      out.entries = await redis.hlen(key);
+      const [, flat] = await redis.hscan(key, 0, { count: SAMPLE });
+      for (let i = 0; i < flat.length; i += 2) { sampleBytes += jsonBytes(flat[i]) + jsonBytes(flat[i + 1]); sampled++; }
+    } else if (type === 'list') {
+      out.entries = await redis.llen(key);
+      const items = await redis.lrange(key, 0, SAMPLE - 1);
+      for (const it of items) { sampleBytes += jsonBytes(it); sampled++; }
+    } else if (type === 'set') {
+      out.entries = await redis.scard(key);
+      const [, members] = await redis.sscan(key, 0, { count: SAMPLE });
+      for (const m of members) { sampleBytes += jsonBytes(m); sampled++; }
+    }
+
+    if (sampled > 0 && out.entries != null) {
+      out.bytes = Math.round((sampleBytes / sampled) * out.entries);
+      out.estimated = out.entries > sampled;
+    } else if (out.entries === 0) {
+      out.bytes = 0;
+    }
   } catch { /* leave null — reported as unknown rather than guessed */ }
-  try {
-    const r = await redis.memory.usage(key);
-    if (typeof r === 'number') out.bytes = r;
-  } catch { /* MEMORY USAGE unsupported on this plan — bytes stay null */ }
   return out;
 }
 
@@ -106,12 +144,13 @@ export default async function handler(req, res) {
       }
 
       const type = await redis.type(key);
-      const { bytes, entries } = await measure(key, type);
+      const { bytes, entries, estimated } = await measure(key, type);
       const fam = familyOf(key);
-      const row = families.get(fam) || { family: fam, type, keys: 0, entries: 0, bytes: 0, bytesKnown: true, sample: key };
+      const row = families.get(fam) || { family: fam, type, keys: 0, entries: 0, bytes: 0, bytesKnown: true, estimated: false, sample: key };
       row.keys++;
       if (entries != null) row.entries += entries;
       if (bytes == null) row.bytesKnown = false; else row.bytes += bytes;
+      if (estimated) row.estimated = true;
       if (row.type !== type) row.type = 'mixed';
       families.set(fam, row);
     }
@@ -130,7 +169,10 @@ export default async function handler(req, res) {
       warnings.push(`${r.family} is ~${(r.bytes / 1024 / 1024).toFixed(0)}MB — stream it to its own file; do not build one archive in memory.`);
     }
     if (anyUnknown) {
-      warnings.push('MEMORY USAGE is unavailable on this Redis plan, so byte sizes are partial. Entry counts are exact.');
+      warnings.push('Some keys could not be sized and are excluded from the total.');
+    }
+    if (rows.some(r => r.estimated)) {
+      warnings.push(`Sizes are estimated from a ${SAMPLE}-entry sample per key, scaled by the exact entry count. Entry counts are exact; bytes are within a few percent.`);
     }
 
     return res.status(200).json({
@@ -143,6 +185,7 @@ export default async function handler(req, res) {
         entries: rows.reduce((n, r) => n + r.entries, 0),
         bytes: totalBytes,
         bytesArePartial: anyUnknown,
+        bytesAreEstimated: rows.some(r => r.estimated),
       },
       families: rows,
       excluded: [...excluded.values()],
