@@ -708,17 +708,31 @@ export async function getAllRecords(layout, { onProgress, batchSize = 100, slimF
 
 const detailCache = new Map();
 
+// Fetches through /api/record, which merges Vibe's own edits over FileMaker's
+// copy (see api/_vibeStore.js). Going direct to FileMaker here would return the
+// pre-Vibe value AND write it into the list cache below — silently undoing
+// every Vibe edit the moment a record was opened.
+//
+// Localhost has no serverless functions, so it falls back to FileMaker direct.
+// The overlay is empty there anyway, which makes the two paths equivalent until
+// local development gains a way to run the API.
+function recordUrl(layout, recordId, env) {
+  return isLocalDev()
+    ? `${getBasePath()}/fmi/data/v2/databases/${env.db}/layouts/${encodeURIComponent(layout)}/records/${recordId}`
+    : `/api/record?db=${encodeURIComponent(env.db)}&layout=${encodeURIComponent(layout)}&recordId=${encodeURIComponent(recordId)}`;
+}
+
 export async function getRecord(layout, recordId) {
   const key = `${layout}:${recordId}`;
   if (detailCache.has(key)) return detailCache.get(key);
   const token = await getToken();
   const env = getCurrentEnv();
   const res = await _scheduledFetch(_HIGH, () => fetch(
-    `${getBasePath()}/fmi/data/v2/databases/${env.db}/layouts/${encodeURIComponent(layout)}/records/${recordId}`,
+    recordUrl(layout, recordId, env),
     // no-store: this single-record URL is constant, so the browser HTTP cache
     // would otherwise serve a stale copy after a related-row (portal) edit —
     // making BOM add/edit/remove look like nothing happened until a full reload.
-    { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' }
+    { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store', credentials: 'include' }
   ));
   if (res.status === 401) {
     sessionToken = null;

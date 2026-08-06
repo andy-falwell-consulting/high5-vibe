@@ -6,6 +6,7 @@
 // (resumable backfill, then incremental modified-since); the app reads via
 // readReplica(). Files starting with _ are not Vercel routes.
 import { Redis } from '@upstash/redis';
+import { readOverlay, applyOverlay } from './_vibeStore.js';
 
 const redis = Redis.fromEnv();
 const FMP_HOST = 'https://ILELLCO.pcifmhosting.com';
@@ -145,6 +146,11 @@ export async function runSync(db, key, budgetMs = 260000) {
 
 // Cursor-paged read (HSCAN) so each HTTP response stays well under Vercel's
 // ~4.5MB body limit. Client starts at cursor '0' and loops until '0' returns.
+//
+// Vibe's own edits are overlaid on the way out (see _vibeStore.js), so every
+// caller — the whole app — sees merged data without knowing this layer exists.
+// With an empty overlay this is a no-op and the result is byte-identical to the
+// raw replica.
 export async function scanReplica(db, key, cursor = '0', count = 1500) {
   const cfg = REPLICATED[key];
   if (!cfg) throw new Error('layout not replicated: ' + key);
@@ -154,7 +160,9 @@ export async function scanReplica(db, key, cursor = '0', count = 1500) {
     const v = flat[i];
     records.push(typeof v === 'string' ? JSON.parse(v) : v);
   }
-  return { cursor: String(next), records };
+  const nextCursor = String(next);
+  const overlay = await readOverlay(db, cfg.layout);
+  return { cursor: nextCursor, records: applyOverlay(records, overlay, nextCursor === '0') };
 }
 
 export async function getMetaPublic(db, key) {
