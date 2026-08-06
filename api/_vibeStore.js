@@ -1,0 +1,86 @@
+// Vibe-owned record data. Files starting with _ are not Vercel routes.
+//
+// PHASE 1 of docs/vibe-owns-the-record.md.
+//
+// Two keyspaces, deliberately separate:
+//
+//   repl:{db}:{layout}:recs   FileMaker's copy. A sync REPLACES it wholesale.
+//   vibe:{db}:{layout}:recs   Vibe's own edits. A sync NEVER touches it.
+//
+// A read merges the two, Vibe winning field by field. Because they are separate
+// keys, "a sync cannot destroy Vibe work" is true by construction rather than
+// by carefulness — which is the whole point. Every Kanban bug chased on
+// 2026-08-05 came from those two things sharing one store, and each fix was a
+// different edge of that same collapse.
+//
+// A fragment holds only the fields Vibe has changed, not a whole record:
+//
+//   { fieldData: { Status: 'Approved' }, __updatedAt, __by }
+//   { __deleted: true, __updatedAt, __by }                      tombstone
+//   { fieldData: {...}, __created: true, ... }                  born in Vibe
+//
+// Storing fragments rather than whole records means a FileMaker change to a
+// field Vibe has never touched still flows through on the next sync. Only what
+// Vibe actually edited is pinned.
+import { Redis } from '@upstash/redis';
+
+const redis = Redis.fromEnv();
+
+export const vibeKey = (db, layout) => `vibe:${db}:${layout}:recs`;
+
+// The whole overlay, as a Map. Small by design — it holds only records Vibe has
+// touched, not the 6,400-record table. If it ever grows enough for this to hurt,
+// switch to HMGET of the ids in the current page plus one HGETALL on the last
+// page to pick up Vibe-only records.
+export async function readOverlay(db, layout) {
+  const raw = (await redis.hgetall(vibeKey(db, layout))) || {};
+  const map = new Map();
+  for (const [id, v] of Object.entries(raw)) {
+    try {
+      map.set(String(id), typeof v === 'string' ? JSON.parse(v) : v);
+    } catch { /* unparseable fragment: ignore rather than fail the whole read */ }
+  }
+  return map;
+}
+
+export async function readFragment(db, layout, recordId) {
+  const v = await redis.hget(vibeKey(db, layout), String(recordId));
+  if (v == null) return null;
+  try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return null; }
+}
+
+// Vibe wins field by field. Anything Vibe hasn't set keeps FileMaker's value.
+export function mergeRecord(base, frag) {
+  if (!frag) return base;
+  if (frag.__deleted) return null;
+  if (!base) return frag.fieldData ? { recordId: frag.recordId, fieldData: { ...frag.fieldData } } : null;
+  return { ...base, fieldData: { ...base.fieldData, ...(frag.fieldData || {}) } };
+}
+
+// Apply an overlay to one page of replica records.
+//
+// `isLastPage` matters: records created in Vibe have no FileMaker counterpart,
+// so they appear in no page of the replica scan and have to be appended once —
+// on the final page, since the client accumulates pages until the cursor comes
+// back '0'. Appending on every page would duplicate them.
+export function applyOverlay(records, overlay, isLastPage) {
+  if (!overlay.size) return records;
+
+  const out = [];
+  const seen = new Set();
+  for (const r of records) {
+    const id = String(r.recordId);
+    seen.add(id);
+    const merged = mergeRecord(r, overlay.get(id));
+    if (merged) out.push(merged);   // null = tombstoned, so it drops out
+  }
+
+  if (isLastPage) {
+    for (const [id, frag] of overlay) {
+      if (seen.has(id) || frag.__deleted || !frag.__created) continue;
+      const born = mergeRecord(null, { ...frag, recordId: id });
+      if (born) out.push(born);
+    }
+  }
+  return out;
+}
