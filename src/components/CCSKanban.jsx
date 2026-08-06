@@ -3,6 +3,7 @@ import {
   DndContext,
   DragOverlay,
   closestCenter,
+  MeasuringStrategy,
   PointerSensor,
   useSensor,
   useSensors,
@@ -11,10 +12,11 @@ import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, horizontalListSortingStrategy, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useAllRecords } from '../hooks/useAllRecords'
-import { updateRecord, bustCache, patchCachedRecord } from '../api/filemaker'
+import { bustCache, patchCachedRecord } from '../api/filemaker'
+import { updateVibeRecord } from '../api/vibeRecords'
 import { getCurrentEnv } from '../config/fmpEnvironments'
 import { RCD_LAYOUT, RCD_CACHE_VERSION, RCD_FIND_QUERY, RCD_SORT } from '../config/ccsCache'
-import { ACTIVE_STAGES, statusColor, mergedStatus } from '../config/ccsStatus'
+import { ACTIVE_STAGES, PIPELINE_STAGES, PIPELINE_SHORT, statusColor, mergedStatus } from '../config/ccsStatus'
 import { useKanbanBoard } from '../hooks/useKanbanBoard'
 import { useKanbanOrder } from '../hooks/useKanbanOrder'
 import { useOpsLeads } from '../hooks/useOpsLeads'
@@ -25,7 +27,14 @@ const CACHE_VERSION = RCD_CACHE_VERSION
 
 // Board columns = the merged active/in-flight stages (Completed / No Go / Other
 // are valid statuses but not columns — a card set to one leaves the board).
-const COLUMNS = ACTIVE_STAGES.map(id => ({ id, label: id, color: statusColor(id) }))
+// Headers use the SHORT stage labels the pipeline dots and Home funnel already
+// use: at 180px a lane cannot fit "Proposed Dates, Sent Contract & DI" without
+// wrapping to three lines and shoving the cards down.
+const COLUMNS = ACTIVE_STAGES.map(id => ({
+  id,
+  label: PIPELINE_SHORT[PIPELINE_STAGES.indexOf(id)] ?? id,
+  color: statusColor(id),
+}))
 const ACTIVE_STATUSES = new Set(ACTIVE_STAGES)
 
 function matchesSearch(r, q) {
@@ -403,17 +412,14 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
     ? lastCompleteRef.current
     : records
 
-  const [localStatus, setLocalStatus] = useState({})
   const [saving, setSaving] = useState({})
   const [activeId, setActiveId] = useState(null)
   const [detailRecord, setDetailRecord] = useState(null)
-  const localStatusRef = useRef({})
+  const [saveError, setSaveError] = useState(null) // { org, why } — a refused move
 
   function handleRefresh() {
     if (refreshing || fetching) return
     bustCache(LAYOUT, CACHE_VERSION)
-    setLocalStatus({})
-    localStatusRef.current = {}
     setRefreshing(true)
     setRefreshKey(k => k + 1)
   }
@@ -440,25 +446,52 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
   )
 
-  // A dragged card shows its new lane immediately, before FileMaker confirms.
-  // That optimistic override used to be cleared ONLY by the Refresh button, so
-  // for the rest of the session the card ignored the record entirely: change the
-  // status in the CCS record panel and the card stayed where it had been dropped.
+  // Auto-scroll the board while a card is held near its left or right edge.
   //
-  // Each override therefore remembers the status the record had at drag time
-  // (`base`). The moment the record itself reports something else — our own
-  // write landing via patchCachedRecord, or an edit made in the record panel or
-  // another tab — the record is the truth and the override is dropped.
-  const getStatus = useCallback((r) => {
-    const override = localStatusRef.current[r.recordId]
-    if (!override) return mergedStatus(r.fieldData)
-    const current = mergedStatus(r.fieldData)
-    if (current !== override.base) {
-      delete localStatusRef.current[r.recordId]
-      return current
+  // The board scrolls horizontally but dnd-kit's built-in auto-scroll does not
+  // engage on this container — measured: holding a dragged card against the
+  // right edge for 1.6s left scrollLeft at 0 with 572px still off screen, so any
+  // lane outside the viewport was impossible to drop onto. Narrower columns (see
+  // CCSKanban.css) mean six lanes usually fit; this covers the windows where
+  // they do not.
+  const boardRef = useRef(null)
+  const scrollDir = useRef(0)
+
+  useEffect(() => {
+    if (!activeId) return
+    const EDGE_PX = 80, STEP_PX = 16
+    const onMove = e => {
+      const el = boardRef.current
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      scrollDir.current = e.clientX > r.right - EDGE_PX ? 1
+        : e.clientX < r.left + EDGE_PX ? -1 : 0
     }
-    return override.to
-  }, [])
+    let raf = 0
+    const tick = () => {
+      const el = boardRef.current
+      if (el && scrollDir.current) el.scrollLeft += scrollDir.current * STEP_PX
+      raf = requestAnimationFrame(tick)
+    }
+    window.addEventListener('pointermove', onMove)
+    raf = requestAnimationFrame(tick)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      cancelAnimationFrame(raf)
+      scrollDir.current = 0
+    }
+  }, [activeId])
+
+  // The card's lane is simply the record's status. There is no optimistic
+  // override any more.
+  //
+  // There used to be one, because a drag wrote to FileMaker and the replica
+  // could take five minutes to agree — so the card had to be pinned to the
+  // dropped lane in the meantime, and untangling when to STOP pinning it took
+  // three attempts (v1.0.275, v1.0.277, v1.0.283). Writing to Vibe removes the
+  // problem rather than managing it: the write lands in ~50ms, patchCachedRecord
+  // updates the list immediately, and nothing downstream can revert it.
+  const getStatus = useCallback((r) => mergedStatus(r.fieldData), [])
 
   // Board membership is curated by the team (a shared Redis set), AND the card's
   // merged status must be an active stage — so a job the team added drops off
@@ -540,21 +573,23 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
 
     if (sourceColumn === targetColumn) return // pure reorder — no status change
 
-    // `base` is what the RECORD says right now, not what the card is showing —
-    // it's the value getStatus watches for a change against.
-    const base = mergedStatus(record.fieldData)
-    localStatusRef.current[active.id] = { to: targetColumn, base }
-    setLocalStatus(p => ({ ...p, [active.id]: targetColumn }))
+    const previous = mergedStatus(record.fieldData)
     setSaving(p => ({ ...p, [active.id]: true }))
+    // Patch the cache first so the card moves at once; the write is fast enough
+    // that a failure rolling it back is barely visible, and nothing else can
+    // overwrite it in the meantime.
+    patchCachedRecord(LAYOUT, CACHE_VERSION, active.id, { Status: targetColumn })
 
     try {
-      await updateRecord(LAYOUT, active.id, { Status: targetColumn })
-      // Patching the cache moves fieldData off `base`, which retires the
-      // override — from here the card follows the record.
-      patchCachedRecord(LAYOUT, CACHE_VERSION, active.id, { Status: targetColumn })
-    } catch {
-      delete localStatusRef.current[active.id]
-      setLocalStatus(p => { const n = { ...p }; delete n[active.id]; return n })
+      await updateVibeRecord(LAYOUT, active.id, { Status: targetColumn })
+    } catch (err) {
+      patchCachedRecord(LAYOUT, CACHE_VERSION, active.id, { Status: previous })
+      // A card that silently slides back is what made this read as "drag doesn't
+      // work" rather than "the save was refused". Say which.
+      setSaveError({
+        org: record.fieldData.zz__Display_Organization__ct || 'That project',
+        why: err?.message || 'Save failed',
+      })
     } finally {
       setSaving(p => { const n = { ...p }; delete n[active.id]; return n })
     }
@@ -602,6 +637,13 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
         </div>
         <button className="kb-add-btn" onClick={() => setShowAdd(true)} title="Add projects to the board">＋ Add projects</button>
       </div>
+      {saveError && (
+        <div className="kb-save-error" role="alert">
+          <span className="kb-save-error-ic">⚠</span>
+          <span><strong>{saveError.org}</strong> stayed where it was — {saveError.why}</span>
+          <button className="kb-save-error-x" onClick={() => setSaveError(null)} aria-label="Dismiss">✕</button>
+        </div>
+      )}
       {showAdd && (
         <AddToBoardPanel
           candidates={displayRecords.filter(r => ACTIVE_STATUSES.has(getStatus(r)) && !board.ids.has(String(r.recordId)))}
@@ -614,9 +656,13 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
         collisionDetection={closestCenter}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
+        // Re-measure droppables continuously. Default measuring happens once at
+        // drag start, so a lane scrolled into view mid-drag would keep its old
+        // (off-screen) rect and reject the drop — undoing the auto-scroll above.
+        measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
       >
         <SortableContext items={orderedColumns.map(c => `col::${c.id}`)} strategy={horizontalListSortingStrategy}>
-          <div className="kb-board">
+          <div className="kb-board" ref={boardRef}>
             {orderedColumns.map(col => (
               <KanbanColumn
                 leadFor={opsLead.leadFor}

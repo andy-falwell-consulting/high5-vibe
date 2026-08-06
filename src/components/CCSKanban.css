@@ -132,11 +132,16 @@
   padding: 16px;
 }
 
-/* Column */
+/* Column
+   min-width is 180 rather than 260 so all six lanes fit on a normal laptop. At
+   260 the board was 1,652px wide inside a 1,080px viewport — two lanes
+   permanently off screen, and since a drag cannot scroll the board on its own
+   (see the auto-scroll effect in CCSKanban.jsx) those lanes were unreachable.
+   Lanes still grow to 300 when there is room. */
 .kb-col {
   display: flex;
   flex-direction: column;
-  min-width: 260px;
+  min-width: 180px;
   max-width: 300px;
   flex: 1;
   background: #111320;
@@ -687,3 +692,22 @@ div:hover > .kb-card-remove { opacity: 1; }
 [data-theme="light"] .kb-add-search { background: #f8fafc; border-color: #e2e8f0; color: #0f172a; }
 [data-theme="light"] .kb-add-row { color: #0f172a; }
 [data-theme="light"] .kb-add-row:hover { background: #f1f5f9; }
+
+/* Refused move. Persists until dismissed rather than auto-hiding — a card
+   sliding back on its own is precisely what made a rejected save read as
+   "dragging is broken". */
+.kb-save-error {
+  display: flex; align-items: center; gap: 8px;
+  margin: 0 16px 8px; padding: 8px 12px;
+  border-radius: 8px;
+  background: #7f1d1d33; border: 1px solid #7f1d1d66;
+  color: #fca5a5; font-size: 13px; flex-shrink: 0;
+}
+.kb-save-error strong { color: #fecaca; font-weight: 600; }
+.kb-save-error-ic { font-size: 14px; }
+.kb-save-error-x {
+  margin-left: auto; background: none; border: none;
+  color: inherit; cursor: pointer; font-size: 13px; padding: 2px 4px;
+}
+[data-theme="light"] .kb-save-error { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
+[data-theme="light"] .kb-save-error strong { color: #7f1d1d; }

@@ -84,3 +84,27 @@ export function applyOverlay(records, overlay, isLastPage) {
   }
   return out;
 }
+
+// Layouts whose EDITS are Vibe's rather than FileMaker's. Deliberately a short
+// explicit list rather than "everything replicated": each layout moves in its
+// own phase, and a layout not named here still writes to FileMaker.
+export const VIBE_OWNED = new Set(['RCD_New']);
+
+// Merge a set of changed fields into a record's fragment.
+//
+// Read-modify-write rather than blind overwrite, so two people editing
+// different fields of the same record don't erase each other. Not a
+// transaction — a genuine simultaneous write to the SAME field still resolves
+// last-writer-wins, which matches how the app behaved against FileMaker.
+export async function writeFragment(db, layout, recordId, fieldData, by) {
+  const id = String(recordId);
+  const existing = (await readFragment(db, layout, id)) || {};
+  const frag = {
+    ...existing,
+    fieldData: { ...(existing.fieldData || {}), ...fieldData },
+    __updatedAt: new Date().toISOString(),
+    __by: by || null,
+  };
+  await redis.hset(vibeKey(db, layout), { [id]: JSON.stringify(frag) });
+  return frag;
+}
