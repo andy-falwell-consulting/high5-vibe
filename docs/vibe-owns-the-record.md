@@ -1,239 +1,260 @@
 # Vibe owns the record — decoupling plan
 
-**Status:** proposed, not started. Written 2026-08-05.
-**Shape:** FileMaker → Vibe sync, manual, one-way. Vibe changes never go back to FMP.
+**Status:** Phase 0 complete and live. Phase 1a–1c complete and live (v1.0.288).
+Phase 1d next. Written 2026-08-05, updated 2026-08-06 to record what actually shipped.
+**Shape:** FileMaker → Vibe sync, one-way. Vibe changes never go back to FMP.
 
 ---
 
 ## The one idea
 
-Today the mirror and the edits share a single store. `repl:{db}:{layout}:recs` holds
-FileMaker's copy, and every Vibe edit is written *into that same cached record*.
+The mirror and the edits used to share a single store. `repl:{db}:{layout}:recs` held
+FileMaker's copy, and every Vibe edit was written *into that same cached record*.
 
-That single collapse is the source of every Kanban bug chased on 2026-08-05: cards
+That single collapse was the source of every Kanban bug chased on 2026-08-05: cards
 reverting on refresh, status changes not surviving a reload, a pending-write guard that
-needed two attempts to get right. None of them were FileMaker refusing anything.
+took three attempts to get right. None of them were FileMaker refusing anything.
 
-Decoupling means splitting the two:
+Decoupling splits the two:
 
-| Keyspace | Owner | What a manual pull does to it |
+| Keyspace | Owner | What a sync does to it |
 |---|---|---|
 | `repl:{db}:{layout}:recs` | FileMaker | **replaces it wholesale** |
 | `vibe:{db}:{layout}:recs` | Vibe | **never touches it** |
 
-A read merges the two, Vibe winning. Records created in Vibe exist only in `vibe:`.
-Deletes are a tombstone in `vibe:`.
+A read merges the two, Vibe winning field by field. Records created in Vibe exist only in
+`vibe:`. Deletes are a tombstone in `vibe:`.
 
-The property we want falls out by construction: **a pull cannot destroy Vibe work.** Not
+The property we want falls out by construction: **a sync cannot destroy Vibe work.** Not
 by carefulness, not by a guard with a ten-minute window — it is structurally impossible,
-because the pull writes to a keyspace the reader treats as the lower layer.
+because the sync writes to a keyspace the reader treats as the lower layer.
+
+Fragments hold **only the fields Vibe has changed**, never whole records. So a FileMaker
+change to a field Vibe has never touched still flows through on the next sync. Only what
+Vibe actually edited is pinned.
 
 ---
 
 ## Decisions taken
 
-1. **Conflicts are surfaced.** Vibe wins on read, but a pull reports how many incoming
-   FileMaker changes were shadowed by a Vibe edit, and which.
-2. **New ids are Vibe-native and obvious.** See [Identity](#identity).
+1. **Conflicts are surfaced.** Vibe wins on read; a sync should report how many incoming
+   FileMaker changes were shadowed by a Vibe edit. *Not yet built — see Phase 1d.*
+2. **New ids are Vibe-native and obvious.** `V-100001` onward. *Not yet built.*
 3. **Vibe owns its schema.** Each module gets an explicit field definition rather than
    reflecting whatever FileMaker happens to expose.
-4. **Backups go to Google Drive** — folder `vibe_backups`
-   (`1fkjp3qpzQ7OGZxx0nb1hDOCWZgoAgT86`, owned by it@high5adventure.org).
+4. **Backups go to Google Drive.** Shipped — see below. The destination moved during
+   implementation from `vibe_backups` to the **`backups` Shared Drive**
+   (`1xW3xXxRzUnSGKM5pG1dCibFAEQUyHLsi`), which turned out to matter.
 
 ## The question still open
 
 **Is anyone still editing CCS records or contacts in FMP Pro?**
 
-It does not block starting — Phases 0–2 are identical either way. It decides the endgame:
+It is now more pressing than when this was written, because CCS projects have actually
+moved. A FileMaker edit to a project still flows *in* on the next sync, but sits
+underneath any Vibe edit to the same field, where nobody will see it.
 
-- **Nobody is** → the sync is a 60-day safety net, then delete it. FileMaker becomes an
+- **Nobody is** → the sync becomes a safety net, then gets deleted. FileMaker becomes an
   archive. No permanent merge layer, no ongoing conflict bookkeeping.
 - **Someone is** → the merge layer is permanent, and we need to know *which fields* they
-  touch, because a pull brings those changes in underneath a Vibe overlay where nobody
-  will see them.
-
-Worth answering before Phase 3.
+  touch.
 
 ---
 
-## Architecture
+## Architecture — as built
 
 ### Read path
 
-One merge function, one place:
+The merge is **server-side, at the record layer**, in `scanReplica` (`api/_replica.js`
+→ `api/_vibeStore.js`).
 
-```
-record(id) = { ...repl[id], ...vibe[id] }        // vibe wins, field by field
-             unless vibe[id].__deleted           // tombstone → record is gone
-```
+This is a change from the original plan, which called for a resolver each consumer would
+call. Merging at the record layer instead means **every existing reader kept working
+untouched** — the Home funnel, the CCS workspace pill and pipeline, the list chips,
+search. They read `fieldData`, and `fieldData` is simply correct.
 
-New Vibe records have no `repl` half. Imported records keep their FileMaker `recordId`,
-so every existing foreign key keeps working untouched.
+It also avoids the failure mode that bit `api/kanban-order.js`, where a second copy of a
+constant drifted from the first and silently broke card ordering in three lanes for
+weeks. There is one merge, in one place.
 
-The discipline that matters: **every consumer goes through the merge**, the same way the
-CCS status resolver has to. A module that reads `repl:` directly will silently show
-pre-edit data, and it will look like a caching bug.
+**Single-record reads go through `/api/record`.** `getRecord()` used to hit FileMaker
+directly and then write what it got into the list cache. Once Vibe owned a field, that
+path would have returned the pre-Vibe value *and overwritten the merged copy the list
+already held* — silently undoing every Vibe edit the moment a record was opened. It now
+applies the same overlay. Localhost keeps the direct path; it has no serverless functions
+and an empty overlay makes the two equivalent.
 
 ### Write path
 
-Writes go to `vibe:` and need only the Google session — no FileMaker token.
+`POST /api/vibe-record` merges changed fields into a record's fragment
+(read-modify-write, so two people editing different fields don't erase each other).
 
-Consequences, all good:
+Two consequences, both of which fixed long-standing problems:
 
-- The read-only-mode banner and per-user FileMaker account provisioning stop mattering.
-  (Today `andy@andyfalwell.com` has an account in `High5_Core4_Dev` but not
-  `High5_Core4`, which is why writes fail on production for that identity.)
-- **Fields absent from a FileMaker layout become writable.** This unblocks, with no FMP
-  layout change at all:
-  - `NameFirst` / `NameLast` — adding a real person contact
-  - `Title` — currently rendered in the Contacts About card but permanently blank
-  - CCS organization — established as unwritable over the Data API
-- Writes drop from a ~1–3s FileMaker round trip to ~50ms.
+- **It needs only a Google session.** The FileMaker path required a per-user FMP account —
+  which is why production writes silently failed for an identity that had an account in
+  Dev but not in prod. That was the original "the Kanban doesn't work" report.
+- **Nothing can revert an edit**, so the optimistic-guard apparatus is unnecessary for
+  Vibe-owned layouts.
 
-### Sync (pull)
+`VIBE_OWNED` in `api/_vibeStore.js` is a short explicit list — currently `RCD_New` only.
+A layout not named there still writes to FileMaker, and the endpoint **refuses** rather
+than silently forwarding, so a caller can't think it wrote to Vibe when it wrote to FMP.
 
-`runSync()` in [`api/_replica.js`](../api/_replica.js) already does this — resumable
-backfill then incremental modified-since, across 8 layouts. It keeps its job; it just
-loses the ability to touch `vibe:`.
+### Sync
 
-Triggered from Admin, per layout, showing:
+`runSync()` in `api/_replica.js` is unchanged. It only ever touches `repl:`.
 
-- last pull time
-- records added / changed / removed
-- **shadowed count** — incoming changes sitting under a Vibe edit, with a drill-in
-
-That last number is what keeps "we don't care about Vibe → FMP" honest instead of
-invisible. If it stays at zero, nobody is working in FileMaker and the endgame question
-answers itself.
-
-The 5-minute production cron gets turned **off** for any layout Vibe owns. That also
-relieves the Upstash budget pressure that exhausted the quota on 2026-07-19 and took
-down login.
+Not yet built: the **shadowed count** — how many incoming FileMaker changes sit under a
+Vibe edit. That number is what keeps "we don't care about Vibe → FMP" honest rather than
+invisible, and it is how the open question above gets answered empirically. If it stays
+at zero, nobody is working in FileMaker.
 
 ---
 
 ## Identity
 
-Imported records keep FileMaker's `recordId` verbatim — a bare integer, e.g. `16689`,
-`304539`. Nothing about existing links changes.
+Imported records keep FileMaker's `recordId` verbatim. Nothing about existing links
+changes.
 
-Records created in Vibe get:
-
-```
-V-100001, V-100002, …
-```
-
-Same family, unmistakable at a glance, allocated by `INCR vibe:id:seq:{db}` starting at
-100000. Never reused, never recycled after a delete.
+Records created in Vibe will get `V-100001` onward, from `INCR vibe:id:seq:{db}` starting
+at 100000. Never reused.
 
 Rules:
 
-- Any code comparing or storing a record id must treat it as an **opaque string**. Some
-  places currently do `Number(x)` on ids — those need auditing.
-- Foreign keys (`_kft__Contact_ID` and friends) must accept both forms.
-- A `V-` id never goes to FileMaker. Nothing sends it there, and if the sync is ever
-  reversed, `V-` records are the set that has no FMP counterpart.
+- Ids are **opaque strings**. Anywhere the code does `Number(recordId)` needs auditing
+  before this ships.
+- Foreign keys must accept both forms.
+- A `V-` id never goes to FileMaker.
+
+*Not yet built — Phase 1d.*
 
 ---
 
-## Backup and restore
+## Backup and restore — shipped
 
-Once Vibe is authoritative, **Upstash Redis is the system of record for the business.**
-That is not something to hold one copy of. This is a blocker for Phase 1, not a
-follow-up.
+Live as of v1.0.286. Admin → Backup.
 
-**What:** every `repl:` and `vibe:` keyspace per database, plus the small Vibe-only
-hashes — `ccs:org`, `ops:lead`, `na-flags`, `kanban:onboard`, `kanban:order`.
+**Nightly at 08:00 UTC**, authenticated as a service account. 51 keys, ~105,000 entries,
+**148MB raw → ~15MB gzipped**, into `backups/YYYY-MM-DD/`. A second run the same day
+reuses that folder and replaces the files rather than duplicating them.
 
-**Format:** one gzipped JSON per layout per run, plus a manifest with counts and a
-SHA-256 per file. Plain JSON so a restore never depends on this codebase existing.
+**Verification is genuine**: the md5 we compute is compared against the checksum Drive
+computes from what it actually received. `manifest.json` goes up last and uncompressed —
+its presence signals a finished run, and it names any missing or unverified keys rather
+than implying success.
 
-**Naming:** `vibe-backup-{db}-YYYY-MM-DD/` inside `vibe_backups`.
+**Restore** (`restore-plan` / `restore-check` / `restore-write`) is built and **rehearsed**.
+It is read-only by default; writes land in a scratch prefix with a 24h TTL unless
+`target=live`, which additionally requires `confirm=overwrite {key}`. Overwriting a live
+key is deliberately not reachable from the UI.
 
-**Cadence:** daily, plus an on-demand run triggered before every migration step.
+**Retention**: every day for 30 days, then the first of each month. Pruning runs only
+after a *complete* backup, and folders are trashed rather than deleted.
 
-**Retention:** 30 daily, then monthly for a year.
+### What building it turned up
 
-**Verification:** read back each uploaded file, compare size and checksum, record the
-last-good run in Redis and show it in Admin — with a loud warning once the newest good
-backup is over 48 hours old. An unverified backup is not a backup.
+- **Live API credentials were sitting in the same keyspace as the data** — QuickBooks and
+  Shopify tokens. A naive "back up everything" would have written them to Drive in
+  plaintext. Now excluded, along with sessions and OAuth nonces.
+- **`MEMORY USAGE` is unavailable on this Upstash plan**, so sizes are estimated from a
+  100-entry sample scaled by the exact count.
+- **The Shared Drive needs `supportsAllDrives`** on every Drive call, or writes are
+  rejected. Set unconditionally.
+- **Vercel stores env newlines escaped**, so a pasted PEM arrives as one line with literal
+  `\n` and fails with `error:1E08010C:DECODER routines::unsupported`. Normalised on read.
+- **A same-day rerun could leave a manifest describing files that no longer existed.**
+  Reusing a day's folder now trashes the manifest first: better no manifest than one that
+  lies.
 
-**Restore drill:** before Phase 1 ships, restore a backup into a scratch keyspace and
-diff it against live. A restore path that has never been executed does not work; it has
-just never been observed failing.
+### The credential, and why a service account
 
-### Credential — needs a decision
+The app's OAuth client is in **Testing** publishing status, and Google expires refresh
+tokens for Testing-status apps after **7 days** — the same rule that forces the preview
+fallback session to be re-captured weekly. A cron on a human's token would have failed
+about once a week, silently.
 
-The app already holds Drive scope, but its Google OAuth client is **unverified
-(Testing mode)**, and Google expires Testing-mode refresh tokens after **7 days**. This
-is already documented for the preview-bypass session, which has to be re-captured weekly.
-A cron-driven backup on a user refresh token would therefore break about once a week —
-silently, which is the worst way for a backup to fail.
+A service account sidesteps user OAuth entirely: sign a JWT, get a short-lived token. No
+consent screen, no refresh token, no publishing status, nothing to expire, and **no app
+verification required**. `GDRIVE_SA_SUBJECT` supports domain-wide delegation but was not
+needed.
 
-Three durable options, best first:
+This is where the Shared Drive mattered: a service account has no Drive storage quota of
+its own, so it cannot own files in a personal My Drive. In a Shared Drive, storage belongs
+to the organisation.
 
-1. **Move `vibe_backups` into a Shared Drive** and add a Google service account as a
-   member. Storage belongs to the organisation, the credential never expires, and it is
-   independent of any individual's account. Note the folder is currently in
-   it@high5adventure.org's My Drive, where a plain service account has no storage quota
-   of its own — this is the reason to prefer a Shared Drive.
-2. **Domain-wide delegation** — service account impersonates it@high5adventure.org.
-   Works with the folder as-is, needs Workspace admin.
-3. **Get the OAuth app verified**, which removes the 7-day expiry. Worth doing anyway,
-   but slow and it is not really a backup solution.
-
-Recommendation: option 1.
+`mode=sa-test` walks the whole path — mint, see the folder, write a probe, read it back
+byte-for-byte, remove the probe — and names the step that failed with the specific remedy.
+Safe to re-run.
 
 ---
 
 ## Migration order
 
-**Phase 0 — backup first.** Export, verify, and complete one restore drill. Nothing else
-starts until this is green.
+**Phase 0 — backup first. ✅ Shipped (v1.0.286).** Export, verify, and one restore drill.
+Nothing else started until this was green.
 
-**Phase 1 — projects (`RCD_New`, ~6,400 records).** Highest pain, self-contained, and the
-module that has consumed the most time. Delivers: Kanban status owned by Vibe, CCS
-organization assignment becomes an ordinary field, and the drag/status machinery is
-deleted rather than patched again. Contacts stay FileMaker-mirrored; projects still
-reference them by id, which keeps working because the mirror is still there.
+**Phase 1 — projects (`RCD_New`, ~6,400 records).**
 
-**Phase 2 — contacts (`Contacts_New`, ~15,500 records).** Unblocks person contacts —
-`NameFirst`/`NameLast`/`Title` — without touching a FileMaker layout. Biggest blast
-radius, since nearly everything joins to contacts, so it goes second rather than first.
+- **1a/1b ✅ (v1.0.287)** — the `vibe:` store and the server-side merge, plus routing
+  single-record reads through it. No behaviour change: record counts identical before and
+  after.
+- **1c ✅ (v1.0.288)** — project writes go to Vibe. FileMaker is read-only for CCS
+  projects from here.
+- **1d — next.** `V-` ids, tombstones for deletes, the shadowed-count report, and the
+  contact-reassignment exception below.
 
-**Phase 3 — inspections, estimates, trainings, RMI.** Mechanical repeats of the same
-pattern. This is where the open question above needs an answer.
+**Phase 2 — contacts (`Contacts_New`, ~15,500 records).** Unblocks adding a person
+properly — `NameFirst`/`NameLast`/`Title` aren't on the FileMaker layout at all, so no UI
+work can reach them today. Biggest blast radius, since nearly everything joins to
+contacts.
 
-**Phase 4 — reference data (products, OE lookup).** Lowest urgency. OE lookup is
-snapshot-only and barely changes.
+**Phase 3 — inspections, estimates, trainings, RMI.** Where the open question needs an
+answer.
 
-**Phase 5 — retire the sync.** If nobody is editing in FileMaker (confirmed by the
-shadowed count sitting at zero), delete `runSync` and the `repl:` keyspace, and keep a
-final export as the archive.
+**Phase 4 — reference data (products, OE lookup).**
+
+**Phase 5 — retire the sync**, if the shadowed count says nobody is editing in FileMaker.
 
 ---
 
-## What gets deleted along the way
+## The one FileMaker writer left on projects
 
-Not a side effect — a deliverable. Phase 1 removes:
+**Contact reassignment** (`handleContactChange` in `CCSv2.jsx`) still writes
+`_kft__Contact_ID` to FileMaker, deliberately.
 
-- the pending-write guard and its localStorage persistence (v1.0.277 / v1.0.279)
-- `localStatusRef`, the `{to, base}` optimistic override, and its retirement rule
-- the FileMaker response-code check on the drag path (v1.0.280)
-- `updateRecord` on the drag path, and with it the whole write-auth failure mode
-- the env-scoped cache reasoning for owned layouts
+Changing it re-derives a family of FMP calcs — `zz__Display_Contact__ct`, the billing
+address block, the related phone and email. A fragment holding only the id would change
+the link and leave every one of those showing the *previous* contact.
 
-Four interacting mechanisms collapse to one merge function.
+Moving it needs a decision about which of those fields Vibe stores itself. That is a
+schema question, not a coding one.
+
+---
+
+## What got deleted, and what stayed
+
+**Deleted in 1c:** `localStatusRef`, the `{to, base}` optimistic override and its
+retirement rule, and the FileMaker response-code check on the drag path. A card's lane is
+now simply its record's status. That override took three attempts to get right
+(v1.0.275, v1.0.277, v1.0.283), each a different edge of the same collapse.
+
+**Kept:** the persisted pending-write guard in `src/api/filemaker.js`. It is generic, and
+contacts, inspections, estimates and the rest still write to FileMaker and still face
+replica lag until their own phases. It is harmless for Vibe-owned layouts — the merge
+agrees with it, so it retires itself on the first revalidate. It goes when the last
+layout moves.
 
 ---
 
 ## Risks
 
-| Risk | Mitigation |
-|---|---|
-| Redis becomes the only copy of the business | Phase 0 — verified daily Drive backups plus a rehearsed restore |
-| A consumer reads `repl:` directly and shows stale data | One merge function; audit every consumer per phase, as with the status resolver |
-| Numeric assumptions break on `V-` ids | Audit `Number(recordId)` and comparison sites before Phase 1 |
-| FileMaker edits silently lost under an overlay | Shadowed count surfaced on every pull |
-| Backup credential expires unnoticed | Shared Drive + service account; Admin warns when the last good backup is >48h old |
-| Upstash quota exhaustion | Owned layouts drop their 5-min cron; pulls become manual |
+| Risk | Mitigation | State |
+|---|---|---|
+| Redis becomes the only copy of the business | Verified nightly Drive backups plus a rehearsed restore | ✅ done |
+| Backup credential expires unnoticed | Service account on a Shared Drive; `sa-test` re-runnable | ✅ done |
+| A consumer reads `repl:` directly and shows stale data | Merge is server-side at the record layer, so there is nothing to keep in sync | ✅ structural |
+| Numeric assumptions break on `V-` ids | Audit `Number(recordId)` before 1d | ⚠ outstanding |
+| FileMaker edits silently lost under an overlay | Shadowed count on every sync | ⚠ not built |
+| Contact reassignment leaves derived fields stale | Still writes to FileMaker until the schema question is settled | ⚠ deliberate |
+| Upstash quota exhaustion | Backup costs ~150 commands a night | ✅ negligible |
