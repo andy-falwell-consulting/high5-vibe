@@ -164,7 +164,7 @@ async function readKey(key, type) {
 }
 
 async function handleExport(req, res, session, mode) {
-  const { createFolder, uploadFile } = await import('./_backupDrive.js');
+  const { ensureFolder, uploadFile } = await import('./_backupDrive.js');
   const { gzipSync } = await import('node:zlib');
   const { createHash } = await import('node:crypto');
   const token = session.accessToken;
@@ -174,19 +174,24 @@ async function handleExport(req, res, session, mode) {
   // A Drive folder id is not a secret — it appears in the folder's own URL —
   // and the override exists so the destination can be moved (notably to a
   // Shared Drive, which the scheduled run will need) without a deploy.
-  const parentId = process.env.BACKUP_DRIVE_FOLDER_ID || '1fkjp3qpzQ7OGZxx0nb1hDOCWZgoAgT86';
+  const parentId = process.env.BACKUP_DRIVE_FOLDER_ID || '1xW3xXxRzUnSGKM5pG1dCibFAEQUyHLsi';
 
   if (mode === 'export-start') {
     const all = await scanAll();
     const keys = all.filter(k => !EXCLUDED_PREFIXES.some(e => k.startsWith(e.prefix))).sort();
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const runId = stamp;
-    const folder = await createFolder(token, `vibe-backup-${stamp}`, parentId);
+    const now = new Date();
+    // One folder per DAY, named by date. A second run on the same day reuses
+    // it and replaces the files inside, so "today's backup" is one thing rather
+    // than a pile of near-identical folders. runId still carries the full
+    // timestamp so two runs can't collide over the same Redis bookkeeping.
+    const day = now.toISOString().slice(0, 10);
+    const runId = now.toISOString().replace(/[:.]/g, '-');
+    const folder = await ensureFolder(token, day, parentId);
     await redis.hset(runKey(runId), {
-      meta: JSON.stringify({ runId, folderId: folder.id, startedAt: new Date().toISOString(), by: session.email, keys }),
+      meta: JSON.stringify({ runId, day, folderId: folder.id, startedAt: now.toISOString(), by: session.email, keys }),
     });
     await redis.expire(runKey(runId), RUN_TTL);
-    return res.status(200).json({ runId, folderId: folder.id, folderName: folder.name, keys });
+    return res.status(200).json({ runId, folderId: folder.id, folderName: folder.name, reusedFolder: folder.reused, keys });
   }
 
   const runId = String(req.query?.run || '');
@@ -240,6 +245,7 @@ async function handleExport(req, res, session, mode) {
 
     const manifest = {
       runId,
+      day: meta.day,
       startedAt: meta.startedAt,
       finishedAt: new Date().toISOString(),
       by: meta.by,

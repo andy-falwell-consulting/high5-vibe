@@ -246,7 +246,7 @@ function BackupTab() {
   // server so a 137MB estate can't run into the function timeout, and so
   // progress is real rather than a spinner.
   async function runExport() {
-    if (!window.confirm('Export every backed-up key to Google Drive? This writes files to the vibe_backups folder.')) return;
+    if (!window.confirm("Export every backed-up key to Google Drive? Files go into today's dated folder in the backups folder, replacing that day's previous run if there was one.")) return;
     setBusy(true); setError(null); setExp({ phase: 'starting', done: 0, total: 0, failures: [] });
     const post = async (qs) => {
       const r = await fetch(`/api/backup?${qs}`, { method: 'POST' });
@@ -271,7 +271,7 @@ function BackupTab() {
       }
       setExp({ phase: 'finishing', done: start.keys.length, total: start.keys.length, failures: [...failures] });
       const result = await post(`mode=export-finish&run=${encodeURIComponent(start.runId)}`);
-      setExp({ phase: 'done', done: start.keys.length, total: start.keys.length, result, failures, folderName: start.folderName });
+      setExp({ phase: 'done', done: start.keys.length, total: start.keys.length, result, failures, folderName: start.folderName, reusedFolder: start.reusedFolder });
     } catch (e) {
       setError(e.message);
       setExp(p => (p ? { ...p, phase: 'failed' } : null));
@@ -283,10 +283,11 @@ function BackupTab() {
       <h2 className="admin-section-title">Backup — dry run</h2>
       <p className="admin-sub" style={{ marginBottom: 16 }}>
         <strong>Scan</strong> lists what a backup would capture and writes nothing.
-        <strong> Export</strong> reads every one of those keys, gzips it, uploads it to the
-        <code>vibe_backups</code> Drive folder, and verifies each file against the checksum
-        Drive computed on receipt. Restore is not built yet — until it has been rehearsed,
-        treat this as untested.
+        <strong> Export</strong> reads every one of those keys, gzips it, and uploads it into a
+        folder named for today's date inside the shared <code>backups</code> Drive folder,
+        verifying each file against the checksum Drive computed on receipt. Running twice in one
+        day replaces that day's files rather than duplicating them. Restore is not built yet —
+        until it has been rehearsed, treat this as untested.
       </p>
 
       <div className="admin-backup-actions">
@@ -316,7 +317,9 @@ function BackupTab() {
                 {exp.result.fileCount} files · {exp.result.totals.entries.toLocaleString()} entries ·{' '}
                 {fmtBytes(exp.result.totals.gzBytes)} compressed (from {fmtBytes(exp.result.totals.rawBytes)})
               </div>
-              <div className="admin-backup-progress-txt">Folder: {exp.folderName}</div>
+              <div className="admin-backup-progress-txt">
+                Folder: {exp.folderName}{exp.reusedFolder ? ' (replaced an earlier run today)' : ''}
+              </div>
               {exp.result.missing?.length > 0 && <div>Missing: {exp.result.missing.join(', ')}</div>}
               {exp.result.unverified?.length > 0 && <div>Unverified: {exp.result.unverified.join(', ')}</div>}
             </div>
