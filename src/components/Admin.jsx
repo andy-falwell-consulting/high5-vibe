@@ -7,6 +7,7 @@ const TABS = [
   { id: 'integrations', label: 'Integrations' },
   { id: 'preview', label: 'Preview access' },
   { id: 'fmp', label: 'FMP' },
+  { id: 'backup', label: 'Backup' },
 ];
 
 function IntegrationsTab() {
@@ -211,6 +212,103 @@ function FmpTab() {
   );
 }
 
+const fmtBytes = n => {
+  if (n == null) return '—';
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+};
+
+// Backup — dry run. Phase 0 of docs/vibe-owns-the-record.md: before Vibe owns
+// any record, we need a verified backup and a rehearsed restore, and before
+// either of those we need to agree on what's actually in the estate.
+//
+// This reads /api/backup?mode=inventory, which writes nothing. Export and
+// restore are separate work and deliberately not wired up here yet.
+function BackupTab() {
+  const [data, setData] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function run() {
+    setBusy(true); setError(null);
+    try {
+      const res = await fetch('/api/backup?mode=inventory');
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || `Failed (${res.status})`);
+      setData(body);
+    } catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <section className="admin-section">
+      <h2 className="admin-section-title">Backup — dry run</h2>
+      <p className="admin-sub" style={{ marginBottom: 16 }}>
+        Lists everything a backup would capture. Writes nothing, uploads nothing,
+        deletes nothing. Run this to agree the scope before the exporter is built.
+      </p>
+
+      <button className="admin-run-btn" onClick={run} disabled={busy}>
+        {busy ? 'Scanning…' : 'Scan the keyspace'}
+      </button>
+      {error && <div className="admin-email-error" style={{ marginTop: 12 }}>{error}</div>}
+
+      {data && (
+        <div className="admin-backup">
+          <div className="admin-backup-totals">
+            <span><strong>{data.totals.keys.toLocaleString()}</strong> keys</span>
+            <span><strong>{data.totals.entries.toLocaleString()}</strong> entries</span>
+            <span>
+              <strong>{fmtBytes(data.totals.bytes)}</strong>
+              {data.totals.bytesArePartial && <em title="Byte sizes unavailable for some keys on this Redis plan"> (partial)</em>}
+            </span>
+          </div>
+
+          <table className="admin-backup-table">
+            <thead>
+              <tr><th>Key family</th><th>Type</th><th>Keys</th><th>Entries</th><th>Size</th></tr>
+            </thead>
+            <tbody>
+              {data.families.map(f => (
+                <tr key={f.family}>
+                  <td className="admin-backup-fam" title={f.sample}>{f.family}</td>
+                  <td>{f.type}</td>
+                  <td>{f.keys.toLocaleString()}</td>
+                  <td>{f.entries ? f.entries.toLocaleString() : '—'}</td>
+                  <td>{f.bytesKnown ? fmtBytes(f.bytes) : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {data.excluded.length > 0 && (
+            <>
+              <h3 className="admin-backup-sub">Deliberately excluded</h3>
+              <ul className="admin-backup-list">
+                {data.excluded.map(x => (
+                  <li key={x.prefix}>
+                    <code>{x.prefix}</code> — {x.keys.toLocaleString()} keys · {x.why}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+
+          {data.warnings.length > 0 && (
+            <>
+              <h3 className="admin-backup-sub">Notes for the exporter</h3>
+              <ul className="admin-backup-list admin-backup-warn">
+                {data.warnings.map((w, i) => <li key={i}>{w}</li>)}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
 // Admin / settings hub. Add future integration + system cards here.
 export default function Admin() {
   const [tab, setTab] = useState('integrations');
@@ -233,6 +331,7 @@ export default function Admin() {
       {tab === 'integrations' && <IntegrationsTab />}
       {tab === 'preview' && <PreviewAccessTab />}
       {tab === 'fmp' && <FmpTab />}
+      {tab === 'backup' && <BackupTab />}
     </main>
   );
 }

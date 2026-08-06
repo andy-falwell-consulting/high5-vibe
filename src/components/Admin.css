@@ -84,3 +84,91 @@
 .admin-email-remove:hover:not(:disabled) { text-decoration: underline; }
 .admin-email-remove:disabled { opacity: 0.5; cursor: default; }
 .admin-email-empty { font-size: 14px; color: #79859a; font-style: italic; padding: 9px 4px; }
+
+/* ── Backup dry run ── */
+.admin-run-btn {
+  padding: 9px 18px;
+  border-radius: 8px;
+  border: none;
+  background: #e87722;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+.admin-run-btn:disabled { opacity: 0.6; cursor: default; }
+
+.admin-backup { margin-top: 20px; }
+
+.admin-backup-totals {
+  display: flex;
+  gap: 22px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  font-size: 15px;
+  color: #94a3b8;
+}
+.admin-backup-totals strong { color: #e2e8f0; font-size: 17px; }
+.admin-backup-totals em { font-style: normal; color: #79859a; font-size: 13px; }
+
+.admin-backup-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.admin-backup-table th {
+  text-align: left;
+  padding: 6px 10px;
+  color: #79859a;
+  font-weight: 600;
+  border-bottom: 1px solid #2a2f45;
+  white-space: nowrap;
+}
+.admin-backup-table td {
+  padding: 6px 10px;
+  color: #cbd5e1;
+  border-bottom: 1px solid #1e2130;
+  white-space: nowrap;
+}
+.admin-backup-table td:not(:first-child) { text-align: right; }
+.admin-backup-table th:not(:first-child) { text-align: right; }
+.admin-backup-fam {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  color: #e2e8f0;
+  white-space: normal;
+  word-break: break-all;
+}
+
+.admin-backup-sub {
+  font-size: 15px;
+  color: #e2e8f0;
+  margin: 22px 0 8px;
+}
+
+.admin-backup-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+  color: #94a3b8;
+  line-height: 1.6;
+}
+.admin-backup-list code {
+  font-size: 13px;
+  color: #cbd5e1;
+  background: #1e2130;
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.admin-backup-warn li { color: #fbbf24; }
+
+[data-theme="light"] .admin-backup-totals { color: #475569; }
+[data-theme="light"] .admin-backup-totals strong { color: #0f172a; }
+[data-theme="light"] .admin-backup-table th { color: #5e6b7c; border-bottom-color: #e2e8f0; }
+[data-theme="light"] .admin-backup-table td { color: #334155; border-bottom-color: #f1f5f9; }
+[data-theme="light"] .admin-backup-fam { color: #0f172a; }
+[data-theme="light"] .admin-backup-sub { color: #0f172a; }
+[data-theme="light"] .admin-backup-list { color: #475569; }
+[data-theme="light"] .admin-backup-list code { background: #f1f5f9; color: #0f172a; }
+[data-theme="light"] .admin-backup-warn li { color: #b45309; }
