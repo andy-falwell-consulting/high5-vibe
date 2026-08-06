@@ -48,6 +48,7 @@ const EXCLUDED_PREFIXES = [
   { prefix: 'qbo_sandbox_refresh_token', why: 'live QuickBooks sandbox credential' },
   { prefix: 'shopify_token', why: 'live Shopify credential' },
   { prefix: 'backup:run:', why: 'this exporter\'s own bookkeeping — transient' },
+  { prefix: 'restore:', why: 'scratch restore rehearsals — expire on their own' },
 ];
 
 // Everything else is grouped into a family so the report reads as a shape
@@ -308,6 +309,11 @@ async function handleExport(req, res, session, mode) {
 // in production, so `repl:` keys legitimately differ from a backup taken
 // earlier. Differences are information, not necessarily faults.
 const SCRATCH = day => `restore:${day}:`;
+// Scratch restores expire on their own. A rehearsal of the Contacts hash puts
+// another 26MB into Redis, and leaving that lying around would bloat storage
+// and turn up in the next inventory. Excluded from backups above, and gone
+// within a day either way.
+const SCRATCH_TTL = 24 * 60 * 60;
 
 async function loadManifest(token, day, parentId) {
   const { findFolder, listFolder, downloadFile } = await import('./_backupDrive.js');
@@ -451,9 +457,11 @@ async function handleRestore(req, res, session, mode) {
     }
     const dest = target === 'live' ? key : `${SCRATCH(day)}${key}`;
     const written = await writeKey(dest, payload.type, payload.data);
+    if (target !== 'live') await redis.expire(dest, SCRATCH_TTL);
     const readBack = await readKey(dest, payload.type);
     return res.status(200).json({
       key, target, dest, written,
+      expiresInSeconds: target === 'live' ? null : SCRATCH_TTL,
       // Diff the thing we just wrote against the backup: proves the write path
       // round-trips, which is the part a read-only check cannot show.
       roundTrip: diffValues(payload.type, payload.data, readBack),
