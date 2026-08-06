@@ -11,6 +11,7 @@
 //   GET  /api/backup?mode=restore-plan&day=         → reads a day's manifest, compares it to the live keyspace
 //   GET  /api/backup?mode=restore-check&day=&key=   → downloads ONE file, verifies checksum, diffs against live; writes nothing
 //   POST /api/backup?mode=restore-write&day=&key=   → writes it back, to a scratch prefix unless target=live
+//   GET  /api/backup?mode=sa-test                   → end-to-end check of the service-account credential
 //
 // The restore side is READ-ONLY by default and lands in a scratch prefix when
 // it does write. Overwriting live keys requires target=live AND confirm=, so
@@ -472,6 +473,99 @@ async function handleRestore(req, res, session, mode) {
   return res.status(400).json({ error: `unknown mode ${mode}` });
 }
 
+
+// ── Service-account connectivity test ─────────────────────────────
+//
+// The nightly backup will authenticate as a service account rather than as
+// whoever happens to be signed in (see _gsa.js for why). Getting that wired up
+// involves several things that can each fail silently — a malformed PEM, the
+// Drive API not enabled, the account not added to the Shared Drive, Workspace
+// policy blocking external members — and Google's errors are not always plain
+// about which.
+//
+// So rather than guess, this walks the whole path and reports each step: mint a
+// token, resolve the folder, list it, write a probe file, read it back, and
+// remove the probe. It leaves nothing behind, and on failure it says which step
+// broke and what to do about it.
+async function handleSaTest(req, res) {
+  const { getServiceAccountToken, serviceAccountConfigured } = await import('./_gsa.js');
+  const { listFolder, uploadFile, downloadFile, trashFileByName } = await import('./_backupDrive.js');
+  const parentId = process.env.BACKUP_DRIVE_FOLDER_ID || DEFAULT_BACKUP_FOLDER;
+
+  const steps = [];
+  const step = (name, ok, detail, hint) => { steps.push({ name, ok, detail, hint }); return ok; };
+
+  if (!serviceAccountConfigured()) {
+    step('Credential present', false, 'GDRIVE_SA_EMAIL / GDRIVE_SA_PRIVATE_KEY are not both set',
+      'Add both in the Vercel project settings, then redeploy — env changes need a new deployment to take effect.');
+    return res.status(200).json({ ok: false, folderId: parentId, steps });
+  }
+  step('Credential present', true, `${process.env.GDRIVE_SA_EMAIL}${process.env.GDRIVE_SA_SUBJECT ? ` impersonating ${process.env.GDRIVE_SA_SUBJECT}` : ''}`);
+
+  let token;
+  try {
+    token = await getServiceAccountToken({ force: true });
+    step('Mint access token', true, 'Google accepted the signed assertion');
+  } catch (e) {
+    const msg = String(e.message);
+    step('Mint access token', false, msg,
+      /sign with GDRIVE_SA_PRIVATE_KEY/.test(msg)
+        ? 'The private key did not parse. Paste the whole PEM including the BEGIN/END lines.'
+        : /unauthorized_client/.test(msg)
+          ? 'If GDRIVE_SA_SUBJECT is set, domain-wide delegation is not authorised for this client ID and scope in the Admin console.'
+          : 'Check the service account still exists and its key has not been revoked.');
+    return res.status(200).json({ ok: false, folderId: parentId, steps });
+  }
+
+  // Listing proves both that the Drive API is on and that the account can
+  // actually see the folder — the step that fails when sharing was missed.
+  let existing;
+  try {
+    existing = await listFolder(token, parentId);
+    step('See the backup folder', true, `${existing.length} item(s) visible`);
+  } catch (e) {
+    const msg = String(e.message);
+    step('See the backup folder', false, msg,
+      /has not been used|disabled/i.test(msg)
+        ? 'Enable the Google Drive API for this Cloud project (APIs & Services → Library).'
+        : /404|notFound/i.test(msg)
+          ? 'The service account cannot see this folder. Add its email as a Content Manager on the Shared Drive — it will not autocomplete, type the full address and press Enter.'
+          : 'Check the folder id and that the account has at least reader access.');
+    return res.status(200).json({ ok: false, folderId: parentId, steps });
+  }
+
+  const probeName = `connectivity-test-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+  const body = Buffer.from('Vibe backup connectivity test. Safe to delete.\n', 'utf8');
+  let file;
+  try {
+    file = await uploadFile(token, { name: probeName, parentId, bytes: body, mimeType: 'text/plain' });
+    step('Write a file', true, `created ${probeName}`);
+  } catch (e) {
+    step('Write a file', false, String(e.message),
+      'The account can see the folder but not write to it — its role is probably Viewer or Commenter. Content Manager is what it needs.');
+    return res.status(200).json({ ok: false, folderId: parentId, steps });
+  }
+
+  try {
+    const back = await downloadFile(token, file.id);
+    const same = back.equals(body);
+    step('Read it back', same, same ? `${back.length} bytes, byte-identical` : 'content did not match what was written',
+      same ? undefined : 'Downloads are being altered in transit — unexpected; do not rely on this backup until understood.');
+  } catch (e) {
+    step('Read it back', false, String(e.message), 'Written but not readable — check the account has more than write-only access.');
+  }
+
+  try {
+    await trashFileByName(token, probeName, parentId);
+    step('Clean up', true, 'probe file moved to the bin');
+  } catch (e) {
+    step('Clean up', false, String(e.message), `Harmless, but ${probeName} is still in the folder — delete it by hand.`);
+  }
+
+  const ok = steps.every(s => s.ok);
+  return res.status(200).json({ ok, folderId: parentId, steps });
+}
+
 export default async function handler(req, res) {
   const session = await getGoogleSession(req);
   if (!session) return res.status(401).json({ error: 'Not authenticated' });
@@ -483,6 +577,14 @@ export default async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'POST required' });
     try {
       return await handleExport(req, res, session, mode);
+    } catch (e) {
+      return res.status(502).json({ error: String(e?.message || e).slice(0, 400) });
+    }
+  }
+
+  if (mode === 'sa-test') {
+    try {
+      return await handleSaTest(req, res);
     } catch (e) {
       return res.status(502).json({ error: String(e?.message || e).slice(0, 400) });
     }

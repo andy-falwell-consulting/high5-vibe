@@ -239,3 +239,24 @@
 
 [data-theme="light"] .admin-day-input { background: #fff; border-color: #e2e8f0; color: #0f172a; }
 [data-theme="light"] .admin-tiny-btn { border-color: #e2e8f0; color: #475569; }
+
+.admin-sa-steps { list-style: none; margin: 12px 0 0; padding: 0; }
+.admin-sa-steps li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px 0;
+  border-bottom: 1px solid #1e2130;
+  font-size: 14px;
+  color: #cbd5e1;
+}
+.admin-sa-steps li:last-child { border-bottom: none; }
+.admin-sa-mark { font-weight: 700; line-height: 1.5; }
+.admin-sa-steps li.ok .admin-sa-mark { color: #22c55e; }
+.admin-sa-steps li.bad .admin-sa-mark { color: #f87171; }
+.admin-sa-detail { color: #79859a; font-size: 13px; margin-top: 2px; word-break: break-word; }
+.admin-sa-hint { color: #fbbf24; font-size: 13px; margin-top: 4px; line-height: 1.5; }
+
+[data-theme="light"] .admin-sa-steps li { color: #334155; border-bottom-color: #f1f5f9; }
+[data-theme="light"] .admin-sa-detail { color: #5e6b7c; }
+[data-theme="light"] .admin-sa-hint { color: #b45309; }
