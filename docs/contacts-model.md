@@ -5,7 +5,8 @@
 Two questions to settle before contacts move: how Vibe stores one-to-many data
 at all, and whether to keep FileMaker's contact model or do better.
 
-The answer to the second is *do better*, and the data says so quite loudly.
+The answer to the second is *do better* — though the margin is narrower than a
+first look suggested. See the correction below.
 
 ---
 
@@ -15,8 +16,8 @@ Measured against production, not inferred:
 
 | | |
 |---|---|
-| Organizations (`Organization = 1`) | **4,752** |
-| People (`Organization = 0`) | **10,831** |
+| Organizations (`Organization = 1`) | **4,751** |
+| People (`Organization = 0`) | **10,839** |
 | Table they live in | **the same one** — `Contacts_New` |
 | What distinguishes them | a boolean |
 | How they link | a join table (`cntct_RLTN`), surfaced as `Portal__Contacts` |
@@ -25,29 +26,52 @@ An organization stores its name in `Name_Organization` and leaves the person
 fields empty. A person does the reverse and gets its organization's name through
 the join — `zz__Display_Organization__ct` is *derived*, not stored.
 
-### The link is many-to-many, and genuinely used
+### The link is many-to-many — but only just
 
-Sampling 300 people and counting their related-contact rows:
+The join table stores **every link twice**, once in each direction: 10,912
+`person→org` rows and exactly 10,912 `org→person` rows. Deduplicated, the real
+picture across all 23,302 rows is:
 
-| Relations | People | |
-|---|---|---|
-| 0 | 14 | 4.7% |
-| 1 | 167 | 55.7% |
-| 2 | 101 | 33.7% |
-| 3–8 | 18 | 6.0% |
+| | |
+|---|---|
+| Distinct person↔organization affiliations | **10,675** |
+| People with at least one | 9,619 of 10,832 |
+| People with **exactly one** | **8,921 — 92.7%** |
+| People with more than one | **698 — 7.3%** |
+| Most affiliations held by one person | 13 (Chris Wanner) |
 
-**Roughly 40% of people are attached to more than one organization** — about
-4,300 of 10,831. One person in the sample covers three schools; another covers
-eight.
+**Correction.** An earlier draft of this document said ~40% of people belong to
+more than one organization. That was wrong. It came from counting
+`Portal__Contacts` rows, which mix organization links with person-to-person
+links and count each direction — not distinct affiliations. The real figure is
+**7.3%**.
 
-This matters more than it looks. Modelling this as a one-to-many — a person
-having *an* organization — would silently discard the extra affiliations for two
-in five people. That is the single most important finding here, and it is the
-opposite of what the shape suggests at a glance.
+That materially weakens the argument for many-to-many, so it is worth being
+precise about what survives it: **698 people hold 1,754 affiliations that a
+one-to-many model would silently discard.** Chris Wanner covering 13
+organizations is a fact about the business, not a data-entry error. There is no
+reason to lose it, and no cost to keeping it.
 
-The join is also not purely org↔person: one sampled person links to an
-organization *and* to another person. The table is a general contact-to-contact
-relation.
+But the design emphasis flips. With 92.7% holding exactly one affiliation, the
+UI should treat "this person's organization" as a single value in the ordinary
+case, and the multi-affiliation case as the exception it is — rather than making
+9,000 people's records look like a list to serve 698.
+
+That is what the `primary` flag below is for, and it matters more given these
+numbers, not less.
+
+### Two other shapes in the same table
+
+**Organization ↔ organization: 691 distinct links.** Organizations relate to
+other organizations — almost certainly the district-and-its-schools structure,
+and very likely the same thing as the site-vs-organization join trap already
+documented in CLAUDE.md for inspections. The design below does not yet account
+for it, and it needs a decision.
+
+**Person ↔ person: 32 distinct links.** Small enough to defer.
+
+**1,213 people have no organization at all**, and 32 relationship rows point at
+contact ids that no longer exist.
 
 ---
 
@@ -87,8 +111,8 @@ Affiliation is a first-class thing rather than a foreign key because the data is
 many-to-many. It also gives a natural home for something FileMaker has nowhere to
 put: a person's title is often **per organization**, not per person.
 
-`primary` is what makes a single "organization" column still displayable for the
-60% of people with exactly one, without lying about the other 40%.
+`primary` is what keeps a single "organization" column displayable for the 92.7%
+of people with exactly one, without discarding the 698 who have more.
 
 ### What this fixes for free
 
@@ -150,10 +174,19 @@ resolving without rewriting a single foreign key.
 That needs one lookup Vibe can answer: *is id 69026 an organization or a person?*
 A single set of organization ids is enough.
 
-Affiliations are built from the `cntct_RLTN` join rows, which requires a layout
-exposing that table over the Data API. **That layout does not exist yet** — same
-class of blocker as `NameFirst`/`NameLast` not being on `Contacts_New`. Worth
-confirming early, because it gates the migration rather than the design.
+Affiliations are built from the `cntct_RLTN` join rows, read through the
+**`Contact_rltn`** layout — which already existed, exposing
+`_kpt__Contact_Relationship_ID`, `_kft__Contact_ID`, `_kft__Contact_ID_Related`
+and a display name across 23,302 rows.
+
+**The migration must deduplicate.** Every link is stored in both directions, so
+a naive import creates 21,350 affiliations where there are 10,675.
+
+Still missing and worth adding while someone is in FMP Pro: `Relationship` and
+`Sort` on that layout, and `NameFirst`/`NameLast` on the contacts layout. None
+of them block the migration — names are readable through `zz__Display__ct` — but
+splitting a display string guesses, and one contact already reads
+`"Sargent Jose  Limone"`.
 
 ---
 
@@ -162,15 +195,17 @@ confirming early, because it gates the migration rather than the design.
 | Decision | Note |
 |---|---|
 | Three entities, or keep one with a type flag? | Recommending three. The flag is what produces the bugs above. |
+| How are organization↔organization links modelled? | 691 of them exist. Probably district→school. Needs its own answer. |
 | Are person↔person relations kept? | They exist in the data. Out of scope for Phase 2 unless anyone uses them. |
 | Does a project reference an organization, a person, or both? | Today it is one contact link doing both jobs. Ian's bug is exactly this. |
 | Which title wins when a person has three affiliations? | The `primary` one, unless shown in an organization's context. |
 
 ## Needed from FileMaker before migration
 
-1. A Data API layout exposing `cntct_RLTN` (the join), or another route to the
-   affiliations.
-2. `NameFirst` / `NameLast` on `Contacts_New` — needed to *read* existing people,
-   even though Vibe will own them afterwards.
+Nothing blocks the migration. Two things would make it cleaner, both layout
+additions:
 
-Both are layout additions, not schema changes, and neither is Claude-doable.
+1. `Relationship` and `Sort` on `Contact_rltn` — `Relationship` would say whether
+   these links mean more than one thing, which the org↔org rows suggest they do.
+2. `NameFirst` / `NameLast` on the contacts layout — so people's names are read
+   rather than parsed out of a display string.
