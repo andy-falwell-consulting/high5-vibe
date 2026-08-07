@@ -161,9 +161,11 @@ export const tombstones = db => redis.smembers(tombKey(db));
 export async function deleteFile(db, token, id) {
   const meta = await getFile(db, id);
   if (!meta) return null;
+  // A tombstone on a Vibe-born file would be pointless — nothing would ever
+  // recreate it — so only migrated ones are recorded.
   if (meta.driveId) await trashFileById(token, meta.driveId).catch(() => {});
   await redis.hdel(FK.file(db), String(id));
   await removeFromParent(db, meta);
-  await redis.sadd(tombKey(db), String(id));
+  if (meta.source === 'filemaker') await redis.sadd(tombKey(db), String(id));
   return meta;
 }

@@ -1,6 +1,8 @@
 // Move FileMaker's container files into Vibe's own store.
 //
 //   POST /api/files-migrate?db=…&kind=ccs|inspection|training&offset=1&limit=8
+//        &allowUnattached=1   move files whose parent key cannot be read
+//        &ignoreTombstones=1  restore files deleted in Vibe
 //   GET  /api/files-migrate?db=…    → the last report
 //
 // Batched rather than run in one pass: 130 files totalling 41 MB is small, but
@@ -76,7 +78,9 @@ export default async function handler(req, res) {
     // A file deleted in Vibe still has its FileMaker row, and this migration
     // keys on that row — so without checking, a re-run would faithfully restore
     // something somebody deliberately removed.
-    const deleted = new Set((await tombstones(db)).map(String));
+    // ignoreTombstones=1 is the way back: a file deleted by mistake is restored
+    // by re-running with it, since FileMaker still holds the original.
+    const deleted = req.query?.ignoreTombstones ? new Set() : new Set((await tombstones(db)).map(String));
 
     const moved = [], skipped = [], failed = [], empty = [], reattached = [], tombstoned = [];
     for (const row of rows) {
