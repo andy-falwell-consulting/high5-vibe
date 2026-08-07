@@ -3,6 +3,10 @@
 //   POST /api/contacts-migrate?db=…&step=contacts&offset=1   → one page of contacts
 //   POST /api/contacts-migrate?db=…&step=relationships&offset=1
 //   POST /api/contacts-migrate?db=…&step=finish              → fold, index, report
+//   POST /api/contacts-migrate?db=…&step=phones&offset=1     → one page of phones
+//   POST /api/contacts-migrate?db=…&step=emails&offset=1
+//   POST /api/contacts-migrate?db=…&step=addresses&offset=1
+//   POST /api/contacts-migrate?db=…&step=methods-finish      → fold onto contacts
 //   GET  /api/contacts-migrate?db=…                          → the last report
 //
 // Driven a page at a time from the client, for the same reason the backup
@@ -20,7 +24,7 @@ import { isAdminEmail } from './_admin.js';
 import { Redis } from '@upstash/redis';
 import {
   K, readHash, writeHash, isOrgRow, toOrganization, toPerson,
-  foldRelationships, resolveParents, indexAffiliations,
+  foldRelationships, resolveParents, indexAffiliations, isVibeId,
 } from './_contacts.js';
 
 const redis = Redis.fromEnv();
@@ -34,6 +38,38 @@ const RELATIONS_LAYOUT = 'Contact_rltn';       // base table is the join itself
 // deduplication and the parent/child inference both need the WHOLE set, and the
 // kind of each end is only known once every contact has been classified.
 const stageKey = db => `vibe:${db}:contacts:staged_rels`;
+const methodKey = (db, kind) => `vibe:${db}:contacts:staged_${kind}`;
+
+// The three child tables. Andy placed every field on a layout per table
+// (2026-08-07); before that they had only script-use layouts carrying no fields
+// at all, so the API could count 36,663 rows and read none of them.
+const METHOD_STEPS = {
+  phones: { layout: 'Phones_vibe', kind: 'phone' },
+  emails: { layout: 'Emails_vibe', kind: 'email' },
+  addresses: { layout: 'Addresses_vibe', kind: 'address' },
+};
+const METHOD_FIELD = { phone: 'phones', email: 'emails', address: 'addresses' };
+
+const s = v => String(v ?? '').trim();
+
+// FileMaker's own `_kpt__` id is kept as the method id, so a re-run overwrites
+// rather than duplicates, and a row stays traceable to the record it came from.
+function toMethodRow(kind, f) {
+  const base = { contactId: s(f._kft__Contact_ID), sort: s(f.Sort_Order) };
+  if (kind === 'phone') {
+    return { ...base, method: { id: s(f._kpt__Phone_ID), type: s(f.Type), number: s(f.Number) } };
+  }
+  if (kind === 'email') {
+    return { ...base, method: { id: s(f._kpt__Internet_Address_ID), type: s(f.Type), address: s(f.Address) } };
+  }
+  return {
+    ...base,
+    method: {
+      id: s(f._kpt__Address_ID), type: s(f.Type), street: s(f.Street),
+      city: s(f.City), state: s(f.State), zip: s(f.Zip), country: s(f.Country),
+    },
+  };
+}
 
 async function fmPage(db, layout, offset, token) {
   const r = await fetch(
@@ -100,6 +136,85 @@ export default async function handler(req, res) {
       return res.status(200).json({ step, offset, total, read: rows.length, nextOffset: offset + rows.length, done: rows.length < PAGE });
     }
 
+    // ── Phones, emails and addresses ──────────────────────────────
+    //
+    // Staged like relationships rather than written per page, because the rows
+    // land ON the contact: writing them a page at a time would mean reading and
+    // rewriting the same contact once per phone it owns.
+    if (METHOD_STEPS[step]) {
+      const { layout, kind } = METHOD_STEPS[step];
+      const { rows, total, msg } = await fmPage(db, layout, offset, token);
+      if (!rows.length) return res.status(200).json({ step, offset, done: true, total, msg });
+      if (offset === 1) await redis.del(methodKey(db, kind));
+      const staged = {};
+      let orphan = 0;
+      for (const r of rows) {
+        const row = toMethodRow(kind, r.fieldData);
+        // No contact id means nothing can own it. 2,915 rows across the three
+        // tables are in this state; they are counted, not silently dropped.
+        if (!row.contactId) { orphan++; continue; }
+        staged[row.method.id] = JSON.stringify(row);
+      }
+      if (Object.keys(staged).length) await writeHash(methodKey(db, kind), staged);
+      return res.status(200).json({
+        step, offset, total, read: rows.length, staged: Object.keys(staged).length, orphan,
+        nextOffset: offset + rows.length, done: rows.length < PAGE,
+      });
+    }
+
+    if (step === 'methods-finish') {
+      const orgs = await readHash(K.org(db));
+      const people = await readHash(K.person(db));
+      const report = { db, at: new Date().toISOString(), by: session.email, kinds: {} };
+      const touched = new Map();   // contactId → { phones, emails, addresses }
+
+      for (const [kind, field] of Object.entries(METHOD_FIELD)) {
+        const staged = await readHash(methodKey(db, kind));
+        let dangling = 0;
+        for (const row of staged.values()) {
+          const id = String(row.contactId);
+          if (!orgs.has(id) && !people.has(id)) { dangling++; continue; }
+          if (!touched.has(id)) touched.set(id, {});
+          const bucket = touched.get(id);
+          (bucket[field] ??= []).push(row);
+        }
+        report.kinds[kind] = { staged: staged.size, dangling };
+      }
+
+      // Sort_Order is what FileMaker displays by; the row id breaks ties so a
+      // re-run produces the same order rather than whatever the hash yielded.
+      const ordered = rows => rows
+        .sort((a, b) => (Number(a.sort || 0) - Number(b.sort || 0)) || String(a.method.id).localeCompare(String(b.method.id)))
+        .map(r => r.method);
+
+      const orgWrites = {}, personWrites = {};
+      let contactsUpdated = 0;
+      for (const [id, buckets] of touched) {
+        const isOrg = orgs.has(id);
+        const entity = isOrg ? orgs.get(id) : people.get(id);
+        const next = { ...entity };
+        for (const field of Object.values(METHOD_FIELD)) {
+          const fromFm = ordered(buckets[field] || []);
+          // Anything added in Vibe carries a VM- id and is kept. Only the rows
+          // this migration owns are replaced, so re-running it never destroys a
+          // number somebody typed into the app.
+          const mine = (Array.isArray(entity[field]) ? entity[field] : []).filter(m => isVibeId(m.id));
+          next[field] = [...fromFm, ...mine];
+        }
+        (isOrg ? orgWrites : personWrites)[id] = JSON.stringify(next);
+        contactsUpdated++;
+      }
+      if (Object.keys(orgWrites).length) await writeHash(K.org(db), orgWrites);
+      if (Object.keys(personWrites).length) await writeHash(K.person(db), personWrites);
+      for (const kind of Object.keys(METHOD_FIELD)) await redis.del(methodKey(db, kind));
+
+      report.contactsUpdated = contactsUpdated;
+      report.organizations = Object.keys(orgWrites).length;
+      report.people = Object.keys(personWrites).length;
+      await redis.set(K.report(db) + ':methods', report);
+      return res.status(200).json(report);
+    }
+
     if (step === 'finish') {
       const orgs = await readHash(K.org(db));
       const people = await readHash(K.person(db));
@@ -146,7 +261,9 @@ export default async function handler(req, res) {
       return res.status(200).json(report);
     }
 
-    return res.status(400).json({ error: "step must be 'contacts', 'relationships' or 'finish'" });
+    return res.status(400).json({
+      error: `step must be one of contacts, relationships, finish, ${Object.keys(METHOD_STEPS).join(', ')}, methods-finish`,
+    });
   } catch (e) {
     return res.status(502).json({ error: String(e?.message || e).slice(0, 300) });
   }

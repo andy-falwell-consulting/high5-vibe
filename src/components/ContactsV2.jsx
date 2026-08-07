@@ -39,21 +39,26 @@ const ORG_FORM = [
   { key: 'notes', label: 'Notes', textarea: true },
 ];
 
-// Phones, emails and addresses. Type vocabularies match the ones the existing
-// Contacts module offers, so what people pick here reads the same as what is
-// already in the file. The migration preserves whatever string FileMaker holds,
-// including values not on these lists.
+// Phones, emails and addresses.
+//
+// Type vocabularies are the values actually in the file, counted across all
+// 36,663 rows — not the list the old Contacts module offers, which turned out
+// to be missing Home and Mobile, the second and fourth most common phone types.
+// Everything occurring 12+ times is here; rarer and plainly corrupt values
+// ('MobiWorkle', a street address typed into the Type box) are left off the
+// list but never rewritten — see MethodForm.
 const METHOD_SPEC = {
   phone: {
     label: 'Phone', plural: 'Phones', field: 'phones',
-    types: ['Work', 'Main Office', 'Fax', 'Camp', 'Winter'],
+    types: ['Work', 'Home', 'Fax', 'Mobile', 'Main Office', 'Personal Mobile',
+      'Billing Fax', 'Mobile Parent', 'Camp', 'Winter', 'Work Parent'],
     fields: [{ key: 'number', label: 'Number' }],
     show: m => m.number,
     href: m => `tel:${String(m.number || '').replace(/[^\d+]/g, '')}`,
   },
   email: {
     label: 'Email or website', plural: 'Email & web', field: 'emails',
-    types: ['Email', 'Web'],
+    types: ['Email', 'Web', 'Home Email', 'Business Web', 'Billing', 'Email Parent', 'Home Web'],
     fields: [{ key: 'address', label: 'Email or URL' }],
     show: m => m.address,
     href: m => (m.type === 'Web'
@@ -62,7 +67,7 @@ const METHOD_SPEC = {
   },
   address: {
     label: 'Address', plural: 'Addresses', field: 'addresses',
-    types: ['Main', 'Course', 'Mailing', 'Billing', 'Work', 'Winter'],
+    types: ['Main', 'Home', 'Mailing', 'Billing', 'Course', 'Work', 'Winter', 'Camp'],
     fields: [
       { key: 'street', label: 'Street' }, { key: 'city', label: 'City' },
       { key: 'state', label: 'State' }, { key: 'zip', label: 'Zip' },
@@ -77,10 +82,18 @@ const METHOD_SPEC = {
 function MethodForm({ kind, initial, busy, onSave, onCancel }) {
   const spec = METHOD_SPEC[kind];
   const [v, setV] = useState(() => ({
-    type: initial?.type || spec.types[0],
+    type: initial?.type ?? '',
     ...Object.fromEntries(spec.fields.map(f => [f.key, initial?.[f.key] ?? ''])),
   }));
   const set = (k, x) => setV(p => ({ ...p, [k]: x }));
+  // A migrated row can carry a type that is not on the list — 'Southern Course',
+  // or a street address someone typed into the Type box. Offering it as an
+  // option means opening the row to fix a typo doesn't silently rewrite the
+  // type to whatever happened to be first. Blank is a real value too: 2,104
+  // rows have no type at all.
+  const types = v.type && !spec.types.includes(v.type)
+    ? [v.type, ...spec.types]
+    : spec.types;
   // Mirrors the server's rule: an address needs any one line, the others need
   // their single value. Checked here only to keep Save from being pressable —
   // the server is what actually enforces it.
@@ -91,7 +104,8 @@ function MethodForm({ kind, initial, busy, onSave, onCancel }) {
   return (
     <div className="c2-methodform">
       <select className="c2-input c2-input--type" value={v.type} onChange={e => set('type', e.target.value)}>
-        {spec.types.map(t => <option key={t} value={t}>{t}</option>)}
+        <option value="">(no type)</option>
+        {types.map(t => <option key={t} value={t}>{t}</option>)}
       </select>
       {spec.fields.map((f, i) => (
         <input key={f.key} className="c2-input c2-input--inline" placeholder={f.label}
