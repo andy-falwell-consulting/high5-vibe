@@ -20,8 +20,8 @@
 .c2-kindtabs button span { font-size: 12px; color: #79859a; }
 .c2-kindtabs button.active { background: #1e2130; color: #e2e8f0; border-color: #3a3f60; }
 
-/* ListBody needs its own scrolling wrapper or only the first page is reachable. */
-.c2-sidebar .lc-body, .c2-sidebar > div:not(.c2-kindtabs):not(.c2-newbar) { min-height: 0; }
+/* ListBody renders no wrapper of its own, so this is the scroller. */
+.c2-list { flex: 1; min-height: 0; overflow-y: auto; }
 
 .c2-row { padding: 9px 14px; border-bottom: 1px solid #1a1d29; cursor: pointer; }
 .c2-row:hover { background: #171a24; }

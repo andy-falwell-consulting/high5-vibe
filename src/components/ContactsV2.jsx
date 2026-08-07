@@ -248,21 +248,27 @@ export default function ContactsV2() {
 
         <ListToolbar c={controls} />
 
-        {loading ? (
-          <div className="c2-loading">{Array.from({ length: 10 }, (_, i) => <div key={i} className="c2-skeleton" />)}</div>
-        ) : loadError ? (
-          <div className="c2-empty">Couldn’t load contacts.<br /><span>{loadError}</span></div>
-        ) : (
-          <ListBody c={controls} renderItem={r => (
-            <div key={r.id}
-              className={`c2-row${selected?.id === r.id ? ' active' : ''}`}
-              onClick={() => open(r)}>
-              <div className="c2-row-name">{r.name || <em>(no name)</em>}</div>
-              {kind === 'people' && r.title && <div className="c2-row-sub">{r.title}</div>}
-              {kind === 'organizations' && r.parentOrganizationId && <div className="c2-row-sub">has a parent organization</div>}
-            </div>
-          )} />
-        )}
+        {/* ListBody returns a bare fragment, so this wrapper is what scrolls.
+            Without it the rows are direct flex children of the sidebar: they
+            shrink to fit instead of overflowing, which crushes them on top of
+            each other and pushes the buttons below off the panel. */}
+        <div className="c2-list">
+          {loading ? (
+            <div className="c2-loading">{Array.from({ length: 10 }, (_, i) => <div key={i} className="c2-skeleton" />)}</div>
+          ) : loadError ? (
+            <div className="c2-empty">Couldn’t load contacts.<br /><span>{loadError}</span></div>
+          ) : (
+            <ListBody c={controls} activeId={selected?.id} renderItem={r => (
+              <div key={r.id}
+                className={`c2-row${selected?.id === r.id ? ' active' : ''}`}
+                onClick={() => open(r)}>
+                <div className="c2-row-name">{r.name || <em>(no name)</em>}</div>
+                {kind === 'people' && r.title && <div className="c2-row-sub">{r.title}</div>}
+                {kind === 'organizations' && r.parentOrganizationId && <div className="c2-row-sub">has a parent organization</div>}
+              </div>
+            )} />
+          )}
+        </div>
 
         <div className="c2-newbar">
           <button className="c2-btn" onClick={() => setCreating('person')}>+ Person</button>
