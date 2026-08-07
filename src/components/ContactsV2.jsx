@@ -4,6 +4,7 @@ import {
   listPeople, listOrganizations, getContact, getOrganizationPeople,
   createPerson, createOrganization, updateContact,
   affiliate, setPrimary, unaffiliate, setParent,
+  addMethod, updateMethod, removeMethod,
 } from '../api/vibeContacts';
 import './ContactsV2.css';
 
@@ -37,6 +38,134 @@ const ORG_FORM = [
   { key: 'siteNumber', label: 'Site number' },
   { key: 'notes', label: 'Notes', textarea: true },
 ];
+
+// Phones, emails and addresses.
+//
+// Type vocabularies are the values actually in the file, counted across all
+// 36,663 rows — not the list the old Contacts module offers, which turned out
+// to be missing Home and Mobile, the second and fourth most common phone types.
+// Everything occurring 12+ times is here; rarer and plainly corrupt values
+// ('MobiWorkle', a street address typed into the Type box) are left off the
+// list but never rewritten — see MethodForm.
+const METHOD_SPEC = {
+  phone: {
+    label: 'Phone', plural: 'Phones', field: 'phones',
+    types: ['Work', 'Home', 'Fax', 'Mobile', 'Main Office', 'Personal Mobile',
+      'Billing Fax', 'Mobile Parent', 'Camp', 'Winter', 'Work Parent'],
+    fields: [{ key: 'number', label: 'Number' }],
+    show: m => m.number,
+    href: m => `tel:${String(m.number || '').replace(/[^\d+]/g, '')}`,
+  },
+  email: {
+    label: 'Email or website', plural: 'Email & web', field: 'emails',
+    types: ['Email', 'Web', 'Home Email', 'Business Web', 'Billing', 'Email Parent', 'Home Web'],
+    fields: [{ key: 'address', label: 'Email or URL' }],
+    show: m => m.address,
+    href: m => (m.type === 'Web'
+      ? (/^https?:\/\//i.test(m.address || '') ? m.address : `https://${m.address}`)
+      : `mailto:${m.address}`),
+  },
+  address: {
+    label: 'Address', plural: 'Addresses', field: 'addresses',
+    types: ['Main', 'Home', 'Mailing', 'Billing', 'Course', 'Work', 'Winter', 'Camp'],
+    fields: [
+      { key: 'street', label: 'Street' }, { key: 'city', label: 'City' },
+      { key: 'state', label: 'State' }, { key: 'zip', label: 'Zip' },
+      { key: 'country', label: 'Country' },
+    ],
+    show: m => [m.street, [m.city, m.state].filter(Boolean).join(', '), m.zip, m.country]
+      .map(s => String(s || '').trim()).filter(Boolean).join(' · '),
+    href: null,
+  },
+};
+
+function MethodForm({ kind, initial, busy, onSave, onCancel }) {
+  const spec = METHOD_SPEC[kind];
+  const [v, setV] = useState(() => ({
+    type: initial?.type ?? '',
+    ...Object.fromEntries(spec.fields.map(f => [f.key, initial?.[f.key] ?? ''])),
+  }));
+  const set = (k, x) => setV(p => ({ ...p, [k]: x }));
+  // A migrated row can carry a type that is not on the list — 'Southern Course',
+  // or a street address someone typed into the Type box. Offering it as an
+  // option means opening the row to fix a typo doesn't silently rewrite the
+  // type to whatever happened to be first. Blank is a real value too: 2,104
+  // rows have no type at all.
+  const types = v.type && !spec.types.includes(v.type)
+    ? [v.type, ...spec.types]
+    : spec.types;
+  // Mirrors the server's rule: an address needs any one line, the others need
+  // their single value. Checked here only to keep Save from being pressable —
+  // the server is what actually enforces it.
+  const valid = kind === 'address'
+    ? spec.fields.some(f => String(v[f.key]).trim())
+    : !!String(v[spec.fields[0].key]).trim();
+
+  return (
+    <div className="c2-methodform">
+      <select className="c2-input c2-input--type" value={v.type} onChange={e => set('type', e.target.value)}>
+        <option value="">(no type)</option>
+        {types.map(t => <option key={t} value={t}>{t}</option>)}
+      </select>
+      {spec.fields.map((f, i) => (
+        <input key={f.key} className="c2-input c2-input--inline" placeholder={f.label}
+          autoFocus={i === 0} value={v[f.key]} onChange={e => set(f.key, e.target.value)} />
+      ))}
+      <button className="c2-btn c2-btn--primary" disabled={busy || !valid} onClick={() => onSave(v)}>Save</button>
+      <button className="c2-btn" onClick={onCancel} disabled={busy}>Cancel</button>
+    </div>
+  );
+}
+
+function ContactMethods({ contact, busy, onAdd, onUpdate, onRemove }) {
+  // { kind, id } — id null means "adding". One form open at a time, so a
+  // half-typed address can't be lost behind another one.
+  const [form, setForm] = useState(null);
+
+  return (
+    <div className="c2-methods">
+      {Object.entries(METHOD_SPEC).map(([kind, spec]) => {
+        const rows = contact[spec.field] || [];
+        return (
+          <div className="c2-methodgroup" key={kind}>
+            <h3>{spec.plural}</h3>
+            {rows.length === 0 && !(form?.kind === kind && !form.id) && (
+              <p className="c2-none">None recorded.</p>
+            )}
+            <ul className="c2-methodlist">
+              {rows.map(m => (form?.kind === kind && form.id === m.id ? (
+                <li key={m.id} className="c2-methodrow c2-methodrow--editing">
+                  <MethodForm kind={kind} initial={m} busy={busy}
+                    onCancel={() => setForm(null)}
+                    onSave={vals => { setForm(null); onUpdate(kind, m.id, vals); }} />
+                </li>
+              ) : (
+                <li key={m.id} className="c2-methodrow">
+                  <span className="c2-methodtype">{m.type || '—'}</span>
+                  {spec.href
+                    ? <a className="c2-methodvalue" href={spec.href(m)}>{spec.show(m)}</a>
+                    : <span className="c2-methodvalue">{spec.show(m)}</span>}
+                  <button className="c2-mini" disabled={busy}
+                    onClick={() => setForm({ kind, id: m.id })}>edit</button>
+                  <button className="c2-mini c2-mini--danger" disabled={busy}
+                    onClick={() => onRemove(kind, m.id)}>remove</button>
+                </li>
+              )))}
+            </ul>
+            {form?.kind === kind && !form.id ? (
+              <MethodForm kind={kind} busy={busy}
+                onCancel={() => setForm(null)}
+                onSave={vals => { setForm(null); onAdd(kind, vals); }} />
+            ) : (
+              <button className="c2-mini c2-mini--add" disabled={busy}
+                onClick={() => setForm({ kind, id: null })}>+ {spec.label}</button>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function Fields({ spec, values, onChange, autoFocusFirst }) {
   return spec.map((f, i) => (
@@ -173,7 +302,11 @@ export default function ContactsV2() {
     fields: r => r,
     storageKey: `contacts-v2-${kind}`,
     name: r => (kind === 'people' ? r.name : r.name) || '',
-    searchKeys: kind === 'people' ? ['name', 'first', 'last', 'title'] : ['name', 'type'],
+    // phones and emails are arrays; the hook stringifies before matching, which
+    // joins them with commas and searches every one.
+    searchKeys: kind === 'people'
+      ? ['name', 'first', 'last', 'title', 'phones', 'phoneDigits', 'emails']
+      : ['name', 'type', 'phones', 'phoneDigits', 'emails'],
     sorts: [
       // Trimmed, so a name stored with leading whitespace sorts where it reads
       // rather than ahead of everything — which is what put a 'T' section at
@@ -190,14 +323,25 @@ export default function ContactsV2() {
   // the detail rather than from what was submitted — the server is what decided
   // what got stored.
   function syncList(d) {
+    // Same shape api/contacts.js sends for a list row, including the phone and
+    // email arrays — otherwise adding a number leaves the sidebar unable to
+    // find the person by it until a reload.
+    const contactable = e => {
+      const phones = (e.phones || []).map(p => p.number).filter(Boolean);
+      return {
+        phones,
+        phoneDigits: phones.map(n => n.replace(/\D/g, '')).filter(Boolean),
+        emails: (e.emails || []).filter(m => m.type !== 'Web').map(m => m.address).filter(Boolean),
+      };
+    };
     if (d.kind === 'person') {
       const p = d.person;
       setPeople(list => list.map(r => r.id !== p.id ? r
-        : { id: p.id, first: p.first, last: p.last, name: p.displayName, title: p.title, status: p.status }));
+        : { id: p.id, first: p.first, last: p.last, name: p.displayName, title: p.title, status: p.status, ...contactable(p) }));
     } else if (d.kind === 'organization') {
       const o = d.organization;
       setOrgs(list => list.map(r => r.id !== o.id ? r
-        : { id: o.id, name: o.name, status: o.status, type: o.type, parentOrganizationId: o.parentOrganizationId }));
+        : { id: o.id, name: o.name, status: o.status, type: o.type, parentOrganizationId: o.parentOrganizationId, ...contactable(o) }));
     }
   }
 
@@ -310,6 +454,11 @@ export default function ContactsV2() {
                 {person.notes && <p className="c2-notes">{person.notes}</p>}
                 {actionError && <div className="c2-error">{actionError}</div>}
 
+                <ContactMethods contact={person} busy={busy}
+                  onAdd={(k, v) => act(() => addMethod(person.id, k, v))}
+                  onUpdate={(k, id, v) => act(() => updateMethod(person.id, k, id, v))}
+                  onRemove={(k, id) => act(() => removeMethod(person.id, k, id))} />
+
                 <h3>Affiliations</h3>
                 {selected.affiliations.length === 0 ? (
                   <p className="c2-none">Not attached to any organization.</p>
@@ -366,6 +515,11 @@ export default function ContactsV2() {
                 </div>
                 {org.notes && <p className="c2-notes">{org.notes}</p>}
                 {actionError && <div className="c2-error">{actionError}</div>}
+
+                <ContactMethods contact={org} busy={busy}
+                  onAdd={(k, v) => act(() => addMethod(org.id, k, v))}
+                  onUpdate={(k, id, v) => act(() => updateMethod(org.id, k, id, v))}
+                  onRemove={(k, id) => act(() => removeMethod(org.id, k, id))} />
 
                 <h3>Parent organization</h3>
                 {org.parent ? (

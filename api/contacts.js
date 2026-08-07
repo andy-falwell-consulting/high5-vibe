@@ -11,10 +11,20 @@
 import { getGoogleSession } from './_googleSession.js';
 import { ALLOWED_DBS } from './_fmp.js';
 import { Redis } from '@upstash/redis';
-import { K, displayName } from './_contacts.js';
+import { K, displayName, methodList } from './_contacts.js';
 
 const redis = Redis.fromEnv();
 const parse = v => { try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return null; } };
+
+// Contacts migrated before methods existed have no such keys at all. Filling
+// them in here means the UI never has to ask whether an array is really an
+// array, and no write has to backfill 15,590 records to make reads safe.
+const withMethods = e => ({
+  ...e,
+  phones: methodList(e, 'phone'),
+  emails: methodList(e, 'email'),
+  addresses: methodList(e, 'address'),
+});
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
@@ -41,9 +51,23 @@ export default async function handler(req, res) {
       for (let i = 1; i < flat.length; i += 2) {
         const e = parse(flat[i]);
         if (!e) continue;
+        // Phones and emails ride along so the sidebar filter can find someone
+        // by number or address. The client already holds every contact, so this
+        // replaces a server-side search index entirely — and as arrays they
+        // both search (String() joins them) and display (take the first).
+        // Web addresses are left out: nobody looks a person up by their URL.
+        const phones = methodList(e, 'phone').map(p => p.number).filter(Boolean);
+        const contactable = {
+          phones,
+          // Numbers are stored formatted ('802-555-0134') but people type them
+          // bare, so the digits go along too or searching 8025550134 finds
+          // nobody. Search-only — nothing renders this.
+          phoneDigits: phones.map(n => n.replace(/\D/g, '')).filter(Boolean),
+          emails: methodList(e, 'email').filter(m => m.type !== 'Web').map(m => m.address).filter(Boolean),
+        };
         records.push(list === 'people'
-          ? { id: e.id, first: e.first, last: e.last, name: displayName(e), title: e.title, status: e.status }
-          : { id: e.id, name: e.name, status: e.status, type: e.type, parentOrganizationId: e.parentOrganizationId });
+          ? { id: e.id, first: e.first, last: e.last, name: displayName(e), title: e.title, status: e.status, ...contactable }
+          : { id: e.id, name: e.name, status: e.status, type: e.type, parentOrganizationId: e.parentOrganizationId, ...contactable });
       }
       res.setHeader('Cache-Control', 's-maxage=15, stale-while-revalidate=60');
       return res.status(200).json({ list, records, cursor: String(next), count: records.length });
@@ -68,7 +92,7 @@ export default async function handler(req, res) {
         .map(parse).filter(Boolean).map(p => [p.id, p]));
       const parent = org.parentOrganizationId ? parse(await redis.hget(K.org(db), org.parentOrganizationId)) : null;
       return res.status(200).json({
-        organization: { ...org, parent: parent ? { id: parent.id, name: parent.name } : null },
+        organization: { ...withMethods(org), parent: parent ? { id: parent.id, name: parent.name } : null },
         people: rows.map(a => {
           const p = byId.get(a.personId);
           return { id: a.personId, name: p ? displayName(p) : null, title: a.title || p?.title || '', affiliationId: a.id, primary: !!a.primary };
@@ -85,7 +109,7 @@ export default async function handler(req, res) {
       const affIds = parse(await redis.hget(K.byOrg(db), id)) || [];
       return res.status(200).json({
         kind: 'organization',
-        organization: { ...org, parent: parent ? { id: parent.id, name: parent.name } : null },
+        organization: { ...withMethods(org), parent: parent ? { id: parent.id, name: parent.name } : null },
         peopleCount: affIds.length,
       });
     }
@@ -105,7 +129,7 @@ export default async function handler(req, res) {
     }));
     return res.status(200).json({
       kind: 'person',
-      person: { ...person, displayName: displayName(person) },
+      person: { ...withMethods(person), displayName: displayName(person) },
       affiliations,
       // Null rather than a guess when nothing is marked primary.
       //

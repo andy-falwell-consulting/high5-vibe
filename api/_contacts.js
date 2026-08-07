@@ -186,6 +186,41 @@ export async function nextId(db, prefix = 'V') {
 
 export const isVibeId = id => /^V[A]?-/.test(String(id));
 
+// ── Contact methods: phones, emails and addresses ─────────────────
+//
+// Stored as arrays ON the contact, not as their own keyspaces. Unlike an
+// affiliation — which joins two things that each exist independently — a phone
+// number belongs to exactly one contact, has no identity apart from it, and is
+// never read without it. Embedding means one read returns everything, there is
+// no index for a write to fall out of step with, and an orphan row cannot
+// exist. FileMaker's own separate tables are an artefact of the relational
+// model, not something the data requires.
+//
+// The trade accepted: editing one phone rewrites the contact record, and
+// "who has this number" is a scan. Both are fine at 15,590 contacts.
+export const METHODS = {
+  phone: { field: 'phones', keys: ['type', 'number'], required: 'number' },
+  email: { field: 'emails', keys: ['type', 'address'], required: 'address' },
+  address: {
+    field: 'addresses',
+    keys: ['type', 'street', 'city', 'state', 'zip', 'country'],
+    // An address with only a type is not an address. Any one line will do,
+    // because plenty of real ones are a PO box or a city with no street.
+    required: ['street', 'city', 'state', 'zip'],
+  },
+};
+
+export const methodList = (entity, kind) => {
+  const v = entity?.[METHODS[kind].field];
+  return Array.isArray(v) ? v : [];
+};
+
+// Every method carries an id so the UI can edit one without rewriting the rest.
+// Migrated rows keep FileMaker's own `_kpt__` value; ones born here get `VM-`.
+export async function nextMethodId(db) {
+  return nextId(db, 'VM');
+}
+
 export async function getEntity(db, id) {
   const [org, person] = await Promise.all([
     redis.hget(K.org(db), String(id)),
