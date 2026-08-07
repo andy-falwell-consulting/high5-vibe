@@ -32,6 +32,7 @@ export const K = {
 };
 
 const parse = v => { try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return null; } };
+export { parse };
 
 export async function readHash(key) {
   const raw = (await redis.hgetall(key)) || {};
@@ -164,4 +165,83 @@ export function indexAffiliations(affiliations) {
   // and keeps a single "organization" column honest for them.
   for (const a of affiliations.values()) a.primary = byPerson[a.personId].length === 1;
   return { byPerson, byOrg };
+}
+
+// ── Writes ────────────────────────────────────────────────────────
+//
+// Records born in Vibe get a `V-` id (`VA-` for affiliations), allocated from a
+// counter. Deliberately obvious at a glance rather than blended in: FileMaker
+// ids are bare integers, so anything prefixed is unambiguously Vibe's and, when
+// FileMaker is retired, the set with no counterpart to reconcile.
+//
+// Ids are opaque STRINGS everywhere. A codebase-wide audit before this shipped
+// found no numeric coercion of record ids, so nothing breaks on the prefix —
+// but that property has to be preserved, not assumed.
+const SEQ_START = 100000;
+
+export async function nextId(db, prefix = 'V') {
+  const n = await redis.incr(`vibe:${db}:seq:contact`);
+  return `${prefix}-${SEQ_START + n}`;
+}
+
+export const isVibeId = id => /^V[A]?-/.test(String(id));
+
+export async function getEntity(db, id) {
+  const [org, person] = await Promise.all([
+    redis.hget(K.org(db), String(id)),
+    redis.hget(K.person(db), String(id)),
+  ]);
+  if (org) return { kind: 'organization', entity: parse(org) };
+  if (person) return { kind: 'person', entity: parse(person) };
+  return { kind: null, entity: null };
+}
+
+export async function putEntity(db, kind, entity) {
+  const key = kind === 'organization' ? K.org(db) : K.person(db);
+  await redis.hset(key, { [entity.id]: JSON.stringify(entity) });
+  return entity;
+}
+
+// Rebuild one person's affiliation index and settle which is primary.
+//
+// Primary is STORED, not inferred at read time. The migration guessed it for
+// anyone with a single affiliation, and the read endpoint used to fall back to
+// "whichever came first" for everyone else — which presented an arbitrary pick
+// as an answer. Here the rule is explicit: an existing primary is kept, and if
+// there is none the sole (or first) affiliation becomes it.
+export async function reindexPerson(db, personId) {
+  const all = await readHash(K.aff(db));
+  const mine = [...all.values()].filter(a => String(a.personId) === String(personId));
+  if (!mine.length) {
+    await redis.hdel(K.byPerson(db), String(personId));
+    return [];
+  }
+  if (!mine.some(a => a.primary)) mine[0].primary = true;
+  const writes = {};
+  for (const a of mine) writes[a.id] = JSON.stringify(a);
+  await writeHash(K.aff(db), writes);
+  await redis.hset(K.byPerson(db), { [String(personId)]: JSON.stringify(mine.map(a => a.id)) });
+  return mine;
+}
+
+export async function reindexOrg(db, organizationId) {
+  const all = await readHash(K.aff(db));
+  const ids = [...all.values()].filter(a => String(a.organizationId) === String(organizationId)).map(a => a.id);
+  if (ids.length) await redis.hset(K.byOrg(db), { [String(organizationId)]: JSON.stringify(ids) });
+  else await redis.hdel(K.byOrg(db), String(organizationId));
+  return ids;
+}
+
+// Walking up rather than trusting the input: an organization made its own
+// ancestor would make every "all work for this district" query loop forever.
+export async function wouldCycle(db, childId, parentId) {
+  let cursor = String(parentId);
+  const seen = new Set([String(childId)]);
+  for (let i = 0; i < 50 && cursor; i++) {
+    if (seen.has(cursor)) return true;
+    seen.add(cursor);
+    const org = parse(await redis.hget(K.org(db), cursor));
+    cursor = org?.parentOrganizationId ? String(org.parentOrganizationId) : null;
+  }
+  return false;
 }

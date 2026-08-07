@@ -79,8 +79,14 @@ export default async function handler(req, res) {
       kind: 'person',
       person: { ...person, displayName: displayName(person) },
       affiliations,
-      // The single value 92.7% of people have, without discarding the rest.
-      primaryOrganization: affiliations.find(a => a.primary)?.organization ?? affiliations[0]?.organization ?? null,
+      // Null rather than a guess when nothing is marked primary.
+      //
+      // This used to fall back to whichever affiliation came first, which read
+      // as an answer while being an arbitrary pick — fine for the 92.7% with a
+      // single affiliation, misleading for the 698 people with more. Primary is
+      // now something set explicitly (see contacts-write.js), so an absent one
+      // means "nobody has chosen", which is worth showing as such.
+      primaryOrganization: affiliations.find(a => a.primary)?.organization ?? null,
     });
   } catch (e) {
     return res.status(502).json({ error: String(e?.message || e).slice(0, 300) });
