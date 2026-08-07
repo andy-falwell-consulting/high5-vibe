@@ -13,7 +13,7 @@
 // tables, so this is a small store — no sharding, no lifecycle rules.
 import { Redis } from '@upstash/redis';
 import { getServiceAccountToken } from './_gsa.js';
-import { ensureFolder, uploadFile } from './_backupDrive.js';
+import { ensureFolder, uploadFile, trashFileById } from './_backupDrive.js';
 
 const redis = Redis.fromEnv();
 
@@ -140,3 +140,32 @@ export async function listForParent(db, kind, parentId) {
 }
 
 export const getFile = async (db, id) => parse(await redis.hget(FK.file(db), String(id)));
+
+// Files added in Vibe get a VF- id, the same convention as V-/VA-/VM- on
+// contacts: a bare number came from FileMaker, anything prefixed is ours.
+export async function nextFileId(db) {
+  const n = await redis.incr(`vibe:${db}:seq:file`);
+  return `VF-${100000 + n}`;
+}
+
+// Deleting a migrated file has to be remembered, not just done. Its FileMaker
+// row still exists, and the migration keys on that row — so without a tombstone
+// the next run would faithfully restore something someone deliberately removed.
+// This is the trap contacts hit first (docs/vibe-owns-the-record.md).
+export const tombKey = db => `vibe:${db}:file:deleted`;
+export const isTombstoned = async (db, id) => !!(await redis.sismember(tombKey(db), String(id)));
+export const tombstones = db => redis.smembers(tombKey(db));
+
+// Drive's trash, not a hard delete: 41 MB of files nobody can get back is a
+// worse outcome than a bin that needs emptying.
+export async function deleteFile(db, token, id) {
+  const meta = await getFile(db, id);
+  if (!meta) return null;
+  // A tombstone on a Vibe-born file would be pointless — nothing would ever
+  // recreate it — so only migrated ones are recorded.
+  if (meta.driveId) await trashFileById(token, meta.driveId).catch(() => {});
+  await redis.hdel(FK.file(db), String(id));
+  await removeFromParent(db, meta);
+  if (meta.source === 'filemaker') await redis.sadd(tombKey(db), String(id));
+  return meta;
+}

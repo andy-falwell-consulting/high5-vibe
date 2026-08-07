@@ -1,6 +1,8 @@
 // Move FileMaker's container files into Vibe's own store.
 //
 //   POST /api/files-migrate?db=…&kind=ccs|inspection|training&offset=1&limit=8
+//        &allowUnattached=1   move files whose parent key cannot be read
+//        &ignoreTombstones=1  restore files deleted in Vibe
 //   GET  /api/files-migrate?db=…    → the last report
 //
 // Batched rather than run in one pass: 130 files totalling 41 MB is small, but
@@ -16,7 +18,7 @@ import { isAdminEmail } from './_admin.js';
 import { Redis } from '@upstash/redis';
 import {
   FK, SOURCES, fetchContainer, putFile, getFile, driveToken, filesFolder,
-  fkIsReadable, addToParent,
+  fkIsReadable, addToParent, tombstones,
 } from './_vibeFiles.js';
 
 const redis = Redis.fromEnv();
@@ -73,13 +75,21 @@ export default async function handler(req, res) {
     // trip, and the token outlives a batch comfortably.
     const gtoken = await driveToken();
     await filesFolder(gtoken);
+    // A file deleted in Vibe still has its FileMaker row, and this migration
+    // keys on that row — so without checking, a re-run would faithfully restore
+    // something somebody deliberately removed.
+    // ignoreTombstones=1 is the way back: a file deleted by mistake is restored
+    // by re-running with it, since FileMaker still holds the original.
+    const deleted = req.query?.ignoreTombstones ? new Set() : new Set((await tombstones(db)).map(String));
 
-    const moved = [], skipped = [], failed = [], empty = [], reattached = [];
+    const moved = [], skipped = [], failed = [], empty = [], reattached = [], tombstoned = [];
     for (const row of rows) {
       const fd = row.fieldData;
       const id = `F-${kind}-${row.recordId}`;
       const streaming = String(fd[src.container] || '');
       if (!streaming.startsWith('http')) { empty.push(id); continue; }
+
+      if (deleted.has(id)) { tombstoned.push(id); continue; }
 
       const parentId = String(fd[src.fk] ?? '').trim();
 
@@ -120,7 +130,7 @@ export default async function handler(req, res) {
     const result = {
       kind, offset, total, read: rows.length, parentReadable: readable,
       moved: moved.length, skipped: skipped.length, reattached: reattached.length,
-      empty: empty.length, failed,
+      empty: empty.length, tombstoned: tombstoned.length, failed,
       bytes: moved.reduce((n, m) => n + (m.size || 0), 0),
       // A parent id of '' means the row is in FileMaker but attached to nothing;
       // it is still moved, so nothing is lost, but it will not appear under any
