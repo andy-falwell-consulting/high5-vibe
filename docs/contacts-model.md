@@ -182,11 +182,19 @@ and a display name across 23,302 rows.
 **The migration must deduplicate.** Every link is stored in both directions, so
 a naive import creates 21,350 affiliations where there are 10,675.
 
-Still missing and worth adding while someone is in FMP Pro: `Relationship` and
-`Sort` on that layout, and `NameFirst`/`NameLast` on the contacts layout. None
-of them block the migration — names are readable through `zz__Display__ct` — but
-splitting a display string guesses, and one contact already reads
-`"Sargent Jose  Limone"`.
+**Names are solved.** `Name_First` and `Name_Last` are now on
+`Contacts_New_vibe` (note the underscores — not `NameFirst`), populated for
+10,788 and 10,755 of 10,839 people, or ~99.5%. This removes a real risk: the
+contact whose display name reads `"Sargent Jose  Limone"` splits to
+`Name_First = "Sargent Jose "`, `Name_Last = "Limone"`. Parsing the display
+string would have made the first name "Sargent" — and would have quietly
+mangled a few hundred records that nobody would have spotted.
+
+Still outstanding, and **not blocking**: `Relationship` and `Sort` exist on
+`Contacts_New_vibe` as *related* fields (`cntct_RLTN::…`), which return only the
+first related row per contact — 1 of Joe Ceglia's 3. They are needed on the
+`Contact_rltn` layout itself, whose base table is the join, where each record is
+one relationship row.
 
 ---
 
@@ -205,7 +213,9 @@ splitting a display string guesses, and one contact already reads
 Nothing blocks the migration. Two things would make it cleaner, both layout
 additions:
 
-1. `Relationship` and `Sort` on `Contact_rltn` — `Relationship` would say whether
-   these links mean more than one thing, which the org↔org rows suggest they do.
-2. `NameFirst` / `NameLast` on the contacts layout — so people's names are read
-   rather than parsed out of a display string.
+1. `Relationship` and `Sort` on **`Contact_rltn`** (the join layout, currently 4
+   fields). `Relationship` would confirm whether these links mean more than one
+   thing — the 691 org↔org rows suggest they do, though that is already
+   distinguishable from the ids alone, which is why this is optional.
+
+`Name_First` / `Name_Last` — **done**.
