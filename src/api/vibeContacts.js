@@ -65,3 +65,13 @@ export const setPrimary = (personId, affiliationId) => write({ action: 'set-prim
 export const setParent = (organizationId, parentOrganizationId) =>
   write({ action: 'set-parent', organizationId, parentOrganizationId });
 export const deleteContact = id => write({ action: 'delete', id });
+
+// Phones, emails and addresses. `kind` is 'phone' | 'email' | 'address'; the
+// server owns the array and returns the whole of it back, so the caller never
+// posts a list it might have read before someone else changed it.
+export const addMethod = (contactId, kind, fields) =>
+  write({ action: 'add-method', contactId, kind, fields });
+export const updateMethod = (contactId, kind, methodId, fields) =>
+  write({ action: 'update-method', contactId, kind, methodId, fields });
+export const removeMethod = (contactId, kind, methodId) =>
+  write({ action: 'remove-method', contactId, kind, methodId });

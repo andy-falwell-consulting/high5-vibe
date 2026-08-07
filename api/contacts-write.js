@@ -9,6 +9,9 @@
 //     unaffiliate          { affiliationId }
 //     set-primary          { personId, affiliationId }
 //     set-parent           { organizationId, parentOrganizationId|null }
+//     add-method           { contactId, kind: phone|email|address, fields }  → VM-…
+//     update-method        { contactId, kind, methodId, fields }
+//     remove-method        { contactId, kind, methodId }
 //
 // PHASE 2b of docs/vibe-owns-the-record.md. Writes go to Vibe only — FileMaker
 // is not touched, and needs only a Google session rather than a per-user
@@ -24,6 +27,7 @@ import { Redis } from '@upstash/redis';
 import {
   K, parse, nextId, getEntity, putEntity, readHash, writeHash,
   reindexPerson, reindexOrg, wouldCycle, displayName, isVibeId,
+  METHODS, methodList, nextMethodId,
 } from './_contacts.js';
 
 const redis = Redis.fromEnv();
@@ -56,7 +60,8 @@ export default async function handler(req, res) {
       const person = {
         id: await nextId(db), first, last, fmDisplay: '',
         title: str(body.title), status: str(body.status) || 'Active', notes: str(body.notes),
-        qboId: '', createdAt: stamp.updatedAt, createdBy: session.email, ...stamp,
+        qboId: '', phones: [], emails: [], addresses: [],
+        createdAt: stamp.updatedAt, createdBy: session.email, ...stamp,
       };
       await putEntity(db, 'person', person);
       return res.status(200).json({ kind: 'person', person: { ...person, displayName: displayName(person) } });
@@ -69,6 +74,7 @@ export default async function handler(req, res) {
         id: await nextId(db), name,
         status: str(body.status) || 'Active', type: str(body.type), notes: str(body.notes),
         siteNumber: str(body.siteNumber), qboId: '', parentOrganizationId: null,
+        phones: [], emails: [], addresses: [],
         createdAt: stamp.updatedAt, createdBy: session.email, ...stamp,
       };
       await putEntity(db, 'organization', org);
@@ -92,6 +98,72 @@ export default async function handler(req, res) {
       if (kind === 'organization' && !next.name) return res.status(400).json({ error: 'an organization needs a name' });
       await putEntity(db, kind === 'person' ? 'person' : 'organization', next);
       return res.status(200).json({ kind, entity: kind === 'person' ? { ...next, displayName: displayName(next) } : next });
+    }
+
+    // ── Contact methods ───────────────────────────────────────────
+    //
+    // Read-modify-write on the server rather than letting the client post the
+    // whole array back. The client's copy can be stale, and a stale array
+    // silently deletes whatever someone else added since it was read.
+    if (action === 'add-method' || action === 'update-method' || action === 'remove-method') {
+      const contactId = str(body.contactId);
+      const kind = str(body.kind);
+      const spec = METHODS[kind];
+      if (!spec) return res.status(400).json({ error: `kind must be one of ${Object.keys(METHODS).join(', ')}` });
+
+      const { kind: entityKind, entity } = await getEntity(db, contactId);
+      if (!entityKind) return res.status(404).json({ error: 'no such contact' });
+      const list = methodList(entity, kind);
+
+      let next;
+      if (action === 'remove-method') {
+        const methodId = str(body.methodId);
+        if (!list.some(m => String(m.id) === methodId)) {
+          return res.status(404).json({ error: `no such ${kind} on this contact` });
+        }
+        next = list.filter(m => String(m.id) !== methodId);
+      } else {
+        const fields = body.fields || {};
+        const unknown = Object.keys(fields).filter(f => !spec.keys.includes(f));
+        if (unknown.length) return res.status(400).json({ error: `not part of a ${kind}: ${unknown.join(', ')}` });
+
+        if (action === 'add-method') {
+          const row = { id: await nextMethodId(db) };
+          for (const k of spec.keys) row[k] = str(fields[k]);
+          const missing = Array.isArray(spec.required)
+            ? !spec.required.some(k => row[k])
+            : !row[spec.required];
+          if (missing) {
+            return res.status(400).json({
+              error: Array.isArray(spec.required)
+                ? `an address needs at least one of ${spec.required.join(', ')}`
+                : `a ${kind} needs a ${spec.required}`,
+            });
+          }
+          next = [...list, row];
+        } else {
+          const methodId = str(body.methodId);
+          const current = list.find(m => String(m.id) === methodId);
+          if (!current) return res.status(404).json({ error: `no such ${kind} on this contact` });
+          const row = { ...current };
+          for (const k of Object.keys(fields)) row[k] = str(fields[k]);
+          const missing = Array.isArray(spec.required)
+            ? !spec.required.some(k => row[k])
+            : !row[spec.required];
+          if (missing) {
+            return res.status(400).json({
+              error: Array.isArray(spec.required)
+                ? `an address needs at least one of ${spec.required.join(', ')}`
+                : `a ${kind} needs a ${spec.required}`,
+            });
+          }
+          next = list.map(m => (String(m.id) === methodId ? row : m));
+        }
+      }
+
+      const updated = { ...entity, [spec.field]: next, ...stamp };
+      await putEntity(db, entityKind === 'person' ? 'person' : 'organization', updated);
+      return res.status(200).json({ contactId, kind, [spec.field]: next });
     }
 
     if (action === 'affiliate') {
