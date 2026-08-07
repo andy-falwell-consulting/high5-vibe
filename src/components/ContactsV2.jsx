@@ -291,8 +291,8 @@ export default function ContactsV2() {
     // phones and emails are arrays; the hook stringifies before matching, which
     // joins them with commas and searches every one.
     searchKeys: kind === 'people'
-      ? ['name', 'first', 'last', 'title', 'phones', 'emails']
-      : ['name', 'type', 'phones', 'emails'],
+      ? ['name', 'first', 'last', 'title', 'phones', 'phoneDigits', 'emails']
+      : ['name', 'type', 'phones', 'phoneDigits', 'emails'],
     sorts: [
       // Trimmed, so a name stored with leading whitespace sorts where it reads
       // rather than ahead of everything — which is what put a 'T' section at
@@ -312,10 +312,14 @@ export default function ContactsV2() {
     // Same shape api/contacts.js sends for a list row, including the phone and
     // email arrays — otherwise adding a number leaves the sidebar unable to
     // find the person by it until a reload.
-    const contactable = e => ({
-      phones: (e.phones || []).map(p => p.number).filter(Boolean),
-      emails: (e.emails || []).filter(m => m.type !== 'Web').map(m => m.address).filter(Boolean),
-    });
+    const contactable = e => {
+      const phones = (e.phones || []).map(p => p.number).filter(Boolean);
+      return {
+        phones,
+        phoneDigits: phones.map(n => n.replace(/\D/g, '')).filter(Boolean),
+        emails: (e.emails || []).filter(m => m.type !== 'Web').map(m => m.address).filter(Boolean),
+      };
+    };
     if (d.kind === 'person') {
       const p = d.person;
       setPeople(list => list.map(r => r.id !== p.id ? r

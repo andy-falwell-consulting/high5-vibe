@@ -56,8 +56,13 @@ export default async function handler(req, res) {
         // replaces a server-side search index entirely — and as arrays they
         // both search (String() joins them) and display (take the first).
         // Web addresses are left out: nobody looks a person up by their URL.
+        const phones = methodList(e, 'phone').map(p => p.number).filter(Boolean);
         const contactable = {
-          phones: methodList(e, 'phone').map(p => p.number).filter(Boolean),
+          phones,
+          // Numbers are stored formatted ('802-555-0134') but people type them
+          // bare, so the digits go along too or searching 8025550134 finds
+          // nobody. Search-only — nothing renders this.
+          phoneDigits: phones.map(n => n.replace(/\D/g, '')).filter(Boolean),
           emails: methodList(e, 'email').filter(m => m.type !== 'Web').map(m => m.address).filter(Boolean),
         };
         records.push(list === 'people'
