@@ -60,4 +60,8 @@ export const affiliate = (personId, organizationId, title) =>
   write({ action: 'affiliate', personId, organizationId, title });
 export const unaffiliate = affiliationId => write({ action: 'unaffiliate', affiliationId });
 export const setPrimary = (personId, affiliationId) => write({ action: 'set-primary', personId, affiliationId });
+// null clears the parent. The server refuses a link that would make the
+// hierarchy circular, so the caller shows that error rather than pre-checking.
+export const setParent = (organizationId, parentOrganizationId) =>
+  write({ action: 'set-parent', organizationId, parentOrganizationId });
 export const deleteContact = id => write({ action: 'delete', id });

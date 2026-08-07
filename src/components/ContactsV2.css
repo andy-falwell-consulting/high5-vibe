@@ -48,10 +48,12 @@
 .c2-chip { background: #1e3a5f; color: #93c5fd; border-radius: 5px; padding: 2px 8px; font-size: 13px; }
 .c2-chip--org { background: #3f2d5c; color: #d8b4fe; }
 .c2-id { margin-left: auto; font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #4b5563; }
-.c2-parent { color: #94a3b8; font-size: 15px; margin: 14px 0 0; }
+.c2-parent { color: #94a3b8; font-size: 15px; margin: 0; }
 .c2-parent strong { color: #e2e8f0; }
-.c2-none { color: #79859a; font-size: 14px; }
+.c2-none { color: #79859a; font-size: 14px; margin: 0 0 10px; }
 .c2-note { color: #fbbf24; font-size: 13px; margin-top: 6px; }
+.c2-noname { color: #79859a; font-style: italic; }
+.c2-notes { color: #94a3b8; font-size: 14px; margin: 14px 0 0; white-space: pre-wrap; }
 
 .c2-affs, .c2-people, .c2-matches { list-style: none; margin: 0; padding: 0; }
 .c2-affs li, .c2-people li {
@@ -68,11 +70,15 @@
   font-size: 13px; font-family: inherit; cursor: pointer;
 }
 .c2-mini + .c2-mini { margin-left: 0; }
+/* Sits next to what precedes it. Two `margin-left: auto` items in one flex row
+   split the free space between them, which pulls the id away from its record. */
+.c2-mini--flush { margin-left: 10px; }
 .c2-mini:hover:not(:disabled) { border-color: #3a3f60; color: #cbd5e1; }
 .c2-mini--danger:hover:not(:disabled) { border-color: var(--h5-red); color: var(--h5-red); }
 .c2-mini:disabled { opacity: .4; cursor: default; }
 
-.c2-addaff { margin-top: 30px; padding-top: 20px; border-top: 1px solid #1e2130; }
+.c2-picker-block { margin-top: 30px; padding-top: 20px; border-top: 1px solid #1e2130; }
+.c2-picker { max-width: 560px; }
 .c2-matches li button {
   display: block; width: 100%; text-align: left;
   padding: 7px 10px; border: none; background: transparent;
@@ -89,6 +95,10 @@
 }
 .c2-input:focus { border-color: #3a3f60; }
 .c2-input--inline { width: auto; flex: 1; min-width: 180px; }
+.c2-input--area { resize: vertical; line-height: 1.45; }
+
+.c2-edit { max-width: 460px; margin-top: 8px; }
+.c2-edit .c2-modal-actions { justify-content: flex-start; }
 .c2-lbl { display: block; font-size: 13px; color: #8b97aa; margin-bottom: 12px; }
 .c2-lbl .c2-input { margin-top: 4px; }
 
@@ -133,5 +143,5 @@
 [data-theme="light"] .c2-modal h2 { color: #0f172a; }
 [data-theme="light"] .c2-skeleton { background: #f1f5f9; }
 [data-theme="light"] .c2-newbar { border-top-color: #e2e8f0; }
-[data-theme="light"] .c2-addaff { border-top-color: #e2e8f0; }
+[data-theme="light"] .c2-picker-block { border-top-color: #e2e8f0; }
 [data-theme="light"] .c2-error { color: #b91c1c; background: #fef2f2; border-color: #fecaca; }
