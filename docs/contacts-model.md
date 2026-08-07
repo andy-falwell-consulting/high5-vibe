@@ -62,13 +62,39 @@ numbers, not less.
 
 ### Two other shapes in the same table
 
-**Organization ↔ organization: 691 distinct links.** Organizations relate to
-other organizations — almost certainly the district-and-its-schools structure,
-and very likely the same thing as the site-vs-organization join trap already
-documented in CLAUDE.md for inspections. The design below does not yet account
-for it, and it needs a decision.
+**Organization ↔ organization: 691 distinct links — and they are a hierarchy.**
+Every one of twenty sampled pairs is a school and its district:
 
-**Person ↔ person: 32 distinct links.** Small enough to defer.
+```
+Read School                  ↔  Bridgeport Board of Education
+Wilbur Cross School          ↔  Bridgeport Board of Education
+Harding High School          ↔  Bridgeport Board of Education
+Barnum School                ↔  Bridgeport Board of Education
+…
+```
+
+This is the **site-vs-organization join trap** already documented in CLAUDE.md,
+seen from the other end: an inspection hangs off the *site* (Read School) while
+the *organization* is the district (Bridgeport Board of Education), and matching
+on the contact id alone silently finds nothing.
+
+It is also, almost certainly, the root of Ian's CCS report. A project points at a
+site; the "organization" people expect to see is the parent.
+
+So this is not a peer relationship and should not be modelled as one. See
+`parentOrganizationId` below.
+
+**Person ↔ person: 32 distinct links.** One is labelled "Spouse". Small enough
+to defer.
+
+**`Relationship` carries nothing.** Now that it is readable: **23,288 of 23,302
+rows are blank — 99.94%.** The fourteen that are filled hold job titles
+("Executive Director", "Camp Director", "Student") and one "Spouse". Not one of
+the 1,382 organization rows has a value.
+
+So there is no link *type* to model, and the handful of values that do exist are
+titles — which is where the design already puts them. Worth having checked
+rather than guessed, even though the answer was "ignore this field".
 
 **1,213 people have no organization at all**, and 32 relationship rows point at
 contact ids that no longer exist.
@@ -102,7 +128,10 @@ say what the business means.
 
 ## Proposal: three entities
 
-**Organization** — name, status, addresses, phones, notes.
+**Organization** — name, status, addresses, phones, notes, and
+`parentOrganizationId` for the district→school hierarchy above. A single parent
+rather than a set: every sampled school belongs to exactly one district. Worth
+confirming no organization has two parents before building.
 **Person** — first name, last name, title, emails, phones, notes.
 **Affiliation** — a link between a person and an organization, carrying the role
 or title *at that organization* and an optional `primary` flag.
@@ -123,6 +152,9 @@ of people with exactly one, without discarding the 698 who have more.
   identified in [the changeover inventory](changeover-inventory.md).
 - The CCS organization field stops being a special case — a project references an
   organization directly instead of inferring one through a contact.
+- The site-vs-organization trap becomes answerable: "all work for Bridgeport
+  Board of Education" is a walk up `parentOrganizationId`, rather than a join
+  that has to be got exactly right each time and currently is not.
 
 ---
 
@@ -190,11 +222,10 @@ contact whose display name reads `"Sargent Jose  Limone"` splits to
 string would have made the first name "Sargent" — and would have quietly
 mangled a few hundred records that nobody would have spotted.
 
-Still outstanding, and **not blocking**: `Relationship` and `Sort` exist on
-`Contacts_New_vibe` as *related* fields (`cntct_RLTN::…`), which return only the
-first related row per contact — 1 of Joe Ceglia's 3. They are needed on the
-`Contact_rltn` layout itself, whose base table is the join, where each record is
-one relationship row.
+`Contact_rltn` now also exposes `Relationship` and `zz__Sort_Order__cn`, so
+nothing further is needed from FileMaker. `Relationship` turned out to be 99.94%
+blank and is ignored; the sort calculation covers ordering without the raw `Sort`
+field.
 
 ---
 
@@ -203,7 +234,7 @@ one relationship row.
 | Decision | Note |
 |---|---|
 | Three entities, or keep one with a type flag? | Recommending three. The flag is what produces the bugs above. |
-| How are organization↔organization links modelled? | 691 of them exist. Probably district→school. Needs its own answer. |
+| ~~How are organization↔organization links modelled?~~ | **Settled** — a district→school hierarchy, modelled as `parentOrganizationId`. |
 | Are person↔person relations kept? | They exist in the data. Out of scope for Phase 2 unless anyone uses them. |
 | Does a project reference an organization, a person, or both? | Today it is one contact link doing both jobs. Ian's bug is exactly this. |
 | Which title wins when a person has three affiliations? | The `primary` one, unless shown in an organization's context. |
@@ -213,9 +244,10 @@ one relationship row.
 Nothing blocks the migration. Two things would make it cleaner, both layout
 additions:
 
-1. `Relationship` and `Sort` on **`Contact_rltn`** (the join layout, currently 4
-   fields). `Relationship` would confirm whether these links mean more than one
-   thing — the 691 org↔org rows suggest they do, though that is already
-   distinguishable from the ids alone, which is why this is optional.
+Nothing. Everything the migration needs is now readable:
 
-`Name_First` / `Name_Last` — **done**.
+- `Name_First` / `Name_Last` on `Contacts_New_vibe` — **done**, ~99.5% populated
+- `Relationship` on `Contact_rltn` — **done**, and it turned out to be empty
+- `zz__Sort_Order__cn` on `Contact_rltn` — covers ordering
+
+Phase 2 is unblocked.
