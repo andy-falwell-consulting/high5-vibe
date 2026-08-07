@@ -174,9 +174,16 @@ export function ListBody({ c, renderItem, activeId }) {
     }
   }, [activeId, c.processed])
 
+  // Keyed by position, not by letter. The same letter can head more than one
+  // section — a name with leading whitespace sorts before 'a' but still lists
+  // under 'T', and an accented name sorts after 'z' and falls into '#' — so
+  // keying on the letter produces duplicates. React does not remove the extras
+  // on the next render, which leaves orphaned headers standing over a list they
+  // no longer belong to (visible in Contacts: '#' and 'T' survived a filter
+  // matching neither).
   const items = c.sections
-    ? c.sections.flatMap(sec => [
-        <div className="lc-letter" key={`L:${sec.letter}`}>{sec.letter}</div>,
+    ? c.sections.flatMap((sec, i) => [
+        <div className="lc-letter" key={`L:${i}:${sec.letter}`}>{sec.letter}</div>,
         ...sec.items.map(renderItem),
       ])
     : c.processed.map(renderItem)

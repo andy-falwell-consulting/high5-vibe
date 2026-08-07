@@ -175,7 +175,10 @@ export default function ContactsV2() {
     name: r => (kind === 'people' ? r.name : r.name) || '',
     searchKeys: kind === 'people' ? ['name', 'first', 'last', 'title'] : ['name', 'type'],
     sorts: [
-      { id: 'name', label: 'Name', value: r => (r.name || '').toLowerCase(), alpha: true },
+      // Trimmed, so a name stored with leading whitespace sorts where it reads
+      // rather than ahead of everything — which is what put a 'T' section at
+      // the top of the organizations list.
+      { id: 'name', label: 'Name', value: r => (r.name || '').trim().toLowerCase(), alpha: true },
       { id: 'status', label: 'Status', value: r => r.status || '' },
     ],
     defaultSort: 'name',
