@@ -36,7 +36,7 @@ export const listPeople = onProgress => listAll('people', onProgress);
 export const listOrganizations = onProgress => listAll('organizations', onProgress);
 
 export const getContact = id =>
-  json(fetch(`/api/contacts?${qs(`id=${encodeURIComponent(id)}`)}`, { credentials: 'include' }).then(r => r));
+  fetch(`/api/contacts?${qs(`id=${encodeURIComponent(id)}`)}`, { credentials: 'include' }).then(json);
 
 export const getOrganizationPeople = orgId =>
   fetch(`/api/contacts?${qs(`org=${encodeURIComponent(orgId)}`)}`, { credentials: 'include' }).then(json);
