@@ -2,6 +2,8 @@
 //
 //   GET /api/contacts?db=…&id=71501          → one person or organization, resolved
 //   GET /api/contacts?db=…&org=69026         → an organization with its people
+//   GET /api/contacts?db=…&list=people&cursor=0        → one page of people
+//   GET /api/contacts?db=…&list=organizations&cursor=0 → one page of organizations
 //   GET /api/contacts?db=…&stats=1           → counts, for verifying a migration
 //
 // Read-only. The write path and the UI come after this is proven against real
@@ -21,6 +23,32 @@ export default async function handler(req, res) {
   if (!ALLOWED_DBS.has(db)) return res.status(400).json({ error: 'db not allowed' });
 
   try {
+    // Cursor-paged, the same shape as /api/records, so the client accumulates
+    // pages until the cursor comes back '0' and then searches locally — which
+    // is how every other list in this app already works.
+    //
+    // Deliberately NOT a maintained search index: one more thing every write
+    // would have to keep in step, and the pattern that already exists here has
+    // the advantage of being the one people know.
+    const list = String(req.query?.list || '');
+    if (list) {
+      if (list !== 'people' && list !== 'organizations') {
+        return res.status(400).json({ error: "list must be 'people' or 'organizations'" });
+      }
+      const key = list === 'people' ? K.person(db) : K.org(db);
+      const [next, flat] = await redis.hscan(key, String(req.query?.cursor ?? '0'), { count: 1000 });
+      const records = [];
+      for (let i = 1; i < flat.length; i += 2) {
+        const e = parse(flat[i]);
+        if (!e) continue;
+        records.push(list === 'people'
+          ? { id: e.id, first: e.first, last: e.last, name: displayName(e), title: e.title, status: e.status }
+          : { id: e.id, name: e.name, status: e.status, type: e.type, parentOrganizationId: e.parentOrganizationId });
+      }
+      res.setHeader('Cache-Control', 's-maxage=15, stale-while-revalidate=60');
+      return res.status(200).json({ list, records, cursor: String(next), count: records.length });
+    }
+
     if (req.query?.stats) {
       const [organizations, people, affiliations] = await Promise.all([
         redis.hlen(K.org(db)), redis.hlen(K.person(db)), redis.hlen(K.aff(db)),

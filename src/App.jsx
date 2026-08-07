@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import NavRail from './components/NavRail'
 import LoginScreen from './components/LoginScreen'
 import ReadOnlyBanner from './components/ReadOnlyBanner'
+import ContactsV2 from './components/ContactsV2'
 import PreviewBypassBanner from './components/PreviewBypassBanner'
 import QboHealthBanner from './components/QboHealthBanner'
 import Home from './components/Home'
@@ -32,6 +33,7 @@ const MODULES = [
   { id: 'home', label: 'Home', icon: '⌂', group: 'Overview' },
   { id: 'reminders', label: 'Reminders', icon: '⏰', group: 'Overview' },
   { id: 'contacts', label: 'Contacts', icon: '◉', group: 'Records' },
+  { id: 'contacts-v2', label: 'Contacts v2', icon: '◎', group: 'Records' },
   { id: 'estimates',   label: 'Estimates',   icon: '◧', group: 'Records' },
   { id: 'inspections', label: 'Inspections', icon: '⚑', group: 'Records' },
   { id: 'rmi',         label: 'Risk Management', icon: '⚠', group: 'Records' },
@@ -282,6 +284,7 @@ export default function App() {
         {visited.has('home') && <div style={{ display: activeModule === 'home' ? 'contents' : 'none' }}><Home onOpen={handlePalettePick} onGoto={handleSelect} onOpenView={(m, v) => navigateTo(m, null, v)} onOpenPalette={() => setPaletteOpen(true)} /></div>}
         {visited.has('reminders') && <div style={{ display: activeModule === 'reminders' ? 'contents' : 'none' }}><Reminders navTarget={navTarget} onClearNav={clearNavTarget} onNavigateTo={navigateTo} /></div>}
         {visited.has('contacts') && <div style={{ display: activeModule === 'contacts' ? 'contents' : 'none' }}><Contacts navTarget={navTarget} onClearNav={clearNavTarget} onNavigateTo={navigateTo} onRecordSelect={makeRecordSelectHandler('contacts')} /></div>}
+        {visited.has('contacts-v2') && <div style={{ display: activeModule === 'contacts-v2' ? 'contents' : 'none' }}><ContactsV2 /></div>}
         {visited.has('estimates') && <div style={{ display: activeModule === 'estimates' ? 'contents' : 'none' }}><Estimates navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('estimates')} /></div>}
         {visited.has('inspections') && <div style={{ display: activeModule === 'inspections' ? 'contents' : 'none' }}><Inspections navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('inspections')} /></div>}
         {visited.has('rmi') && <div style={{ display: activeModule === 'rmi' ? 'contents' : 'none' }}><RMI navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('rmi')} /></div>}
