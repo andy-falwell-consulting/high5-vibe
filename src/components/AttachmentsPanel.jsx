@@ -4,7 +4,7 @@ import './AttachmentsPanel.css';
 
 // Reusable file-attachments panel. Pass a `parentId` (the record an attachment
 // belongs to) and an `api` of { list, upload, remove, freshUrl } from
-// recordAttachments.makeAttachments(). Self-contained: load, upload (drag-drop),
+// vibeFiles.makeVibeAttachments(). Self-contained: load, upload (drag-drop),
 // view (fresh URL on click), and delete.
 //
 // `invoiceDocNumber` (optional): when the record carries a QuickBooks invoice
