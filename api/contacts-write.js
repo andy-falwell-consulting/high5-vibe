@@ -23,7 +23,7 @@ import { ALLOWED_DBS } from './_fmp.js';
 import { Redis } from '@upstash/redis';
 import {
   K, parse, nextId, getEntity, putEntity, readHash, writeHash,
-  reindexPerson, reindexOrg, wouldCycle, displayName,
+  reindexPerson, reindexOrg, wouldCycle, displayName, isVibeId,
 } from './_contacts.js';
 
 const redis = Redis.fromEnv();
@@ -117,9 +117,12 @@ export default async function handler(req, res) {
         for (const a of all.values()) if (String(a.personId) === personId) writes[a.id] = JSON.stringify(a);
         await writeHash(K.aff(db), writes);
       }
-      await reindexPerson(db, personId);
+      // Report what was STORED. reindexPerson promotes a first affiliation to
+      // primary, so returning the pre-reindex copy told the caller primary was
+      // false when it had just been set true.
+      const settled = await reindexPerson(db, personId);
       await reindexOrg(db, organizationId);
-      return res.status(200).json({ affiliation: aff });
+      return res.status(200).json({ affiliation: settled.find(a => a.id === aff.id) || aff });
     }
 
     if (action === 'unaffiliate') {
@@ -167,6 +170,29 @@ export default async function handler(req, res) {
       const next = { ...o.entity, parentOrganizationId: parentId, ...stamp };
       await putEntity(db, 'organization', next);
       return res.status(200).json({ organization: next });
+    }
+
+    if (action === 'delete') {
+      const id = str(body.id);
+      const { kind, entity } = await getEntity(db, id);
+      if (!kind) return res.status(404).json({ error: 'no such contact' });
+      // Only records BORN in Vibe can be removed outright. One derived from
+      // FileMaker still exists there and would simply return on the next sync,
+      // so removing it needs a tombstone — which is Phase 2c, not something to
+      // fake here.
+      if (!isVibeId(id)) {
+        return res.status(400).json({ error: 'that contact came from FileMaker; removing it needs a tombstone, which is not built yet' });
+      }
+      const all = await readHash(K.aff(db));
+      const mine = [...all.values()].filter(a =>
+        String(a.personId) === id || String(a.organizationId) === id);
+      for (const a of mine) await redis.hdel(K.aff(db), a.id);
+      // Reindex every counterpart, so no index is left pointing at a gone id.
+      for (const pid of new Set(mine.map(a => String(a.personId)))) await reindexPerson(db, pid);
+      for (const oid of new Set(mine.map(a => String(a.organizationId)))) await reindexOrg(db, oid);
+      await redis.hdel(kind === 'person' ? K.person(db) : K.org(db), id);
+      await redis.hdel(kind === 'person' ? K.byPerson(db) : K.byOrg(db), id);
+      return res.status(200).json({ deleted: id, kind, affiliationsRemoved: mine.length, was: entity?.name || displayName(entity || {}) });
     }
 
     return res.status(400).json({ error: `unknown action "${action}"` });
