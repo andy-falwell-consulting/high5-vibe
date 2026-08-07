@@ -25,16 +25,21 @@ export const FK = {
 
 export const parentKey = (kind, id) => `${kind}:${id}`;
 
-// The three FileMaker container tables. The foreign key is NOT the same field
-// on each, and taking it from the app's own config matters: `ID` on RCD_Pics is
-// the picture's own serial (23, 94…), not the project — keying ccs on it would
-// have filed 64 files under wrong parents without erroring.
+// The three FileMaker container tables. The parent key is `ID` on all three —
+// established by measurement once the fields were placed on the layouts, not by
+// reading the app's config:
 //
-// `ID_Parent` exists on two of these and is blank in every row; it is a
-// leftover clone, noted in trainingAttachments.js.
+//   RCD_Pics.ID          filled 69/69, every sampled value a real RCD id
+//   RCD_Pics.rcd_id      filled  0/69  ← what ccsAttachments.js queries
+//   Inspections_Pics.ID  filled 20/20, every sampled value a real inspection id
+//
+// I earlier assumed `ID` was the picture's own serial because 23 and 94 looked
+// like row numbers. They are project ids. `rcd_id`, `inspection_id` and
+// `ID_Parent` all exist and are empty in every row — leftover clones, as
+// trainingAttachments.js already noted for Training_Pics.
 export const SOURCES = {
-  ccs: { layout: 'RCD_Pics', container: 'image', fk: 'rcd_id', nameField: 'File Name' },
-  inspection: { layout: 'Inspections_Pics', container: 'image', fk: 'ID', nameField: null },
+  ccs: { layout: 'RCD_Pics', container: 'image', fk: 'ID', nameField: 'File Name' },
+  inspection: { layout: 'Inspections_Pics', container: 'image', fk: 'ID', nameField: 'File Name' },
   training: { layout: 'Training_Pics', container: 'image', fk: 'ID', nameField: 'File Name' },
 };
 
