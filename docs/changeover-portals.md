@@ -11,7 +11,8 @@ its own carrying the keys — because the Data API can only read fields placed o
 a layout, and a *related* field on a parent layout returns only the first
 related row.
 
-26 portals. **23 need nothing. 3 need work.**
+26 portals. **23 needed nothing. Of the 3 that did, 2 are now resolved** —
+Andy placed the fields on 2026-08-07. One remains.
 
 ---
 
@@ -34,7 +35,13 @@ Worth pairing with the known trap in CLAUDE.md: the parent totals
 Data API** — they return `201 Field cannot be modified`. Vibe will have to
 compute estimate totals itself.
 
-### 2. Bill of materials — layout is on the wrong table
+### 2. Bill of materials — RESOLVED
+
+`item_li_vibe` now sits on the item line-item table: **125,047 rows**, with
+`_kpt__Item_Line_Item_ID`, `_kft__Item_ID__parent`, `_kft__Item_ID__assemblyLine`,
+`Quantity`, `Cost`, `Total`, `Total_Cost`. Migratable as it stands.
+
+The original problem, for the record:
 
 `Portal__Bill_of_Materials 4` on `Products & Services_New`, and `Items_Portal`.
 
@@ -42,18 +49,23 @@ compute estimate totals itself.
 rows) with related `item_ITMLI__billOfMaterials::` fields on it — so it returns
 one component per item no matter how many a product has.
 
-**Needed:** a layout on the item line-item table itself, with its primary key,
-the parent item foreign key, and `Quantity`, `Total`, `Cost`, `Total_Cost`.
+~~**Needed:** a layout on the item line-item table itself.~~ Done — `item_li_vibe`.
 
-### 3. Inspection line items — one field short
+### 3. Inspection line items — RESOLVED
+
+`Element_Grade` is on `Script_Use__Inspections_Line_Items` and populated (461 of
+500 sampled rows; values 1–5 and NI). With both keys and every other portal
+field already present, this table — **208,316 rows, the largest child table in
+the file** — is fully readable.
+
+The original problem, for the record:
 
 `inspt_INSPLI` on `Inspections_New`. The table is
 `Script_Use__Inspections_Line_Items` — **208,316 rows, the largest child table in
 the file** — and it already carries `_kft__Inspection_ID`,
 `_kpt__Inspection_Line_Item_ID`, `_kft__Item_ID` and every data field but one.
 
-**Needed:** place `Element_Grade` on that layout. It exists in the table and is
-populated; it is simply not on the layout.
+~~**Needed:** place `Element_Grade` on that layout.~~ Done.
 
 `Name` in that portal is not a field on the line item; it comes from the related
 item, and `Item_Name` is already there.
@@ -92,5 +104,9 @@ the rows**, with the keys and data fields placed directly on it.
   related row.
 - A field can be **queryable without being readable**: a find on `RCD_Pics` by
   `rcd_id` matches records, and the field is absent from every row returned.
+- Probing a child table **through a portal's table occurrence only sees fields
+  already placed on that portal**. A "no such field" answer there means "not on
+  the portal", not "not in the table" — I reported the latter once and was
+  wrong. To ask what a table really holds, query a layout that sits on it.
 - Layouts named `Script_Use__…` usually have **no fields on them at all**, even
   though the table behind them is full.
