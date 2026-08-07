@@ -19,13 +19,15 @@ replicated layouts there are 413 fields, of which 40 are computed — and the ap
 reads only **six distinct derivations**, four of which are the same idea
 repeated.
 
-**The portal problem is bigger, and the file problem is not in the plan at all.**
+**Both of those turned out smaller than this document first assumed.** The
+file problem was 130 files totalling 41 MB and is now done. The portal problem
+is 3 tables needing a layout, not 23 — see docs/changeover-portals.md.
 
 | | Count | Assessment |
 |---|---|---|
 | Distinct computed values the app reads | 6 | tractable — Vibe can compute all six |
-| Portals the app reads | 23 | the real work; one-to-many has no home in Vibe yet |
-| Layouts with container (file) fields | 4+ | **unaddressed** — see below |
+| Portals the app reads | 26 | swept 2026-08-07 — 23 need nothing, 3 need FileMaker work (docs/changeover-portals.md) |
+| Layouts with container (file) fields | 3 with data | **done** — 130 files, 41 MB, migrated and hash-verified (v1.0.305) |
 
 ---
 
