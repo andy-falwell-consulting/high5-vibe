@@ -38,9 +38,22 @@ export default async function handler(req, res) {
     const body = await r.json().catch(() => ({}));
 
     const rec = body?.response?.data?.[0];
-    if (!rec) return res.status(r.status).json(body);   // pass FileMaker's own error through
-
     const frag = await readFragment(db, layout, recordId);
+
+    // A record born in Vibe has no FileMaker counterpart, so FileMaker answers
+    // "record is missing" — correctly, from its point of view. Serve it from the
+    // fragment alone. Found by auditing what a V- prefixed id would break: this
+    // was the only place that assumed every id exists in FileMaker.
+    if (!rec) {
+      if (frag?.__created && !frag.__deleted) {
+        return res.status(200).json({
+          messages: [{ code: '0', message: 'OK' }],
+          response: { data: [{ recordId, modId: '0', fieldData: { ...(frag.fieldData || {}) }, portalData: {} }] },
+        });
+      }
+      return res.status(r.status).json(body);   // pass FileMaker's own error through
+    }
+
     const merged = mergeRecord(rec, frag);
 
     // A tombstoned record is gone as far as the app is concerned, even though

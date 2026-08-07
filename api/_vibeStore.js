@@ -108,3 +108,71 @@ export async function writeFragment(db, layout, recordId, fieldData, by) {
   await redis.hset(vibeKey(db, layout), { [id]: JSON.stringify(frag) });
   return frag;
 }
+
+// ── Shadowed FileMaker changes ────────────────────────────────────
+//
+// The honest cost of one-way sync: when FileMaker changes a field Vibe has
+// already overridden, that change arrives, lands in repl:, and is then hidden
+// under the overlay. Nobody sees it. This records those so the loss is visible
+// rather than silent.
+//
+// It is also how the open question gets answered with evidence instead of
+// opinion: if this stays empty, nobody is editing CCS records in FMP Pro, and
+// the merge layer can eventually be deleted. If it fills up, we know exactly
+// who is working where and on which fields.
+export const shadowKey = (db, layout) => `vibe:${db}:${layout}:shadowed`;
+
+// Guards against an unbounded hash if something upstream goes haywire — the
+// signal is "is this empty or not", and a few hundred examples is plenty to
+// act on.
+const SHADOW_MAX = 500;
+
+// Compare an incoming batch of FileMaker records against what Vibe overrides.
+// `previous` is the repl: copy from BEFORE this sync wrote over it, so this
+// detects a genuine FileMaker CHANGE rather than merely "Vibe differs from FMP"
+// (which is true of every edit Vibe has ever made and would say nothing).
+export async function recordShadowed(db, layout, incoming, previous, overlay) {
+  if (!overlay.size) return 0;
+  const entries = {};
+
+  for (const rec of incoming) {
+    const id = String(rec.recordId);
+    const frag = overlay.get(id);
+    if (!frag?.fieldData) continue;
+    const before = previous.get(id);
+    if (!before) continue;   // new to the replica: nothing was overwritten
+
+    const changed = [];
+    for (const [field, vibeShows] of Object.entries(frag.fieldData)) {
+      const was = before.fieldData?.[field];
+      const now = rec.fieldData?.[field];
+      if (JSON.stringify(was) === JSON.stringify(now)) continue;  // FMP didn't touch it
+      // FileMaker changed, but landed on the value Vibe already shows — the two
+      // agree, so nothing is being hidden and there is nothing to report.
+      // Without this the list fills with entries whose fmpNow and vibeShows are
+      // identical, and a signal that cries wolf gets ignored.
+      if (JSON.stringify(now) === JSON.stringify(vibeShows)) continue;
+      changed.push({ field, fmpWas: was ?? null, fmpNow: now ?? null, vibeShows });
+    }
+    if (changed.length) entries[id] = JSON.stringify({ at: new Date().toISOString(), fields: changed });
+  }
+
+  const n = Object.keys(entries).length;
+  if (!n) return 0;
+  if ((await redis.hlen(shadowKey(db, layout))) < SHADOW_MAX) {
+    await redis.hset(shadowKey(db, layout), entries);
+  }
+  return n;
+}
+
+export async function readShadowed(db, layout) {
+  const raw = (await redis.hgetall(shadowKey(db, layout))) || {};
+  return Object.entries(raw).map(([recordId, v]) => {
+    const parsed = typeof v === 'string' ? JSON.parse(v) : v;
+    return { recordId, ...parsed };
+  }).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+}
+
+export async function clearShadowed(db, layout) {
+  await redis.del(shadowKey(db, layout));
+}

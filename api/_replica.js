@@ -6,7 +6,7 @@
 // (resumable backfill, then incremental modified-since); the app reads via
 // readReplica(). Files starting with _ are not Vercel routes.
 import { Redis } from '@upstash/redis';
-import { readOverlay, applyOverlay } from './_vibeStore.js';
+import { readOverlay, applyOverlay, VIBE_OWNED, recordShadowed } from './_vibeStore.js';
 
 const redis = Redis.fromEnv();
 const FMP_HOST = 'https://ILELLCO.pcifmhosting.com';
@@ -126,6 +126,27 @@ export async function runSync(db, key, budgetMs = 260000) {
       if (code === '401') break; // no records modified — nothing to do
       const data = j?.response?.data || [];
       if (!data.length) break;
+      // Before overwriting, note any FileMaker change to a field Vibe has
+      // overridden — that change is about to become invisible under the
+      // overlay, and silently losing it is the one real cost of one-way sync.
+      // Only for layouts Vibe owns: everything else has no overlay to hide
+      // behind, and an extra HGETALL per sync per layout is not free.
+      if (VIBE_OWNED.has(layout)) {
+        const overlay = await readOverlay(db, layout);
+        if (overlay.size) {
+          const ids = data.map(r => String(r.recordId)).filter(id => overlay.has(id));
+          if (ids.length) {
+            const raw = await redis.hmget(rk(db, layout, 'recs'), ...ids);
+            const previous = new Map();
+            ids.forEach((id, i) => {
+              const v = Array.isArray(raw) ? raw[i] : raw?.[id];
+              if (v) previous.set(id, typeof v === 'string' ? JSON.parse(v) : v);
+            });
+            await recordShadowed(db, layout, data, previous, overlay);
+          }
+        }
+      }
+
       const entries = {};
       for (const r of data) {
         entries[r.recordId] = slim(r);
