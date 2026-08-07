@@ -14,7 +14,10 @@ import { fmpToken, ALLOWED_DBS } from './_fmp.js';
 import { getGoogleSession } from './_googleSession.js';
 import { isAdminEmail } from './_admin.js';
 import { Redis } from '@upstash/redis';
-import { FK, SOURCES, fetchContainer, putFile, getFile, driveToken, filesFolder } from './_vibeFiles.js';
+import {
+  FK, SOURCES, fetchContainer, putFile, getFile, driveToken, filesFolder,
+  fkIsReadable, addToParent,
+} from './_vibeFiles.js';
 
 const redis = Redis.fromEnv();
 const FMP_HOST = 'https://ILELLCO.pcifmhosting.com';
@@ -46,6 +49,19 @@ export default async function handler(req, res) {
 
   try {
     const token = await fmpToken(db);
+
+    // Refuse rather than upload 24 MB that ends up attached to nothing. The
+    // operator gets the field and layout to fix, or can pass allowUnattached=1
+    // to move the bytes now and let a later run place them.
+    const readable = await fkIsReadable(FMP_HOST, db, src.layout, src.fk, token);
+    if (!readable && !req.query?.allowUnattached) {
+      return res.status(409).json({
+        error: `${src.layout} does not expose ${src.fk}, so a file's parent record cannot be read.`,
+        fix: `Place the ${src.fk} field on the ${src.layout} layout, or retry with &allowUnattached=1.`,
+        kind, layout: src.layout, fk: src.fk,
+      });
+    }
+
     const url = `${FMP_HOST}/fmi/data/v2/databases/${db}/layouts/${encodeURIComponent(src.layout)}`
       + `/records?_limit=${limit}&_offset=${offset}`;
     const page = await (await fetch(url, { headers: { Authorization: `Bearer ${token}` } })).json();
@@ -58,15 +74,27 @@ export default async function handler(req, res) {
     const gtoken = await driveToken();
     await filesFolder(gtoken);
 
-    const moved = [], skipped = [], failed = [], empty = [];
+    const moved = [], skipped = [], failed = [], empty = [], reattached = [];
     for (const row of rows) {
       const fd = row.fieldData;
       const id = `F-${kind}-${row.recordId}`;
       const streaming = String(fd[src.container] || '');
       if (!streaming.startsWith('http')) { empty.push(id); continue; }
 
+      const parentId = String(fd[src.fk] ?? '').trim();
+
       const existing = await getFile(db, id);
-      if (existing?.driveId) { skipped.push(id); continue; }
+      if (existing?.driveId) {
+        // Already moved. If it landed unattached and the parent is readable
+        // now, place it — cheaper and safer than re-uploading the bytes.
+        if (!existing.parentId && parentId) {
+          const fixed = { ...existing, parentId };
+          await redis.hset(FK.file(db), { [id]: JSON.stringify(fixed) });
+          await addToParent(db, fixed);
+          reattached.push(id);
+        } else skipped.push(id);
+        continue;
+      }
 
       try {
         const got = await fetchContainer(streaming, token);
@@ -75,9 +103,9 @@ export default async function handler(req, res) {
         // rather than leaving a row called 'file'.
         const name = (src.nameField && String(fd[src.nameField] || '').trim())
           || got.name
-          || `${kind}-${String(fd[src.fk] || 'unfiled')}-${row.recordId}.${extFromUrl(streaming)}`;
+          || `${kind}-${parentId || 'unfiled'}-${row.recordId}.${extFromUrl(streaming)}`;
         const record = await putFile(db, gtoken, {
-          id, parentKind: kind, parentId: String(fd[src.fk] || ''),
+          id, parentKind: kind, parentId,
           name, mime: got.mime, source: 'filemaker',
           fmLayout: src.layout, fmRecordId: String(row.recordId),
           createdAt: fd.CreationTimestamp || '', createdBy: fd.CreatedBy || '',
@@ -90,8 +118,9 @@ export default async function handler(req, res) {
     }
 
     const result = {
-      kind, offset, total, read: rows.length,
-      moved: moved.length, skipped: skipped.length, empty: empty.length, failed,
+      kind, offset, total, read: rows.length, parentReadable: readable,
+      moved: moved.length, skipped: skipped.length, reattached: reattached.length,
+      empty: empty.length, failed,
       bytes: moved.reduce((n, m) => n + (m.size || 0), 0),
       // A parent id of '' means the row is in FileMaker but attached to nothing;
       // it is still moved, so nothing is lost, but it will not appear under any

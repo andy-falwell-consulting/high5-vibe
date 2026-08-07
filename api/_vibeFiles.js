@@ -25,14 +25,30 @@ export const FK = {
 
 export const parentKey = (kind, id) => `${kind}:${id}`;
 
-// The three FileMaker container tables, and what each row's key means. The
-// foreign key is called `ID` on all three — not `ID_Parent`, which is present
-// on two of them and blank in every row (noted in trainingAttachments.js).
+// The three FileMaker container tables. The foreign key is NOT the same field
+// on each, and taking it from the app's own config matters: `ID` on RCD_Pics is
+// the picture's own serial (23, 94…), not the project — keying ccs on it would
+// have filed 64 files under wrong parents without erroring.
+//
+// `ID_Parent` exists on two of these and is blank in every row; it is a
+// leftover clone, noted in trainingAttachments.js.
 export const SOURCES = {
-  ccs: { layout: 'RCD_Pics', container: 'image', fk: 'ID', nameField: null },
+  ccs: { layout: 'RCD_Pics', container: 'image', fk: 'rcd_id', nameField: 'File Name' },
   inspection: { layout: 'Inspections_Pics', container: 'image', fk: 'ID', nameField: null },
   training: { layout: 'Training_Pics', container: 'image', fk: 'ID', nameField: 'File Name' },
 };
+
+// A field can be queryable on these layouts without being readable: a find on
+// RCD_Pics by rcd_id matches, but the field is absent from every row that comes
+// back. So the parent of a file cannot always be discovered by reading it, and
+// the migration has to check rather than assume — an unreadable key yields an
+// empty parentId, which would quietly leave every file attached to nothing.
+export async function fkIsReadable(host, db, layout, fk, token) {
+  const m = await (await fetch(
+    `${host}/fmi/data/v2/databases/${db}/layouts/${encodeURIComponent(layout)}`,
+    { headers: { Authorization: `Bearer ${token}` } })).json();
+  return (m?.response?.fieldMetaData || []).some(f => f.name === fk);
+}
 
 const DEFAULT_PARENT = '1xW3xXxRzUnSGKM5pG1dCibFAEQUyHLsi';   // the shared backup folder
 const parentFolder = () => process.env.BACKUP_DRIVE_FOLDER_ID || DEFAULT_PARENT;
