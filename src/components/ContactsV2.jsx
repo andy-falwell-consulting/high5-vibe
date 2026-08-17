@@ -208,8 +208,17 @@ function Fields({ spec, values, onChange, autoFocusFirst }) {
 //
 // It used to be two buttons deciding for you before the modal opened, which
 // meant getting it wrong cost a cancel and a restart. The kind is a control
-// here, and the fields follow it — the same lists the edit form uses, so what
-// you can set when creating is what you can set afterwards.
+// here, and the fields follow it.
+//
+// Deliberately the SHORTEST form that produces a valid record: an organization
+// needs only its name, a person only a name and what they do. Everything else —
+// status, type, site number, notes, and the phones, emails and addresses — is
+// edited on the record once it exists, where there is room to show it properly.
+// A create form that asks for everything gets abandoned or filled with guesses.
+const CREATE_FIELDS = {
+  person: PERSON_FORM.filter(f => ['first', 'last', 'title'].includes(f.key)),
+  organization: ORG_FORM.filter(f => f.key === 'name'),
+};
 function CreateModal({ initialKind, onClose, onCreated }) {
   const [kind, setKind] = useState(initialKind === 'organizations' ? 'organization' : 'person');
   // One store across both kinds. `status` and `notes` are on both forms, so
@@ -219,7 +228,7 @@ function CreateModal({ initialKind, onClose, onCreated }) {
   const [error, setError] = useState(null);
   const set = (k, v) => setValues(p => ({ ...p, [k]: v }));
 
-  const spec = kind === 'person' ? PERSON_FORM : ORG_FORM;
+  const spec = CREATE_FIELDS[kind];
   const canSave = kind === 'person'
     ? !!(String(values.first || '').trim() || String(values.last || '').trim())
     : !!String(values.name || '').trim();
@@ -230,7 +239,9 @@ function CreateModal({ initialKind, onClose, onCreated }) {
     try {
       // Only the chosen kind's fields are sent. The shared store may hold a
       // name typed before switching to Person, and the endpoint rejects a field
-      // it does not own rather than storing it quietly.
+      // it does not own rather than storing it quietly. Status is left out
+      // entirely so the server applies its own default rather than an empty
+      // string standing in for one.
       const payload = Object.fromEntries(spec.map(f => [f.key, values[f.key] ?? '']));
       const r = kind === 'person' ? await createPerson(payload) : await createOrganization(payload);
       onCreated(kind === 'person' ? r.person : r.organization, kind);
@@ -270,6 +281,8 @@ function CreateModal({ initialKind, onClose, onCreated }) {
 // fields nobody touched with whatever this browser last read, which is how a
 // stale tab quietly undoes someone else's edit.
 function EditForm({ kind, entity, busy, error, onSave, onCancel }) {
+  // The FULL field set, not the short create form — everything the create modal
+  // leaves out is meant to be filled in here.
   const spec = kind === 'person' ? PERSON_FORM : ORG_FORM;
   const [values, setValues] = useState(() =>
     Object.fromEntries(spec.map(f => [f.key, entity[f.key] ?? ''])));
