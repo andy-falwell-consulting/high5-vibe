@@ -146,9 +146,12 @@ function useProjectCost(recordId) {
 
 const kbMoney = v => `$${Number(v).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 
-function KanbanDetail({ record, onClose, currentStatus, onNavigateTo, opsLead }) {
+function KanbanDetail({ record, onClose, onNavigateTo, opsLead }) {
   const f = record.fieldData
   const cost = useProjectCost(record.recordId)
+
+  // Same 3-rep field as the card face — a project can hold up to three types.
+  const types = [1, 2, 3].map(i => f[`Type of Project(${i})`]).filter(Boolean)
 
   const builders = [
     f['Lead Builder'] && { label: 'Lead', name: f['Lead Builder'] },
@@ -163,14 +166,13 @@ function KanbanDetail({ record, onClose, currentStatus, onNavigateTo, opsLead })
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  const col = COLUMNS.find(c => c.id === currentStatus)
-
   return (
     <div className="kb-overlay" onClick={onClose}>
       <div className="kb-detail" onClick={e => e.stopPropagation()}>
         <button className="kb-detail-close" onClick={onClose} aria-label="Close">✕</button>
-        {/* 'ccs-v2' is the Workspace (phases, financials, QuickBooks); 'ccs' is
-            the older List view. See CHILD_TO_VIEW in ProjectsWorkspace.jsx. */}
+        {/* 'ccs-v2' is the Workspace — phases, financials, QuickBooks, and the
+            Notes and Work Order text this panel no longer repeats. See
+            CHILD_TO_VIEW in ProjectsWorkspace.jsx. */}
         <button className="kb-detail-nav-btn" onClick={() => { onNavigateTo?.('ccs-v2', record.recordId); onClose(); }}>Open in CCS ◈</button>
 
         <div className="kb-detail-org">{f.zz__Display_Organization__ct || '—'}</div>
@@ -178,20 +180,13 @@ function KanbanDetail({ record, onClose, currentStatus, onNavigateTo, opsLead })
           <div className="kb-detail-contact">{f.zz__Display_Contact__ct}</div>
         )}
 
+        {/* Status and swimlane are not repeated here: the card was opened from
+            the lane that states both, so restating them spent the top of the
+            panel on what the reader had just clicked through. */}
         <div className="kb-detail-badges">
-          {f['Type of Project(1)'] && (
-            <span className="kb-detail-badge">{f['Type of Project(1)']}</span>
-          )}
+          {types.map(t => <span className="kb-detail-badge" key={t}>{t}</span>)}
           {f['rcd start date'] && (
             <span className="kb-detail-badge kb-detail-badge--date">{f['rcd start date']}</span>
-          )}
-          {mergedStatus(f) && (
-            <span className="kb-detail-badge kb-detail-badge--status">{mergedStatus(f)}</span>
-          )}
-          {col && (
-            <span className="kb-detail-badge kb-detail-badge--kanban" style={{ '--badge-color': col.color }}>
-              {col.label}
-            </span>
           )}
         </div>
 
@@ -231,21 +226,9 @@ function KanbanDetail({ record, onClose, currentStatus, onNavigateTo, opsLead })
           </div>
         )}
 
-        {f['Work Order'] && (
-          <div className="kb-detail-section">
-            <div className="kb-detail-label">Work Order Notes</div>
-            <div className="kb-detail-wo">{f['Work Order']}</div>
-          </div>
-        )}
-
-        {f.Notes && (
-          <div className="kb-detail-section">
-            <div className="kb-detail-label">Notes</div>
-            {/* FileMaker stores hard returns as \r; pre-wrap keeps the author's
-                paragraph breaks instead of collapsing them into one block. */}
-            <div className="kb-detail-notes">{String(f.Notes).replace(/\r/g, '\n')}</div>
-          </div>
-        )}
+        {/* Notes and Work Order notes are both long free text and pushed the
+            rest of the panel off screen. They are on the CCS record, one click
+            away via "Open in CCS". */}
 
         <div className="kb-detail-timestamps">
           {f.zz__Created_On && (
@@ -681,7 +664,6 @@ export default function CCSKanban({ navTarget, onNavigateTo, onClearNav }) {
         <KanbanDetail
           opsLead={opsLead.leadFor(detailRecord.recordId)}
           record={detailRecord}
-          currentStatus={getStatus(detailRecord)}
           onClose={() => setDetailRecord(null)}
           onNavigateTo={onNavigateTo}
         />
