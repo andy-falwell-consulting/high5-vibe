@@ -1,15 +1,39 @@
 import { useEffect, useState } from 'react';
-import { getAllRecords } from '../api/filemaker';
+import { getAllRecords, subscribeCacheUpdates } from '../api/filemaker';
 import { RELATED_SOURCES, isVibeMintedId } from '../config/relatedRecords';
 
-// The five module caches, loaded once and shared by every contact opened after.
-// getAllRecords serves a warm cache synchronously enough that this is really
-// just "don't do it five times per click", but it also means opening a contact
-// never triggers five network calls — App.jsx has already prewarmed all of them.
+// The five module caches, loaded once and shared by every contact opened after,
+// so opening a contact never costs five reads. App.jsx has already prewarmed
+// all of them, so the first load is served warm too.
+//
+// The memo SUBSCRIBES rather than snapshotting. Holding the array from the
+// first read would mean an inspection edited in its own module still showed its
+// old date here until a reload — which is the staleness this whole approach
+// exists to remove, reintroduced one level up. subscribeCacheUpdates fires on
+// patchCachedRecord, so the memo tracks the same cache the modules do, and
+// `revision` lets an open contact recompute instead of waiting to be reopened.
 const cache = new Map();      // layout -> records
 const inflight = new Map();   // layout -> promise
+const subscribed = new Set(); // layout
+const listeners = new Set();
+let revision = 0;
+
+function bump() {
+  revision++;
+  for (const fn of listeners) fn(revision);
+}
+
+function watch(src) {
+  if (subscribed.has(src.layout)) return;
+  subscribed.add(src.layout);
+  subscribeCacheUpdates(src.layout, src.cv, records => {
+    cache.set(src.layout, records);
+    bump();
+  });
+}
 
 function load(src) {
+  watch(src);
   if (cache.has(src.layout)) return Promise.resolve(cache.get(src.layout));
   if (inflight.has(src.layout)) return inflight.get(src.layout);
   const p = getAllRecords(src.layout, { cacheVersion: src.cv, batchSize: 100 })
@@ -66,6 +90,13 @@ export function useRelatedRecords(contact, orgs) {
   // the empty and Vibe-minted cases need no state at all — they are facts about
   // the id, knowable during render.
   const [result, setResult] = useState(null);
+  // Re-runs the filter when a module patches its cache, so a record edited
+  // elsewhere in the app updates here without the contact being reopened.
+  const [rev, setRev] = useState(0);
+  useEffect(() => {
+    listeners.add(setRev);
+    return () => { listeners.delete(setRev); };
+  }, []);
 
   const contactId = contact?.kind === 'organization' ? contact.organization?.id : contact?.person?.id;
   const kind = contact?.kind;
@@ -110,7 +141,7 @@ export function useRelatedRecords(contact, orgs) {
       .catch(() => { if (alive) setResult({ key: contactId, groups: null, children: 0 }); });
 
     return () => { alive = false; };
-  }, [contactId, kind, orgs, minted]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [contactId, kind, orgs, minted, rev]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!contactId) return { loading: false, groups: null };
   if (minted) return { loading: false, groups: RELATED_SOURCES.map(s => ({ src: s, rows: [] })), minted: true };
