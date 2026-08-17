@@ -52,29 +52,23 @@ function matchesSearch(r, q) {
 
 function KanbanCardView({ record, saving, dimmed, opsLead }) {
   const f = record.fieldData
-  const wo = f['Work Order']
+  // Type of Project is a 3-rep FileMaker field, and a project can carry more
+  // than one — 86 of 1,000 do, 8 carry three. Showing only rep 1 hid the rest.
+  const types = [1, 2, 3].map(i => f[`Type of Project(${i})`]).filter(Boolean)
   return (
     <div className={`kb-card${saving ? ' kb-card--saving' : ''}${dimmed ? ' kb-card--dimmed' : ''}`}>
       <div className="kb-card-org">{f.zz__Display_Organization__ct || '—'}</div>
-      {f.zz__Display_Contact__ct && (
-        <div className="kb-card-contact">{f.zz__Display_Contact__ct}</div>
-      )}
       <div className="kb-card-meta">
-        {f['Type of Project(1)'] && (
-          <span className="kb-card-type">{f['Type of Project(1)']}</span>
-        )}
+        {types.map(t => <span className="kb-card-type" key={t}>{t}</span>)}
         {f['rcd start date'] && (
           <span className="kb-card-date">{f['rcd start date']}</span>
         )}
-        {f['Lead Builder'] && (
-          <span className="kb-card-builder">{f['Lead Builder']}</span>
-        )}
       </div>
+      {/* The ops lead, not the lead builder: the board is used to see who is
+          running a job, and that is a Vibe-held assignment (useOpsLeads), not
+          FileMaker's 'Lead Builder'. */}
       {opsLead && (
         <div className="kb-card-ops"><span className="kb-card-ops-ic">◇</span>{opsLead}</div>
-      )}
-      {wo && (
-        <div className="kb-card-wo">{wo.length > 70 ? wo.slice(0, 70) + '…' : wo}</div>
       )}
     </div>
   )
