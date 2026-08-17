@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
 import { BRAND, UI } from '../config/brandColors';
+import { formatPhone, telHref } from '../../api/_phone';
 import {
   listPeople, listOrganizations, getContact, getOrganizationPeople,
   createPerson, createOrganization, updateContact,
@@ -61,9 +62,11 @@ const METHOD_SPEC = {
     label: 'Phone', plural: 'Phones', field: 'phones',
     types: ['Work', 'Home', 'Fax', 'Mobile', 'Main Office', 'Personal Mobile',
       'Billing Fax', 'Mobile Parent', 'Camp', 'Winter', 'Work Parent'],
-    fields: [{ key: 'number', label: 'Number' }],
-    show: m => m.number,
-    href: m => `tel:${String(m.number || '').replace(/[^\d+]/g, '')}`,
+    // Stored E.164, shown (508) 853-7824. The extension is its own field —
+    // typing 'x261' into the number still works, the server splits it out.
+    fields: [{ key: 'number', label: 'Number' }, { key: 'ext', label: 'Ext.', narrow: true }],
+    show: m => formatPhone(m.number, m.ext),
+    href: m => telHref(m.number, m.ext),
   },
   email: {
     label: 'Email or website', plural: 'Email & web', field: 'emails',
@@ -133,7 +136,7 @@ function MethodForm({ kind, initial, busy, onSave, onCancel }) {
         {types.map(t => <option key={t} value={t}>{t}</option>)}
       </select>
       {spec.fields.map((f, i) => (
-        <input key={f.key} className="c2-input c2-input--inline" placeholder={f.label}
+        <input key={f.key} className={`c2-input c2-input--inline${f.narrow ? ' c2-input--narrow' : ''}`} placeholder={f.label}
           autoFocus={i === 0} value={v[f.key]} onChange={e => set(f.key, e.target.value)} />
       ))}
       <button className="c2-btn c2-btn--primary" disabled={busy || !valid} onClick={() => onSave(v)}>Save</button>

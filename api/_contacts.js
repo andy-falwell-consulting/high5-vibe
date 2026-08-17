@@ -209,7 +209,7 @@ export const untombstoneContact = (db, id) => redis.srem(contactTombKey(db), Str
 // The trade accepted: editing one phone rewrites the contact record, and
 // "who has this number" is a scan. Both are fine at 15,590 contacts.
 export const METHODS = {
-  phone: { field: 'phones', keys: ['type', 'number'], required: 'number' },
+  phone: { field: 'phones', keys: ['type', 'number', 'ext'], required: 'number' },
   email: { field: 'emails', keys: ['type', 'address'], required: 'address' },
   address: {
     field: 'addresses',

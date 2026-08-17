@@ -24,6 +24,7 @@
 import { getGoogleSession } from './_googleSession.js';
 import { ALLOWED_DBS } from './_fmp.js';
 import { Redis } from '@upstash/redis';
+import { normalisePhoneInput } from './_phone.js';
 import {
   K, parse, nextId, getEntity, putEntity, readHash, writeHash,
   reindexPerson, reindexOrg, wouldCycle, displayName, isVibeId,
@@ -126,10 +127,22 @@ export default async function handler(req, res) {
         const fields = body.fields || {};
         const unknown = Object.keys(fields).filter(f => !spec.keys.includes(f));
         if (unknown.length) return res.status(400).json({ error: `not part of a ${kind}: ${unknown.join(', ')}` });
+        // An update carrying nothing writable is a caller bug, not a no-op to
+        // wave through. Answering 200 to one hid a bulk repair of 102 phone
+        // numbers that silently did nothing — every call reported success and
+        // not a single record changed. `update` has had this guard all along.
+        if (action === 'update-method' && !Object.keys(fields).length) {
+          return res.status(400).json({ error: 'fields is empty' });
+        }
 
         if (action === 'add-method') {
           const row = { id: await nextMethodId(db) };
           for (const k of spec.keys) row[k] = str(fields[k]);
+          // Stored E.164, with the extension its own field — including one
+          // typed inline as 'x261', which is how all 1,390 existing ones are
+          // written. Normalising here rather than in the browser means a
+          // number arrives in the same shape however it was sent.
+          if (kind === 'phone') Object.assign(row, normalisePhoneInput(row.number, row.ext));
           const missing = Array.isArray(spec.required)
             ? !spec.required.some(k => row[k])
             : !row[spec.required];
@@ -147,6 +160,7 @@ export default async function handler(req, res) {
           if (!current) return res.status(404).json({ error: `no such ${kind} on this contact` });
           const row = { ...current };
           for (const k of Object.keys(fields)) row[k] = str(fields[k]);
+          if (kind === 'phone') Object.assign(row, normalisePhoneInput(row.number, row.ext));
           const missing = Array.isArray(spec.required)
             ? !spec.required.some(k => row[k])
             : !row[spec.required];

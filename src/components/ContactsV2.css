@@ -232,6 +232,7 @@ a.c2-methodvalue:hover { color: var(--h5-red); text-decoration: underline; }
 .c2-input:focus { border-color: var(--h5-red); }
 .c2-input--inline { width: auto; flex: 1; min-width: 180px; }
 .c2-input--type { width: auto; flex-shrink: 0; padding-right: 6px; }
+.c2-input--narrow { flex: 0 0 90px; min-width: 90px; }
 .c2-input--area { resize: vertical; line-height: 1.45; }
 
 .c2-edit { max-width: 460px; }
