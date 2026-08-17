@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { getRecord, getRecordWithPortals, prefetchRecord, updateRecord, invalidateRecord, patchCachedRecord, createRecord, addCachedRecord } from '../api/filemaker';
+import { getRecord, getRecordWithPortals, prefetchRecord, invalidateRecord, patchCachedRecord, createRecord, addCachedRecord } from '../api/filemaker';
+import { updateVibeRecord } from '../api/vibeRecords';
 import { useAllRecords } from '../hooks/useAllRecords';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
 import RecordSaveBar from './RecordSaveBar';
@@ -373,7 +374,11 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
         await refreshLines();
         resetLineState();
       }
-      if (Object.keys(edits).length) await updateRecord(LAYOUT, selected.recordId, edits);
+      // Inspections_New is Vibe-owned (api/_vibeStore.js), so the record's own
+      // fields no longer go back to FileMaker. Line items still do — they are a
+      // portal, and the fragment model covers fieldData only. Until they move,
+      // an inspection's fields live in Vibe and its findings in FileMaker.
+      if (Object.keys(edits).length) await updateVibeRecord(LAYOUT, selected.recordId, edits);
       // Apply saved values optimistically — no blocking refetch (which can be
       // starved behind background batch loads). Patch the list cache so the
       // sidebar status dot updates, and drop the detail cache so a later
