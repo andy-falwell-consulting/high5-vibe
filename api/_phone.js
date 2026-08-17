@@ -33,9 +33,17 @@ export function splitExtension(raw) {
  */
 export function toE164(raw) {
   const digits = String(raw ?? '').replace(/\D/g, '');
-  if (digits.length === 10) return `+1${digits}`;
-  if (digits.length === 11 && digits[0] === '1') return `+${digits}`;
-  return null;
+  const ten = digits.length === 10 ? digits
+    : (digits.length === 11 && digits[0] === '1') ? digits.slice(1)
+    : null;
+  if (!ten) return null;
+  // NANP validity, not just length. Area code and exchange both have to start
+  // 2-9. Without this, '1 973 389 285' — a leading country code and a number
+  // one digit short — passes as ten digits and becomes +11973389285, an E.164
+  // string with area code 197 that cannot exist. 149 numbers went into
+  // production looking valid that way before this check was added.
+  if (!/^[2-9]\d\d[2-9]\d{6}$/.test(ten)) return null;
+  return `+1${ten}`;
 }
 
 export const isE164 = v => /^\+\d{8,15}$/.test(String(v ?? ''));
