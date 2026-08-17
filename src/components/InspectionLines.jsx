@@ -1,4 +1,4 @@
-import { CATEGORIES, ELEMENT_GRADES, EQUIPMENT, groupByCategory } from '../api/inspectionLines';
+import { CATEGORIES, ELEMENT_GRADES, EQUIPMENT, groupByCategory } from '../api/inspectionLinesVibe';
 import './InspectionLines.css';
 
 // Editable line-item table for an inspection. Presentational — the parent owns

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { createRecord, getRecord, addCachedRecord, findInLayout } from '../api/filemaker';
 import { RCD_LAYOUT, RCD_CACHE_VERSION } from '../config/ccsCache';
 import { copyProfileFields } from '../config/inspectionCopy';
-import { copyLines } from '../api/inspectionLines';
+import { copyLines } from '../api/inspectionLinesVibe';
 import { markCarriedLines } from '../api/naFlags';
 import { autoAssignOpsLead } from '../api/opsLead';
 import { getCurrentEnv } from '../config/fmpEnvironments';
@@ -133,16 +133,20 @@ export default function QuickAddFromContact({ contact, onNavigateTo }) {
       if (type === 'ccs' && recordId) {
         await autoAssignOpsLead(getCurrentEnv().db, recordId).catch(() => {});
       }
-      // Copy the source's line items. This has to happen after the create —
-      // portal writes need the new record to exist and carry its own
-      // _kpt__Inspection_ID first (a copy onto a record without one fails
-      // with FileMaker error 101).
+      // Copy the source's line items. Lines live in Vibe's store and are keyed
+      // by _kpt__Inspection_ID, so the new record has to be read back for its
+      // id first — createRecord only hands back FileMaker's recordId.
       if (type === 'inspection' && v.mode === 'copy' && v.source?.recordId) {
-        const copied = await copyLines(v.source.recordId, recordId);
-        // Flag them as carried over so last year's findings can't quietly ship
-        // under this year's date — the badge clears as each line is edited.
-        if (copied.length) {
-          await markCarriedLines(recordId, copied.map(l => String(l.recordId))).catch(() => {});
+        const sourceInspectionId = v.sourceFull?._kpt__Inspection_ID;
+        const madeRec = (await getRecord('Inspections_New', recordId))?.response?.data?.[0];
+        const newInspectionId = madeRec?.fieldData?._kpt__Inspection_ID;
+        if (sourceInspectionId && newInspectionId) {
+          const copied = await copyLines(sourceInspectionId, newInspectionId);
+          // Flag them as carried over so last year's findings can't quietly ship
+          // under this year's date — the badge clears as each line is edited.
+          if (copied.length) {
+            await markCarriedLines(recordId, copied.map(l => String(l.recordId))).catch(() => {});
+          }
         }
       }
       // Put the fresh record in the cached list immediately (don't wait for sync).

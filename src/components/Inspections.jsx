@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { getRecord, getRecordWithPortals, prefetchRecord, invalidateRecord, patchCachedRecord, createRecord, addCachedRecord } from '../api/filemaker';
+import { getRecord, prefetchRecord, invalidateRecord, patchCachedRecord, createRecord, addCachedRecord } from '../api/filemaker';
 import { updateVibeRecord } from '../api/vibeRecords';
 import { useAllRecords } from '../hooks/useAllRecords';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
@@ -8,7 +8,12 @@ import RecordFormModal from './RecordFormModal';
 import { generateAndAttachReport, downloadReport, inspectionAttachments } from '../api/inspectionAttachments';
 import AttachmentsPanel from './AttachmentsPanel';
 import InspectionLines from './InspectionLines';
-import { toLine, addLines, updateLine, deleteLine, copyLines } from '../api/inspectionLines';
+// Line items come from Vibe's own store (api/_inspectionLines.js), not the
+// FileMaker portal. The exported surface matches inspectionLines.js, but the
+// keys do NOT: every call takes the inspection's _kpt__Inspection_ID and a
+// line's own id, where the portal client took FileMaker recordIds. That is why
+// the swap is a real change rather than an import rename.
+import { listLines, addLines, updateLine, deleteLine, copyLines } from '../api/inspectionLinesVibe';
 import { fetchCarriedLines, markCarriedLines, clearCarriedLine } from '../api/naFlags';
 import { copyProfileFields } from '../config/inspectionCopy';
 import './Inspections.css';
@@ -181,6 +186,11 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
   const [newLines, setNewLines] = useState([]);
   const [deletedIds, setDeletedIds] = useState(() => new Set());
   const [carriedIds, setCarriedIds] = useState(() => new Set());
+  // Saved lines for the open inspection. They used to arrive as
+  // selected.portalData.inspt_INSPLI; Vibe serves them separately, so they get
+  // their own state and their own loading flag.
+  const [lines, setLines] = useState([]);
+  const [linesLoading, setLinesLoading] = useState(false);
   const tempId = useRef(0);
   const selectedRef = useRef(null);   // guards async fetches against stale selections
   const copySourceRef = useRef(null); // recordId of the inspection being copied, if any
@@ -201,10 +211,21 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
       if (selectedRef.current === r.recordId) setCarriedIds(new Set(keys));
     }).catch(() => {});
     setSelected(r);
-    // Plain getRecord caps the line-items portal at FileMaker's default of 50
-    // (same issue the PDF report worked around) — elevate it so the on-screen
-    // list matches the report and doesn't silently truncate large inspections.
-    getRecordWithPortals(LAYOUT, r.recordId, { inspt_INSPLI: 2000 }).then(detail => {
+    setLines([]);
+    // Vibe's store has no 50-row portal cap to work around, so this is one
+    // read of the whole set however long the inspection is.
+    const inspectionId = r.fieldData?._kpt__Inspection_ID;
+    setLinesLoading(!!inspectionId);
+    if (inspectionId) {
+      listLines(inspectionId).then(rows => {
+        if (selectedRef.current !== r.recordId) return;
+        setLines(rows);
+        setLinesLoading(false);
+      }).catch(() => { if (selectedRef.current === r.recordId) setLinesLoading(false); });
+    }
+    // The record itself is still re-read: the detail pane shows related fields
+    // (site, individual, e-mail) that the list-level record does not carry.
+    getRecord(LAYOUT, r.recordId).then(detail => {
       setSelected(prev => prev?.recordId === r.recordId ? detail.response.data[0] : prev);
     }).catch(() => {});
   }
@@ -274,12 +295,14 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
   async function handleCreate(fieldData) {
     const source = copySourceRef.current;
     let payload = fieldData;
+    let sourceInspectionId = null;
 
     // Copying carries the site's course profile across as well as its lines.
     if (source) {
       const full = await getRecord(LAYOUT, source);
       const src = full?.response?.data?.[0]?.fieldData;
       if (!src) throw new Error('Could not load the inspection to copy.');
+      sourceInspectionId = src._kpt__Inspection_ID;
       payload = { ...copyProfileFields(src), ...fieldData };
       // Point the copy at the SAME site contact as its predecessor. The picker
       // hands back the org contact, but inspections hang off a separate site
@@ -292,21 +315,28 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
     const newId = res?.response?.recordId;
     if (!newId) throw new Error(res?.messages?.[0]?.message || 'Could not create the record');
 
-    // Line items must wait until the new record exists and has its own
-    // _kpt__Inspection_ID — a portal write against a record without one fails
-    // with FileMaker error 101.
-    if (source) {
-      const copied = await copyLines(source, newId);
+    // Read the new record back before copying: createRecord returns FileMaker's
+    // recordId, and the lines are keyed by _kpt__Inspection_ID, which FileMaker
+    // assigns. The old portal write also needed this read, but for a different
+    // reason — it failed with error 101 until the parent had an id. That trap
+    // is gone; the read is not, because the id is the key.
+    const created = await getRecord(LAYOUT, newId);
+    const rec = created?.response?.data?.[0];
+    const newInspectionId = rec?.fieldData?._kpt__Inspection_ID;
+
+    if (source && sourceInspectionId && newInspectionId) {
+      const copied = await copyLines(sourceInspectionId, newInspectionId);
       if (copied.length) {
         await markCarriedLines(newId, copied.map(l => String(l.recordId))).catch(() => {});
       }
     }
     copySourceRef.current = null;
 
-    getRecord(LAYOUT, newId).then(d => {
-      const rec = d?.response?.data?.[0];
-      if (rec) { addCachedRecord(LAYOUT, CACHE_VERSION, rec); handleSelect(rec); onRecordSelect?.(rec.recordId, rec.fieldData?.Organization || rec.fieldData?.['inspt_CNTCT__site::Name_Organization']); }
-    }).catch(() => {});
+    if (rec) {
+      addCachedRecord(LAYOUT, CACHE_VERSION, rec);
+      handleSelect(rec);
+      onRecordSelect?.(rec.recordId, rec.fieldData?.Organization || rec.fieldData?.['inspt_CNTCT__site::Name_Organization']);
+    }
   }
 
   const handleFieldChange = useCallback((fk, v) => setEdits(p => ({ ...p, [fk]: v })), []);
@@ -340,16 +370,15 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
     setNewLines(rows => [...rows, { _tempId: id, Category: category, Description: '', Quantity: '', Equipment: '', Element_Grade: '', Flag_Checkbox: '' }]);
   }, []);
 
-  // Re-read the portal after writing, so the on-screen rows carry the real
-  // recordIds the server assigned (needed for any subsequent edit or delete).
+  // Re-read the lines after writing, so the on-screen rows carry the real ids
+  // the server assigned (needed for any subsequent edit or delete).
   const refreshLines = useCallback(async () => {
-    const id = selected?.recordId;
-    if (!id) return;
-    invalidateRecord(LAYOUT, id);
-    const detail = await getRecordWithPortals(LAYOUT, id, { inspt_INSPLI: 2000 });
-    const rec = detail?.response?.data?.[0];
-    if (rec && selectedRef.current === id) setSelected(prev => (prev?.recordId === id ? rec : prev));
-  }, [selected?.recordId]);
+    const recordId = selected?.recordId;
+    const inspectionId = selected?.fieldData?._kpt__Inspection_ID;
+    if (!recordId || !inspectionId) return;
+    const rows = await listLines(inspectionId);
+    if (selectedRef.current === recordId) setLines(rows);
+  }, [selected?.recordId, selected?.fieldData?._kpt__Inspection_ID]);
 
   async function handleSave() {
     const lineChanges = Object.keys(lineEdits).length + newLines.length + deletedIds.size;
@@ -359,13 +388,18 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
       // Line items first — they're the risky part. If they fail we surface the
       // error before touching the parent, rather than half-saving.
       if (lineChanges) {
-        for (const id of deletedIds) await deleteLine(selected.recordId, id);
+        // Keyed on the inspection's own id, not FileMaker's recordId — see the
+        // import comment. Passing recordId here would write under a key that
+        // looks valid and belongs to nothing.
+        const inspectionId = selected.fieldData?._kpt__Inspection_ID;
+        if (!inspectionId) throw new Error('This inspection has no ID yet, so its lines cannot be saved.');
+        for (const id of deletedIds) await deleteLine(inspectionId, id);
         for (const [id, changes] of Object.entries(lineEdits)) {
           if (deletedIds.has(String(id))) continue;   // deleted wins over edited
-          await updateLine(selected.recordId, id, changes);
+          await updateLine(inspectionId, id, changes);
         }
         const toAdd = newLines.filter(l => (l.Description || '').trim() || l.Quantity || l.Equipment || l.Element_Grade);
-        if (toAdd.length) await addLines(selected.recordId, toAdd);
+        if (toAdd.length) await addLines(inspectionId, toAdd);
 
         // Persist the cleared carried-over flags for the lines just edited.
         for (const id of Object.keys(lineEdits)) clearCarriedLine(selected.recordId, id).catch(() => {});
@@ -415,14 +449,13 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
   }, [navWidth]);
 
   const f = selected?.fieldData;
-  const p = selected?.portalData;
-  const lineItems = p?.inspt_INSPLI || [];
 
   // What the editor renders: saved rows with any staged edits applied and
-  // deletions marked, followed by rows added this session.
+  // deletions marked, followed by rows added this session. `lines` are already
+  // in UI shape (listLines maps them through toLine), so there is nothing to
+  // convert here any more.
   const workingLines = [
-    ...lineItems.map(row => {
-      const line = toLine(row);
+    ...lines.map(line => {
       const staged = lineEdits[line.recordId];
       return { ...line, ...(staged || {}), _deleted: deletedIds.has(String(line.recordId)) };
     }),
@@ -534,6 +567,12 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
               </Section>
 
               <Section title="Line Items" icon="≡">
+                {/* Lines are fetched separately now, so there is a moment where
+                    the record is on screen and they are not. Saying so beats
+                    rendering an empty findings list on a full inspection. */}
+                {linesLoading && !workingLines.length && (
+                  <p className="insp-lines-loading">Loading line items…</p>
+                )}
                 <InspectionLines
                   lines={workingLines}
                   carriedIds={carriedIds}
