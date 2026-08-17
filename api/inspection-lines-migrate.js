@@ -1,7 +1,7 @@
 // Move FileMaker's inspection line items into Vibe's own store.
 //
 //   POST /api/inspection-lines-migrate?db=…&offset=1   → one page of 1,000
-//   POST /api/inspection-lines-migrate?db=…&step=finish → group and write
+//   POST /api/inspection-lines-migrate?db=…&step=finish[&cursor=…] → promote
 //   GET  /api/inspection-lines-migrate?db=…            → the last report
 //
 // Staged and then folded, like the contact methods, because the rows land ON
@@ -24,6 +24,7 @@ const PAGE = 1000;
 
 const stageKey = db => `vibe:${db}:inspli:staging`;
 const reportKey = db => `vibe:${db}:inspli:report`;
+const progressKey = db => `vibe:${db}:inspli:finish`;
 
 const parse = v => { try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return null; } };
 
@@ -42,9 +43,19 @@ export default async function handler(req, res) {
 
   try {
     if (req.query?.step === 'finish') {
-      // Promote staging to live in one pass. Read in chunks so a 67 MB hash is
-      // never fully resident: HSCAN gives batches rather than everything.
-      let cursor = '0', inspections = 0, lines = 0;
+      // Resumable. Promoting staging to live means moving 67.6 MB through one
+      // function, and Vercel stops a function at 300s — so this walks the HSCAN
+      // cursor in bounded slices and hands the next one back. Without that, a
+      // timeout would leave live half-written with no place to continue from,
+      // and the only recovery would be running the whole migration again.
+      const startedAt = Date.now();
+      const BUDGET_MS = 120000;      // well inside the ceiling, with room for a slow slice
+      const FIELD_BUDGET = 800;      // ~11 MB at the median, ~54 MB at the worst case
+
+      let cursor = String(req.query?.cursor ?? '0');
+      const progress = (await redis.get(progressKey(db))) || { inspections: 0, lines: 0 };
+      let inspections = 0, lines = 0, fields = 0;
+
       do {
         const [next, flat] = await redis.hscan(stageKey(db), cursor, { count: 200 });
         const writes = {};
@@ -52,16 +63,33 @@ export default async function handler(req, res) {
           const arr = parse(flat[i + 1]);
           if (!Array.isArray(arr) || !arr.length) continue;
           writes[String(flat[i])] = JSON.stringify(arr);
-          inspections++; lines += arr.length;
+          inspections++; lines += arr.length; fields++;
         }
         if (Object.keys(writes).length) await redis.hset(linesKey(db), writes);
         cursor = String(next);
-      } while (cursor && cursor !== '0');
+      } while (cursor && cursor !== '0' && fields < FIELD_BUDGET && Date.now() - startedAt < BUDGET_MS);
 
-      await redis.del(stageKey(db));
-      const report = { db, at: new Date().toISOString(), by: session.email, inspections, lines };
+      const totals = {
+        inspections: progress.inspections + inspections,
+        lines: progress.lines + lines,
+      };
+      const done = !cursor || cursor === '0';
+
+      if (!done) {
+        await redis.set(progressKey(db), totals);
+        return res.status(200).json({ step: 'finish', done: false, cursor, ...totals, thisPass: { inspections, lines } });
+      }
+
+      // HSCAN can return the same field more than once across a resumed walk,
+      // so these totals are an upper bound on work done, not a record count.
+      // The authoritative figure is HLEN of the live hash.
+      await redis.del(stageKey(db), progressKey(db));
+      const report = {
+        db, at: new Date().toISOString(), by: session.email,
+        ...totals, stored: await redis.hlen(linesKey(db)),
+      };
       await redis.set(reportKey(db), report);
-      return res.status(200).json(report);
+      return res.status(200).json({ step: 'finish', done: true, ...report });
     }
 
     const offset = Math.max(1, Number(req.query?.offset) || 1);
