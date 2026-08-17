@@ -262,6 +262,26 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
     for (const c of contactRecords) m.set(String(c.fieldData?._kpt__Contact_ID), c.fieldData);
     return m;
   }, [contactRecords]);
+
+  // Organization name → its contact id, so the organization in the hero can
+  // link to its own record. Most projects have no Vibe organization assignment,
+  // and FileMaker's zz__Display_Organization__ct is a calculated name carrying
+  // no key — without this the link would almost never appear.
+  //
+  // Ambiguous names are deliberately dropped rather than resolved to whichever
+  // matched first: 19 organization names are shared by more than one record, and
+  // silently opening the wrong one is worse than not linking.
+  const orgIdByName = useMemo(() => {
+    const m = new Map();
+    for (const c of contactRecords) {
+      const fd = c.fieldData;
+      if (String(fd?.Organization) !== '1') continue;
+      const name = String(fd?.Name_Organization || '').trim().toLowerCase();
+      if (!name) continue;
+      m.set(name, m.has(name) ? null : String(fd._kpt__Contact_ID));
+    }
+    return m;
+  }, [contactRecords]);
   const opsLead = useOpsLeads(getCurrentEnv().db);
 
   const [selected, setSelected] = useState(null);
@@ -552,6 +572,10 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
   const org = vibeOrgName || f.zz__Display_Organization__ct || '—';
   const orgIsFromVibe = !!vibeOrgName;
 
+  // Vibe's assignment is an id already; otherwise resolve the displayed name,
+  // which yields null when more than one organization answers to it.
+  const orgLinkId = vibeOrgId || orgIdByName.get(String(org).trim().toLowerCase()) || '';
+
   // '<unassigned>' is what the FileMaker calc renders when no contact is set —
   // a label, not a name, so it must never read as one or be linked.
   const hasContact = !!f.zz__Display_Contact__ct && f.zz__Display_Contact__ct !== '<unassigned>';
@@ -626,14 +650,11 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
                   <div className="cv2-hero-id">
                     <div className="cv2-hero-type">{projectTypeSelected.join(' · ') || 'Project'}</div>
                     <h1 className="cv2-hero-org">
-                      {/* Only linkable when an id is actually known. The
-                          organization has one when it came from Vibe's own
-                          assignment; FileMaker's zz__Display_Organization__ct is
-                          a calculated name with no key behind it, so that case
-                          stays plain text rather than a link that goes nowhere. */}
-                      {vibeOrgId
+                      {/* Plain text when no id can be established — a link that
+                          opens the wrong organization is worse than none. */}
+                      {orgLinkId
                         ? <button type="button" className="cv2-hero-link" title="Open this organization"
-                            onClick={() => onNavigateApp?.('contacts-v2', String(vibeOrgId))}>{org}</button>
+                            onClick={() => onNavigateApp?.('contacts-v2', orgLinkId)}>{org}</button>
                         : org}
                       <button className="cv2-pick-btn" onClick={() => setOrgPicker(true)} title="Assign this project to an organization">
                         {orgIsFromVibe || f.zz__Display_Organization__ct ? 'Change' : 'Assign'}
