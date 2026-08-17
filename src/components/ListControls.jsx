@@ -166,8 +166,13 @@ export function ListBody({ c, renderItem, activeId }) {
     const root = anchorRef.current?.parentElement
     const el = root?.querySelector('.active')
     if (!root || !el) return // not rendered yet (loading/filtered) — retry on next processed change
-    scrolledFor.current = activeId
     const scroller = scrollParent(el) || root
+    // A zero height means this ran mid-layout — switching Contacts v2 between
+    // People and Organizations does exactly that. Centring against 0 lands the
+    // row half above the fold, and because the attempt was recorded it never
+    // tried again. Leaving `scrolledFor` unset retries on the next render.
+    if (!scroller.clientHeight) return
+    scrolledFor.current = activeId
     const sr = scroller.getBoundingClientRect(), er = el.getBoundingClientRect()
     if (er.top < sr.top || er.bottom > sr.bottom) {
       scroller.scrollTop += (er.top - sr.top) - (scroller.clientHeight - er.height) / 2
