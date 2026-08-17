@@ -109,6 +109,14 @@ export async function writeFragment(db, layout, recordId, fieldData, by) {
   return frag;
 }
 
+// Drop a fragment entirely, so the record goes back to being FileMaker's.
+// Returns whether there was one to remove, so a caller can tell "reverted" from
+// "there was nothing to revert".
+export async function dropFragment(db, layout, recordId) {
+  const n = await redis.hdel(vibeKey(db, layout), String(recordId));
+  return n > 0;
+}
+
 // ── Shadowed FileMaker changes ────────────────────────────────────
 //
 // The honest cost of one-way sync: when FileMaker changes a field Vibe has

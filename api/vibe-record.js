@@ -1,7 +1,9 @@
 // Write a Vibe-owned record edit.
 //
-//   POST /api/vibe-record?db=High5_Core4&layout=RCD_New
+//   POST   /api/vibe-record?db=High5_Core4&layout=RCD_New
 //     { recordId, fieldData }  → merges those fields into the record's fragment
+//   DELETE /api/vibe-record?db=…&layout=…&recordId=…
+//     drops the fragment, so the record reverts to FileMaker's values
 //
 // PHASE 1c of docs/vibe-owns-the-record.md. For layouts Vibe owns, this
 // REPLACES the FileMaker write — projects are no longer written back to FMP.
@@ -17,10 +19,12 @@
 //    up, which is what the pending-write guard existed to paper over.
 import { getGoogleSession } from './_googleSession.js';
 import { ALLOWED_DBS } from './_fmp.js';
-import { VIBE_OWNED, writeFragment } from './_vibeStore.js';
+import { VIBE_OWNED, writeFragment, dropFragment } from './_vibeStore.js';
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'POST required' });
+  if (req.method !== 'POST' && req.method !== 'DELETE') {
+    return res.status(405).json({ error: 'POST or DELETE' });
+  }
   const session = await getGoogleSession(req);
   if (!session) return res.status(401).json({ error: 'Not authenticated' });
 
@@ -32,6 +36,17 @@ export default async function handler(req, res) {
     // it is writing to Vibe and is actually writing to FMP is the exact
     // confusion this phase exists to end.
     return res.status(400).json({ error: `${layout} is not Vibe-owned yet — it still writes to FileMaker.` });
+  }
+
+  // Reverting an override back to FileMaker's values. Also the only way to
+  // clear a fragment written against a record that does not exist — one of
+  // those is inert, because applyOverlay surfaces a record with no FileMaker
+  // counterpart only when it is marked __created, but it is still litter.
+  if (req.method === 'DELETE') {
+    const id = String(req.query?.recordId || '').trim();
+    if (!id) return res.status(400).json({ error: 'recordId required' });
+    const removed = await dropFragment(db, layout, id);
+    return res.status(200).json({ recordId: id, layout, removed });
   }
 
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
