@@ -88,7 +88,7 @@ export function applyOverlay(records, overlay, isLastPage) {
 // Layouts whose EDITS are Vibe's rather than FileMaker's. Deliberately a short
 // explicit list rather than "everything replicated": each layout moves in its
 // own phase, and a layout not named here still writes to FileMaker.
-export const VIBE_OWNED = new Set(['RCD_New']);
+export const VIBE_OWNED = new Set(['RCD_New', 'Inspections_New']);
 
 // Merge a set of changed fields into a record's fragment.
 //
@@ -107,6 +107,14 @@ export async function writeFragment(db, layout, recordId, fieldData, by) {
   };
   await redis.hset(vibeKey(db, layout), { [id]: JSON.stringify(frag) });
   return frag;
+}
+
+// Drop a fragment entirely, so the record goes back to being FileMaker's.
+// Returns whether there was one to remove, so a caller can tell "reverted" from
+// "there was nothing to revert".
+export async function dropFragment(db, layout, recordId) {
+  const n = await redis.hdel(vibeKey(db, layout), String(recordId));
+  return n > 0;
 }
 
 // ── Shadowed FileMaker changes ────────────────────────────────────
