@@ -10,27 +10,35 @@ import { RCD_CACHE_VERSION } from './ccsCache';
 // inspection dates since v1.0.328. Reading the module caches instead means
 // these lists go through the overlay and are correct by construction.
 //
-// HOW THE JOIN WORKS. Measured against production on 2026-08-17, not assumed —
-// the field that looks like the obvious key is often not the one that is
-// populated:
+// HOW THE JOIN WORKS. Measured against every record in production on
+// 2026-08-17, not assumed. The question asked was: when a record's organization
+// NAME resolves to organization X, does its _kft__Contact_ID also point at X?
 //
-//   layout            _kft__Contact_ID     organization name
-//   Inspections_New   85/200  (42%)        200/200
-//   RCD_New           196/200              198/200
-//   trainings_New     197/200              198/200
-//   RMI_New           103/117              115/117
-//   Estimates_New     NOT ON THE LAYOUT    display calc only
+//   layout            FK = the org   FK points elsewhere   no FK
+//   Inspections_New            0            3,862            476
+//   RCD_New                    0            6,329             78
+//   trainings_New              0            2,361             43
+//   RMI_New                    0              103             12
+//   Estimates_New          2,723               12              0
 //
-// Inspections is the reason `org` is not a fallback but a first-class key: an
-// inspection hangs off a *site* contact rather than the organization a picker
-// returns (the join trap in CLAUDE.md), and its FK is empty more often than
-// not. Matching on organization name is what the inspt_CNTCT__site
-// relationship keys on anyway, and it is what Inspections.jsx already does.
+// Zero is not a rounding artefact. On four of the five layouts the foreign key
+// NEVER names the organization — it names the *person* the work was arranged
+// with, or the *site* contact it was carried out at, both of which are separate
+// contact records from the organization a picker returns. That is the join trap
+// in CLAUDE.md, and it is total rather than occasional. On those four, matching
+// the organization name is the entire join; the id check below fires for
+// people's own pages and effectively never for an organization's.
+//
+// Estimates is the exception, and the reason `fkIsOrg` exists. Its key names
+// the organization itself on 2,723 of 2,735 resolvable records, so there the
+// key is authoritative and a name match actively does harm: 12 estimates
+// belonging to one "Fay School" would otherwise also be listed under the other
+// organization of the same name.
 //
 // IS MATCHING ON A NAME SAFE? Across 4,751 organizations there are 4,726
-// distinct names: 19 names are shared, covering 39 organizations (0.8%). Those
-// are reported to the reader rather than silently merged — see sharedName in
-// useRelatedRecords.
+// distinct names: 19 names are shared, covering 39 organizations (0.8%). Where
+// a name is the join, that overlap is reported to the reader rather than
+// silently merged — see sharedNameCount in useRelatedRecords.
 //
 // cv MUST match the module's own CACHE_VERSION. Reading a version nobody wrote
 // finds an empty cache and the section renders empty with no error — the same
@@ -89,12 +97,11 @@ export const RELATED_SOURCES = [
     module: 'estimates',
     layout: 'Estimates_New',
     cv: 1,
-    // _kft__Contact_ID was added to this layout on 2026-08-17 so estimates could
-    // join the same way everything else does. Records written before then still
-    // resolve through `org` on the display calc, which is populated on 2,808 of
-    // 2,817 estimates — the 9 exceptions read "<deleted>" and belong to a
-    // contact that no longer exists.
+    // _kft__Contact_ID was placed on this layout on 2026-08-17. Unlike every
+    // other source here it names the organization itself, so it is trusted
+    // exclusively — see fkIsOrg and the table above.
     fk: '_kft__Contact_ID',
+    fkIsOrg: true,
     org: f => f.zz__Display_Contact__ct,
     date: f => f.Date,
     columns: [

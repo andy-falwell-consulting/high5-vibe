@@ -121,6 +121,11 @@ export function useRelatedRecords(contact, orgs) {
             // exactly what the foreign key says, and a name match would pull in
             // an organization's whole history under one employee.
             if (kind !== 'organization') return false;
+            // Where the key names the organization (Estimates alone — see
+            // relatedRecords.js), a record that carries one has already been
+            // judged by it. Falling through to the name here would list another
+            // same-named organization's work as this one's.
+            if (src.fkIsOrg && fk) return false;
             const on = norm(src.org(f));
             return !!on && names.has(on);
           });
