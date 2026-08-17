@@ -181,11 +181,17 @@ export function ListBody({ c, renderItem, activeId }) {
         if (++tries < 30) raf = requestAnimationFrame(attempt)
         return
       }
-      scrolledFor.current = activeId
       const sr = scroller.getBoundingClientRect(), er = el.getBoundingClientRect()
       if (er.top < sr.top || er.bottom > sr.bottom) {
         scroller.scrollTop += (er.top - sr.top) - (scroller.clientHeight - er.height) / 2
+        // Check again next frame rather than trusting one pass. The panel can
+        // finish laying out after this runs — a sidebar header appearing, a
+        // font swapping in — which moves the row back out of view against a
+        // height that is no longer current. Recording the attempt only once it
+        // has actually settled is what stops it landing above the fold.
+        if (++tries < 30) { raf = requestAnimationFrame(attempt); return }
       }
+      scrolledFor.current = activeId
     }
     attempt()
     return () => cancelAnimationFrame(raf)
