@@ -112,30 +112,46 @@ function Section({ icon, title, children, aside }) {
 // risk items. These arrived as FileMaker portals on the old Contacts page,
 // which cannot see Vibe edits (see config/relatedRecords.js); here they come
 // from each module's own cache and so read through the overlay.
-function RelatedWork({ contact, orgs, onOpen }) {
-  const { loading, groups, children, minted } = useRelatedRecords(contact, orgs);
-  const org = contact?.kind === 'organization' ? contact.organization : null;
-  const shared = org ? sharedNameCount(org, orgs) : 0;
+//
+// One tab per source, matching the tab strip on the original Contacts module.
 
-  if (minted) {
-    return (
-      <Section icon="≡" title="Work">
-        <p className="c2-none">Created in Vibe — no earlier records to show.</p>
-      </Section>
-    );
-  }
-  if (loading) return <Section icon="≡" title="Work"><p className="c2-none">Loading…</p></Section>;
-  if (!groups) return <Section icon="≡" title="Work"><p className="c2-none">Could not load related records.</p></Section>;
+// The table for a single source, rendered inside its own tab.
+function WorkTable({ src, rows, onOpen }) {
+  if (!rows.length) return <p className="c2-none">Nothing recorded.</p>;
+  return (
+    <div className="c2-table-scroll">
+      <table className="c2-table">
+        <thead>
+          <tr>{src.columns.map(c => <th key={c.label} className={c.money ? 'num' : undefined}>{c.label}</th>)}</tr>
+        </thead>
+        <tbody>
+          {rows.map(r => (
+            <tr key={r.recordId} className="c2-row-link" title="Open"
+              onClick={() => onOpen?.(src.module, r.recordId)}>
+              {src.columns.map(c => {
+                const v = c.get(r.fieldData || {});
+                return (
+                  <td key={c.label} className={c.money ? 'num' : undefined}>
+                    {c.money
+                      ? '$' + Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })
+                      : (v || '—')}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
-  const withRows = groups.filter(g => g.rows.length);
-  if (!withRows.length) {
-    return (
-      <Section icon="≡" title="Work">
-        <p className="c2-none">No inspections, projects, training, estimates or risk items.</p>
-      </Section>
-    );
-  }
-
+// The caveats that belong with a work list: a shared organization name can pull
+// in another organization's records, and a district's list includes its sites.
+// Shown above the table rather than hidden, so an overlap reads as a known
+// limitation instead of as fact.
+function WorkNotes({ shared, children }) {
+  if (!shared && !children) return null;
   return (
     <>
       {shared > 0 && (
@@ -148,35 +164,25 @@ function RelatedWork({ contact, orgs, onOpen }) {
       {children > 0 && (
         <p className="c2-note">Includes {children === 1 ? 'one affiliated site' : `${children} affiliated sites`}.</p>
       )}
-      {withRows.map(({ src, rows }) => (
-        <Section key={src.id} icon="≡" title={`${src.label} (${rows.length})`}>
-          <div className="c2-table-scroll">
-            <table className="c2-table">
-              <thead>
-                <tr>{src.columns.map(c => <th key={c.label} className={c.money ? 'num' : undefined}>{c.label}</th>)}</tr>
-              </thead>
-              <tbody>
-                {rows.map(r => (
-                  <tr key={r.recordId} className="c2-row-link" title="Open"
-                    onClick={() => onOpen?.(src.module, r.recordId)}>
-                    {src.columns.map(c => {
-                      const v = c.get(r.fieldData || {});
-                      return (
-                        <td key={c.label} className={c.money ? 'num' : undefined}>
-                          {c.money
-                            ? '$' + Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })
-                            : (v || '—')}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Section>
-      ))}
     </>
+  );
+}
+
+// Tab strip. Mirrors .ct-tabs on the original Contacts module — same
+// underline-on-active treatment and the same count pill — so the two modules
+// read as one product.
+function Tabs({ tabs, active, onPick }) {
+  return (
+    <div className="c2-tabs" role="tablist">
+      {tabs.map(t => (
+        <button key={t.id} role="tab" aria-selected={active === t.id}
+          className={`c2-tab${active === t.id ? ' on' : ''}`}
+          onClick={() => onPick(t.id)}>
+          {t.label}
+          {t.count > 0 && <span className="c2-tab-count">{t.count}</span>}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -456,6 +462,10 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
   const [orgPeople, setOrgPeople] = useState(null);
   const [creating, setCreating] = useState(null);
   const [editing, setEditing] = useState(false);
+  // Which detail tab is showing. Resets to Overview whenever a different record
+  // is opened — carrying "Estimates" across to a contact that has none would
+  // land the reader on an empty pane with no idea why.
+  const [tab, setTab] = useState('overview');
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState(null);
   const selectedId = useRef(null);
@@ -485,6 +495,34 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
   }, [navTarget]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const records = kind === 'people' ? people : orgs;
+
+  // Lifted out of the work tables so the tab strip can carry counts. One fetch
+  // for the open contact, shared by every tab.
+  const related = useRelatedRecords(selected, orgs);
+  const selectedOrg = selected?.kind === 'organization' ? selected.organization : null;
+  const sharedNames = selectedOrg ? sharedNameCount(selectedOrg, orgs) : 0;
+
+  // Overview always; People only for an organization. Work sources get a tab
+  // each — for an organization always, so the strip is the same shape on every
+  // record, but for a PERSON only when there is something in it: a person's
+  // work is the exception (records key to the site, not the employee), and five
+  // permanently empty tabs on 10,831 people would be noise.
+  const workTabs = (related.groups || [])
+    .filter(g => selected?.kind === 'organization' || g.rows.length)
+    .map(g => ({ id: g.src.id, label: g.src.label, count: g.rows.length }));
+
+  const detailTabs = [
+    { id: 'overview', label: 'Overview', count: 0 },
+    ...(selected?.kind === 'organization'
+      ? [{ id: 'people', label: 'People', count: orgPeople?.length || 0 }]
+      : []),
+    ...workTabs,
+  ];
+
+  // A tab can vanish between records (a person with no estimates). Falling back
+  // rather than rendering nothing.
+  const activeTab = detailTabs.some(t => t.id === tab) ? tab : 'overview';
+  const activeGroup = (related.groups || []).find(g => g.src.id === activeTab);
 
   const controls = useListControls({
     records,
@@ -543,6 +581,7 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
     setSelected({ loading: true, id: rec.id });
     setOrgPeople(null);
     setEditing(false);
+    setTab('overview');
     setActionError(null);
     if (push) onRecordSelect?.(rec.id);
     try {
@@ -696,6 +735,9 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
                 {person.notes && <p className="c2-notes">{person.notes}</p>}
                 {actionError && <div className="c2-error">{actionError}</div>}
 
+                <Tabs tabs={detailTabs} active={activeTab} onPick={setTab} />
+
+                {activeTab === 'overview' && (<>
                 <Section icon="✉" title="Contact details">
                   <ContactMethods contact={person} busy={busy}
                     onAdd={(k, v) => act(() => addMethod(person.id, k, v))}
@@ -739,10 +781,15 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
                       onPick={(o, title) => act(() => affiliate(person.id, o.id, title))} />
                   </div>
                 </Section>
+                </>)}
 
                 {/* A person shows only what is keyed to them, not their
                     organization's whole history — see useRelatedRecords. */}
-                <RelatedWork contact={selected} orgs={orgs} onOpen={onNavigateTo} />
+                {activeGroup && (
+                  <Section icon="≡" title={activeGroup.src.label}>
+                    <WorkTable src={activeGroup.src} rows={activeGroup.rows} onOpen={onNavigateTo} />
+                  </Section>
+                )}
               </>
             )}
           </div>
@@ -770,6 +817,9 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
                 {org.notes && <p className="c2-notes">{org.notes}</p>}
                 {actionError && <div className="c2-error">{actionError}</div>}
 
+                <Tabs tabs={detailTabs} active={activeTab} onPick={setTab} />
+
+                {activeTab === 'overview' && (<>
                 <Section icon="✉" title="Contact details">
                   <ContactMethods contact={org} busy={busy}
                     onAdd={(k, v) => act(() => addMethod(org.id, k, v))}
@@ -796,24 +846,34 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
                   </>
                 )}
                 </Section>
+                </>)}
 
-                <Section icon="◎" title={`People${orgPeople ? ` (${orgPeople.length})` : ''}`}>
-                {!orgPeople ? <p className="c2-none">Loading…</p>
-                  : orgPeople.length === 0 ? <p className="c2-none">Nobody attached yet.</p>
-                  : (
-                    <ul className="c2-people">
-                      {orgPeople.map(p => (
-                        <li key={p.affiliationId}>
-                          <button className="c2-link" onClick={() => goTo(p.id)}>{p.name}</button>
-                          {p.title && <span className="c2-aff-title">{p.title}</span>}
-                          {p.primary && <span className="c2-primary">primary</span>}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </Section>
+                {activeTab === 'people' && (
+                  <Section icon="◎" title={`People${orgPeople ? ` (${orgPeople.length})` : ''}`}>
+                  {!orgPeople ? <p className="c2-none">Loading…</p>
+                    : orgPeople.length === 0 ? <p className="c2-none">Nobody attached yet.</p>
+                    : (
+                      <ul className="c2-people">
+                        {orgPeople.map(p => (
+                          <li key={p.affiliationId}>
+                            <button className="c2-link" onClick={() => goTo(p.id)}>{p.name}</button>
+                            {p.title && <span className="c2-aff-title">{p.title}</span>}
+                            {p.primary && <span className="c2-primary">primary</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </Section>
+                )}
 
-                <RelatedWork contact={selected} orgs={orgs} onOpen={onNavigateTo} />
+                {activeGroup && (
+                  <Section icon="≡" title={activeGroup.src.label}>
+                    <WorkNotes shared={sharedNames} children={related.children || 0} />
+                    {related.loading
+                      ? <p className="c2-none">Loading…</p>
+                      : <WorkTable src={activeGroup.src} rows={activeGroup.rows} onOpen={onNavigateTo} />}
+                  </Section>
+                )}
               </>
             )}
           </div>

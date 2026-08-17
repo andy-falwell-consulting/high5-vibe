@@ -143,6 +143,29 @@
 .c2-noname { color: #79859a; font-style: italic; }
 .c2-notes { color: #94a3b8; font-size: 15px; margin: 0; white-space: pre-wrap; }
 
+/* ── Detail tabs ───────────────────────────────────────────────── */
+/* Mirrors .ct-tabs on the original Contacts module: underline on the active
+   tab, count pill, same type scale — so a record reads the same in both. */
+.c2-tabs {
+  display: flex; gap: 2px; flex-wrap: wrap;
+  border-bottom: 1px solid #1e2130;
+  margin-bottom: 2px;
+}
+.c2-tab {
+  background: none; border: none; cursor: pointer; font-family: inherit;
+  font-size: 15px; color: #8b97aa; padding: 8px 12px;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  display: inline-flex; align-items: center; gap: 6px;
+  transition: color .12s;
+}
+.c2-tab:hover { color: #cbd5e1; }
+.c2-tab.on { color: #f1f5f9; border-bottom-color: var(--h5-red); font-weight: 500; }
+.c2-tab-count {
+  font-size: 12px; background: #1e2236; color: #94a3b8;
+  border-radius: 9px; padding: 1px 7px;
+}
+.c2-tab.on .c2-tab-count { background: #2a1f24; color: #f87171; }
+
 /* ── Related work (inspections, CCS, training, estimates, RMI) ── */
 /* The table scrolls inside its own box rather than widening the pane —
    Estimates and CCS both carry more columns than a narrow window fits. */
@@ -363,3 +386,10 @@ a.c2-methodvalue:hover { color: var(--h5-red); text-decoration: underline; }
 [data-theme="light"] .c2-table th { color: #64748b; border-bottom-color: #e2e8f0; }
 [data-theme="light"] .c2-table td { color: #334155; border-bottom-color: #f1f5f9; }
 [data-theme="light"] .c2-row-link:hover td { background: #f8fafc; color: #0f172a; }
+
+[data-theme="light"] .c2-tabs { border-bottom-color: #e2e8f0; }
+[data-theme="light"] .c2-tab { color: #5e6b7c; }
+[data-theme="light"] .c2-tab:hover { color: #334155; }
+[data-theme="light"] .c2-tab.on { color: #0f172a; }
+[data-theme="light"] .c2-tab-count { background: #f1f5f9; color: #475569; }
+[data-theme="light"] .c2-tab.on .c2-tab-count { background: #fef2f2; color: #b91c1c; }
