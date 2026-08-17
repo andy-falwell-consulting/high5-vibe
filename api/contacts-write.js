@@ -127,6 +127,13 @@ export default async function handler(req, res) {
         const fields = body.fields || {};
         const unknown = Object.keys(fields).filter(f => !spec.keys.includes(f));
         if (unknown.length) return res.status(400).json({ error: `not part of a ${kind}: ${unknown.join(', ')}` });
+        // An update carrying nothing writable is a caller bug, not a no-op to
+        // wave through. Answering 200 to one hid a bulk repair of 102 phone
+        // numbers that silently did nothing — every call reported success and
+        // not a single record changed. `update` has had this guard all along.
+        if (action === 'update-method' && !Object.keys(fields).length) {
+          return res.status(400).json({ error: 'fields is empty' });
+        }
 
         if (action === 'add-method') {
           const row = { id: await nextMethodId(db) };
