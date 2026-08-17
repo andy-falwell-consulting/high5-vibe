@@ -165,13 +165,36 @@ export function ListBody({ c, renderItem, activeId }) {
     if (scrolledFor.current === activeId) return
     const root = anchorRef.current?.parentElement
     const el = root?.querySelector('.active')
-    if (!root || !el) return // not rendered yet (loading/filtered) — retry on next processed change
-    scrolledFor.current = activeId
-    const scroller = scrollParent(el) || root
-    const sr = scroller.getBoundingClientRect(), er = el.getBoundingClientRect()
-    if (er.top < sr.top || er.bottom > sr.bottom) {
-      scroller.scrollTop += (er.top - sr.top) - (scroller.clientHeight - er.height) / 2
+    if (!root) return
+    // Waits for a scroller that has actually been laid out. The effect can fire
+    // before the list has height — switching Contacts v2 between People and
+    // Organizations does it, and so does a module that is still hidden —
+    // and centring against a clientHeight of 0 leaves the row above the fold.
+    // Retrying on the next processed change was not enough: for a click that
+    // changes nothing else, there is no next change. Frames are throttled
+    // while the tab is hidden, so this also settles correctly on return.
+    let raf = 0, tries = 0
+    const attempt = () => {
+      const el = root.querySelector('.active')
+      const scroller = el && (scrollParent(el) || root)
+      if (!el || !scroller?.clientHeight) {
+        if (++tries < 30) raf = requestAnimationFrame(attempt)
+        return
+      }
+      const sr = scroller.getBoundingClientRect(), er = el.getBoundingClientRect()
+      if (er.top < sr.top || er.bottom > sr.bottom) {
+        scroller.scrollTop += (er.top - sr.top) - (scroller.clientHeight - er.height) / 2
+        // Check again next frame rather than trusting one pass. The panel can
+        // finish laying out after this runs — a sidebar header appearing, a
+        // font swapping in — which moves the row back out of view against a
+        // height that is no longer current. Recording the attempt only once it
+        // has actually settled is what stops it landing above the fold.
+        if (++tries < 30) { raf = requestAnimationFrame(attempt); return }
+      }
+      scrolledFor.current = activeId
     }
+    attempt()
+    return () => cancelAnimationFrame(raf)
   }, [activeId, c.processed])
 
   // Keyed by position, not by letter. The same letter can head more than one

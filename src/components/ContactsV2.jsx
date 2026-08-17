@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
+import { BRAND, UI } from '../config/brandColors';
 import {
   listPeople, listOrganizations, getContact, getOrganizationPeople,
   createPerson, createOrganization, updateContact,
@@ -20,6 +21,14 @@ import './ContactsV2.css';
 // type flag and a single name field, which is how a person called Ryan Doak was
 // filed as a company and then rendered blank everywhere. Here they are separate
 // kinds, and a person has a first and last name.
+
+// Status colours, matching the original Contacts module so a record reads the
+// same in both. Brand tones rather than arbitrary ones — see config/brandColors.
+const statusColor = status => ({
+  Active: UI.success,
+  Inactive: UI.neutral,
+  Prospect: BRAND.gold,
+}[status] || UI.neutral);
 
 // What each kind exposes for editing. These lists must stay in step with
 // PERSON_FIELDS / ORG_FIELDS in api/contacts-write.js, which rejects anything
@@ -78,6 +87,22 @@ const METHOD_SPEC = {
     href: null,
   },
 };
+
+// The original Contacts module groups everything into bordered cards with a
+// red-accented icon and an uppercase title. Same component here so a record
+// reads the same in both modules.
+function Section({ icon, title, children, aside }) {
+  return (
+    <section className="c2-section">
+      <div className="c2-section-header">
+        <span className="c2-section-icon" aria-hidden="true">{icon}</span>
+        <h3>{title}</h3>
+        {aside}
+      </div>
+      <div className="c2-section-body">{children}</div>
+    </section>
+  );
+}
 
 function MethodForm({ kind, initial, busy, onSave, onCancel }) {
   const spec = METHOD_SPEC[kind];
@@ -268,7 +293,7 @@ function EditForm({ kind, entity, busy, error, onSave, onCancel }) {
   );
 }
 
-export default function ContactsV2() {
+export default function ContactsV2({ navTarget, onClearNav, onRecordSelect } = {}) {
   const [kind, setKind] = useState('people');
   const [people, setPeople] = useState([]);
   const [orgs, setOrgs] = useState([]);
@@ -293,6 +318,18 @@ export default function ContactsV2() {
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, []);
+
+  // Deep links and the Back button. The kind is not in the URL — `open` reads
+  // it off the record — so #contacts-v2/90043 resolves whether 90043 turns out
+  // to be a person or an organization.
+  useEffect(() => {
+    if (!navTarget || navTarget.moduleId !== 'contacts-v2') return;
+    const id = String(navTarget.recordId ?? '');
+    if (!id) { onClearNav?.(); return; }
+    if (selectedId.current === id) { onClearNav?.(); return; }
+    open({ id }, { push: false });
+    onClearNav?.();
+  }, [navTarget]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const records = kind === 'people' ? people : orgs;
 
@@ -345,16 +382,31 @@ export default function ContactsV2() {
     }
   }
 
-  async function open(rec) {
+  // `push` is false when arriving FROM the URL (a deep link or the Back
+  // button) — pushing again there would add a duplicate history entry and make
+  // Back appear not to work.
+  async function open(rec, { push = true } = {}) {
     selectedId.current = rec.id;
     setSelected({ loading: true, id: rec.id });
     setOrgPeople(null);
     setEditing(false);
     setActionError(null);
+    if (push) onRecordSelect?.(rec.id);
     try {
       const d = await getContact(rec.id);
       if (selectedId.current !== rec.id) return;
-      setSelected(d);
+      // The tab follows the record. A person's detail showing while the
+      // sidebar lists organizations is the kind of disagreement that reads as
+      // a bug, so the kind comes from what the server actually returned rather
+      // than from whatever tab happened to be open.
+      setKind(d.kind === 'organization' ? 'organizations' : 'people');
+      // The id has to be carried onto the resolved record. /api/contacts
+      // answers { kind, person|organization, … } with no id at the top level,
+      // so setting the response alone dropped `selected.id` — which is what the
+      // sidebar highlight and ListBody's scroll-into-view both key on. The row
+      // for the open record has been silently unhighlighted since this module
+      // shipped; it only became obvious once records could link to each other.
+      setSelected({ ...d, id: rec.id });
       syncList(d);
       if (d.kind === 'organization') {
         const op = await getOrganizationPeople(rec.id);
@@ -365,11 +417,19 @@ export default function ContactsV2() {
     }
   }
 
+  // Following a link from one record to another. The search box is cleared
+  // because the destination is usually not in the current filter — leaving it
+  // shows a detail pane for a record the sidebar says does not exist.
+  function goTo(id) {
+    controls.setTyped('');
+    open({ id });
+  }
+
   async function act(fn) {
     setBusy(true); setActionError(null);
     try {
       await fn();
-      if (selectedId.current) await open({ id: selectedId.current });
+      if (selectedId.current) await open({ id: selectedId.current }, { push: false });
     } catch (e) {
       // Shown in place. An alert() dismisses itself and leaves no trace of what
       // the server actually objected to — "that would make the hierarchy
@@ -384,6 +444,21 @@ export default function ContactsV2() {
   return (
     <div className="c2-container">
       <aside className="c2-sidebar">
+        <div className="c2-sidebar-header">
+          <div className="c2-sidebar-title">
+            <div className="c2-sidebar-logo">H5</div>
+            <div>
+              <div className="c2-sidebar-module">Contacts</div>
+              <div className="c2-sidebar-count">
+                {loading ? 'Loading…' : `${(people.length + orgs.length).toLocaleString()} records`}
+              </div>
+            </div>
+            <button className="c2-new-btn" onClick={() => setCreating(kind === 'people' ? 'person' : 'organization')}>
+              ＋ New
+            </button>
+          </div>
+        </div>
+
         <div className="c2-kindtabs">
           <button className={kind === 'people' ? 'active' : ''} onClick={() => { setKind('people'); setSelected(null); }}>
             People <span>{people.length.toLocaleString()}</span>
@@ -409,9 +484,12 @@ export default function ContactsV2() {
               <div key={r.id}
                 className={`c2-row${selected?.id === r.id ? ' active' : ''}`}
                 onClick={() => open(r)}>
-                <div className="c2-row-name">{r.name || <em>(no name)</em>}</div>
-                {kind === 'people' && r.title && <div className="c2-row-sub">{r.title}</div>}
-                {kind === 'organizations' && r.parentOrganizationId && <div className="c2-row-sub">has a parent organization</div>}
+                <span className="c2-row-dot" style={{ background: statusColor(r.status) }} />
+                <div className="c2-row-text">
+                  <div className="c2-row-name">{r.name || <em>(no name)</em>}</div>
+                  {kind === 'people' && r.title && <div className="c2-row-sub">{r.title}</div>}
+                  {kind === 'organizations' && r.parentOrganizationId && <div className="c2-row-sub">has a parent organization</div>}
+                </div>
               </div>
             )} />
           )}
@@ -454,19 +532,25 @@ export default function ContactsV2() {
                 {person.notes && <p className="c2-notes">{person.notes}</p>}
                 {actionError && <div className="c2-error">{actionError}</div>}
 
-                <ContactMethods contact={person} busy={busy}
-                  onAdd={(k, v) => act(() => addMethod(person.id, k, v))}
-                  onUpdate={(k, id, v) => act(() => updateMethod(person.id, k, id, v))}
-                  onRemove={(k, id) => act(() => removeMethod(person.id, k, id))} />
+                <Section icon="✉" title="Contact details">
+                  <ContactMethods contact={person} busy={busy}
+                    onAdd={(k, v) => act(() => addMethod(person.id, k, v))}
+                    onUpdate={(k, id, v) => act(() => updateMethod(person.id, k, id, v))}
+                    onRemove={(k, id) => act(() => removeMethod(person.id, k, id))} />
+                </Section>
 
-                <h3>Affiliations</h3>
+                <Section icon="◎" title="Affiliations">
                 {selected.affiliations.length === 0 ? (
                   <p className="c2-none">Not attached to any organization.</p>
                 ) : (
                   <ul className="c2-affs">
                     {selected.affiliations.map(a => (
                       <li key={a.id}>
-                        <span className="c2-aff-org">{a.organization || a.organizationId}</span>
+                        {a.organizationId
+                          ? <button className="c2-link" onClick={() => goTo(a.organizationId)}>
+                              {a.organization || a.organizationId}
+                            </button>
+                          : <span className="c2-aff-org">{a.organization || '—'}</span>}
                         {a.title && <span className="c2-aff-title">{a.title}</span>}
                         {a.primary
                           ? <span className="c2-primary">primary</span>
@@ -485,12 +569,12 @@ export default function ContactsV2() {
                   <p className="c2-note">No primary organization chosen.</p>
                 )}
 
-                <div className="c2-picker-block">
-                  <h3>Attach to an organization</h3>
-                  <OrgPicker orgs={orgs} busy={busy} withTitle actionLabel="Attach"
-                    placeholder="Search organizations…"
-                    onPick={(o, title) => act(() => affiliate(person.id, o.id, title))} />
-                </div>
+                  <div className="c2-picker-block">
+                    <OrgPicker orgs={orgs} busy={busy} withTitle actionLabel="Attach"
+                      placeholder="Attach to an organization…"
+                      onPick={(o, title) => act(() => affiliate(person.id, o.id, title))} />
+                  </div>
+                </Section>
               </>
             )}
           </div>
@@ -516,14 +600,17 @@ export default function ContactsV2() {
                 {org.notes && <p className="c2-notes">{org.notes}</p>}
                 {actionError && <div className="c2-error">{actionError}</div>}
 
-                <ContactMethods contact={org} busy={busy}
-                  onAdd={(k, v) => act(() => addMethod(org.id, k, v))}
-                  onUpdate={(k, id, v) => act(() => updateMethod(org.id, k, id, v))}
-                  onRemove={(k, id) => act(() => removeMethod(org.id, k, id))} />
+                <Section icon="✉" title="Contact details">
+                  <ContactMethods contact={org} busy={busy}
+                    onAdd={(k, v) => act(() => addMethod(org.id, k, v))}
+                    onUpdate={(k, id, v) => act(() => updateMethod(org.id, k, id, v))}
+                    onRemove={(k, id) => act(() => removeMethod(org.id, k, id))} />
+                </Section>
 
-                <h3>Parent organization</h3>
+                <Section icon="⌂" title="Parent organization">
                 {org.parent ? (
-                  <p className="c2-parent">Part of <strong>{org.parent.name}</strong>
+                  <p className="c2-parent">Part of{' '}
+                    <button className="c2-link c2-link--strong" onClick={() => goTo(org.parent.id)}>{org.parent.name}</button>
                     <button className="c2-mini c2-mini--danger c2-mini--flush" disabled={busy}
                       onClick={() => act(() => setParent(org.id, null))}>remove</button>
                   </p>
@@ -538,21 +625,23 @@ export default function ContactsV2() {
                       onPick={o => act(() => setParent(org.id, o.id))} />
                   </>
                 )}
+                </Section>
 
-                <h3>People {orgPeople ? `(${orgPeople.length})` : ''}</h3>
+                <Section icon="◎" title={`People${orgPeople ? ` (${orgPeople.length})` : ''}`}>
                 {!orgPeople ? <p className="c2-none">Loading…</p>
                   : orgPeople.length === 0 ? <p className="c2-none">Nobody attached yet.</p>
                   : (
                     <ul className="c2-people">
                       {orgPeople.map(p => (
                         <li key={p.affiliationId}>
-                          <span className="c2-aff-org">{p.name}</span>
+                          <button className="c2-link" onClick={() => goTo(p.id)}>{p.name}</button>
                           {p.title && <span className="c2-aff-title">{p.title}</span>}
                           {p.primary && <span className="c2-primary">primary</span>}
                         </li>
                       ))}
                     </ul>
                   )}
+                </Section>
               </>
             )}
           </div>
