@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
 import { BRAND, UI } from '../config/brandColors';
 import { formatPhone, telHref } from '../../api/_phone';
+import { useRelatedRecords, sharedNameCount } from '../hooks/useRelatedRecords';
 import {
   listPeople, listOrganizations, getContact, getOrganizationPeople,
   createPerson, createOrganization, updateContact,
@@ -104,6 +105,78 @@ function Section({ icon, title, children, aside }) {
       </div>
       <div className="c2-section-body">{children}</div>
     </section>
+  );
+}
+
+// The work a contact has — inspections, CCS projects, training, estimates,
+// risk items. These arrived as FileMaker portals on the old Contacts page,
+// which cannot see Vibe edits (see config/relatedRecords.js); here they come
+// from each module's own cache and so read through the overlay.
+function RelatedWork({ contact, orgs, onOpen }) {
+  const { loading, groups, children, minted } = useRelatedRecords(contact, orgs);
+  const org = contact?.kind === 'organization' ? contact.organization : null;
+  const shared = org ? sharedNameCount(org, orgs) : 0;
+
+  if (minted) {
+    return (
+      <Section icon="≡" title="Work">
+        <p className="c2-none">Created in Vibe — no earlier records to show.</p>
+      </Section>
+    );
+  }
+  if (loading) return <Section icon="≡" title="Work"><p className="c2-none">Loading…</p></Section>;
+  if (!groups) return <Section icon="≡" title="Work"><p className="c2-none">Could not load related records.</p></Section>;
+
+  const withRows = groups.filter(g => g.rows.length);
+  if (!withRows.length) {
+    return (
+      <Section icon="≡" title="Work">
+        <p className="c2-none">No inspections, projects, training, estimates or risk items.</p>
+      </Section>
+    );
+  }
+
+  return (
+    <>
+      {shared > 0 && (
+        <p className="c2-note c2-note--warn">
+          {shared === 1
+            ? 'Another organization shares this name, so these lists may include its work.'
+            : `${shared} other organizations share this name, so these lists may include their work.`}
+        </p>
+      )}
+      {children > 0 && (
+        <p className="c2-note">Includes {children === 1 ? 'one affiliated site' : `${children} affiliated sites`}.</p>
+      )}
+      {withRows.map(({ src, rows }) => (
+        <Section key={src.id} icon="≡" title={`${src.label} (${rows.length})`}>
+          <div className="c2-table-scroll">
+            <table className="c2-table">
+              <thead>
+                <tr>{src.columns.map(c => <th key={c.label} className={c.money ? 'num' : undefined}>{c.label}</th>)}</tr>
+              </thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.recordId} className="c2-row-link" title="Open"
+                    onClick={() => onOpen?.(src.module, r.recordId)}>
+                    {src.columns.map(c => {
+                      const v = c.get(r.fieldData || {});
+                      return (
+                        <td key={c.label} className={c.money ? 'num' : undefined}>
+                          {c.money
+                            ? '$' + Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })
+                            : (v || '—')}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Section>
+      ))}
+    </>
   );
 }
 
@@ -373,7 +446,7 @@ function EditForm({ kind, entity, busy, error, onSave, onCancel, onDeleted, affi
   );
 }
 
-export default function ContactsV2({ navTarget, onClearNav, onRecordSelect } = {}) {
+export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNavigateTo } = {}) {
   const [kind, setKind] = useState('people');
   const [people, setPeople] = useState([]);
   const [orgs, setOrgs] = useState([]);
@@ -666,6 +739,10 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect } = {
                       onPick={(o, title) => act(() => affiliate(person.id, o.id, title))} />
                   </div>
                 </Section>
+
+                {/* A person shows only what is keyed to them, not their
+                    organization's whole history — see useRelatedRecords. */}
+                <RelatedWork contact={selected} orgs={orgs} onOpen={onNavigateTo} />
               </>
             )}
           </div>
@@ -735,6 +812,8 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect } = {
                     </ul>
                   )}
                 </Section>
+
+                <RelatedWork contact={selected} orgs={orgs} onOpen={onNavigateTo} />
               </>
             )}
           </div>
