@@ -249,6 +249,8 @@ a.c2-methodvalue:hover { color: var(--h5-red); text-decoration: underline; }
 }
 .c2-btn:hover:not(:disabled) { background: var(--h5-red); border-color: var(--h5-red); color: #fff; }
 .c2-btn--primary { background: var(--h5-red); border-color: var(--h5-red); color: #fff; }
+.c2-btn--danger { background: #7f1d1d; border-color: #991b1b; color: #fecaca; }
+.c2-btn--danger:hover:not(:disabled) { background: #b91c1c; border-color: #b91c1c; color: #fff; }
 .c2-btn--primary:hover:not(:disabled) { background: #c9151c; border-color: #c9151c; }
 .c2-btn:disabled { opacity: .45; cursor: default; }
 
@@ -269,6 +271,13 @@ a.c2-methodvalue:hover { color: var(--h5-red); text-decoration: underline; }
   margin-top: 10px; font-size: 15px; color: #fca5a5;
   background: #7f1d1d33; border: 1px solid #7f1d1d66; border-radius: 8px; padding: 8px 10px;
 }
+
+/* Danger zone, kept at the foot of the edit form so it is never the first thing
+   a cursor lands on. */
+.c2-danger { margin-top: 22px; padding-top: 16px; border-top: 1px solid #1e2130; }
+.c2-danger--open { border-top-color: #7f1d1d; }
+.c2-danger-title { font-size: 17px; color: #e2e8f0; margin-bottom: 6px; }
+.c2-danger-warn { font-size: 14px; color: #94a3b8; line-height: 1.5; margin: 0 0 14px; }
 
 /* ── Light theme ───────────────────────────────────────────────── */
 [data-theme="light"] .c2-container { background: #f8fafc; color: #0f172a; }
@@ -302,6 +311,8 @@ a.c2-methodvalue:hover { color: var(--h5-red); text-decoration: underline; }
 [data-theme="light"] .c2-btn { background: #f1f5f9; border-color: #e2e8f0; color: #334155; }
 [data-theme="light"] .c2-btn:hover:not(:disabled) { background: var(--h5-red); border-color: var(--h5-red); color: #fff; }
 [data-theme="light"] .c2-btn--primary { background: var(--h5-red); border-color: var(--h5-red); color: #fff; }
+.c2-btn--danger { background: #7f1d1d; border-color: #991b1b; color: #fecaca; }
+.c2-btn--danger:hover:not(:disabled) { background: #b91c1c; border-color: #b91c1c; color: #fff; }
 [data-theme="light"] .c2-input { background: #fff; border-color: #e2e8f0; color: #0f172a; }
 [data-theme="light"] .c2-modal { background: #fff; border-color: #e2e8f0; }
 [data-theme="light"] .c2-modal h2 { color: #0f172a; }
@@ -309,3 +320,8 @@ a.c2-methodvalue:hover { color: var(--h5-red); text-decoration: underline; }
 [data-theme="light"] .c2-newbar { border-top-color: #e2e8f0; }
 [data-theme="light"] .c2-picker-block { border-top-color: #e2e8f0; }
 [data-theme="light"] .c2-error { color: #b91c1c; background: #fef2f2; border-color: #fecaca; }
+[data-theme="light"] .c2-btn--danger { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
+[data-theme="light"] .c2-btn--danger:hover:not(:disabled) { background: #b91c1c; border-color: #b91c1c; color: #fff; }
+[data-theme="light"] .c2-danger { border-top-color: #e2e8f0; }
+[data-theme="light"] .c2-danger--open { border-top-color: #fecaca; }
+[data-theme="light"] .c2-danger-title { color: #0f172a; }

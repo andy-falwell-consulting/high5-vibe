@@ -24,7 +24,7 @@ import { isAdminEmail } from './_admin.js';
 import { Redis } from '@upstash/redis';
 import {
   K, readHash, writeHash, isOrgRow, toOrganization, toPerson,
-  foldRelationships, resolveParents, indexAffiliations, isVibeId,
+  foldRelationships, resolveParents, indexAffiliations, isVibeId, contactTombstones,
 } from './_contacts.js';
 
 const redis = Redis.fromEnv();
@@ -102,10 +102,16 @@ export default async function handler(req, res) {
     if (step === 'contacts') {
       const { rows, total, msg } = await fmPage(db, CONTACTS_LAYOUT, offset, token);
       if (!rows.length) return res.status(200).json({ step, offset, done: true, total, msg });
+      // A contact deleted in Vibe still has its FileMaker row, and this step
+      // writes every row it reads — so without checking, a re-run would restore
+      // it. `ignoreTombstones=1` is the way back from a mistaken delete.
+      const deleted = req.query?.ignoreTombstones ? new Set() : new Set((await contactTombstones(db)).map(String));
       const orgs = {}, people = {};
+      let tombstoned = 0;
       for (const r of rows) {
         const f = r.fieldData;
         if (!f._kpt__Contact_ID) continue;
+        if (deleted.has(String(f._kpt__Contact_ID))) { tombstoned++; continue; }
         if (isOrgRow(f)) orgs[String(f._kpt__Contact_ID)] = JSON.stringify(toOrganization(f));
         else people[String(f._kpt__Contact_ID)] = JSON.stringify(toPerson(f));
       }
@@ -113,7 +119,7 @@ export default async function handler(req, res) {
       if (Object.keys(people).length) await writeHash(K.person(db), people);
       return res.status(200).json({
         step, offset, total, read: rows.length,
-        organizations: Object.keys(orgs).length, people: Object.keys(people).length,
+        organizations: Object.keys(orgs).length, people: Object.keys(people).length, tombstoned,
         nextOffset: offset + rows.length, done: rows.length < PAGE,
       });
     }

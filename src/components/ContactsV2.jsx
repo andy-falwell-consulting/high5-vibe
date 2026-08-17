@@ -5,7 +5,7 @@ import {
   listPeople, listOrganizations, getContact, getOrganizationPeople,
   createPerson, createOrganization, updateContact,
   affiliate, setPrimary, unaffiliate, setParent,
-  addMethod, updateMethod, removeMethod,
+  addMethod, updateMethod, removeMethod, deleteContact,
 } from '../api/vibeContacts';
 import './ContactsV2.css';
 
@@ -264,7 +264,62 @@ function CreateModal({ kind, onClose, onCreated }) {
 // Only what actually CHANGED is sent. Posting the whole form back would rewrite
 // fields nobody touched with whatever this browser last read, which is how a
 // stale tab quietly undoes someone else's edit.
-function EditForm({ kind, entity, busy, error, onSave, onCancel }) {
+// Typed confirmation, the same bar DeleteRecordButton sets for every other
+// module: a contact can be referenced by projects, inspections and estimates
+// through `_kft__Contact_ID`, and nothing here rewrites those. An OK button is
+// too cheap for that.
+function DeleteContact({ kind, entity, name, affiliations, busy, onDeleted }) {
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState('');
+  const [error, setError] = useState(null);
+  const [working, setWorking] = useState(false);
+  const armed = typed.trim().toUpperCase() === 'DELETE';
+
+  async function run() {
+    if (!armed || working) return;
+    setWorking(true); setError(null);
+    try {
+      const r = await deleteContact(entity.id);
+      onDeleted(r);
+    } catch (e) { setError(e.message); setWorking(false); }
+  }
+
+  if (!open) {
+    return (
+      <div className="c2-danger">
+        <button className="c2-btn c2-btn--danger" disabled={busy} onClick={() => setOpen(true)}>
+          🗑 Delete {kind === 'person' ? 'person' : 'organization'}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="c2-danger c2-danger--open">
+      <div className="c2-danger-title">Delete <strong>{name || 'this contact'}</strong>?</div>
+      <p className="c2-danger-warn">
+        This removes the {kind} from Vibe and cannot be undone from here.
+        {affiliations > 0 && ` Its ${affiliations} affiliation${affiliations === 1 ? '' : 's'} ${affiliations === 1 ? 'is' : 'are'} removed too.`}
+        {' '}Projects, inspections and estimates that reference this contact are
+        not changed, and will be left pointing at a record that no longer exists.
+      </p>
+      <label className="c2-lbl" htmlFor="c2-del">Type <strong>DELETE</strong> to confirm</label>
+      <input id="c2-del" className="c2-input" autoFocus autoComplete="off" placeholder="DELETE"
+        value={typed} disabled={working}
+        onChange={e => setTyped(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter' && armed) run(); }} />
+      {error && <div className="c2-error">{error}</div>}
+      <div className="c2-modal-actions">
+        <button className="c2-btn" disabled={working} onClick={() => { setOpen(false); setTyped(''); setError(null); }}>Cancel</button>
+        <button className="c2-btn c2-btn--danger" disabled={!armed || working} onClick={run}>
+          {working ? 'Deleting…' : 'Delete permanently'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function EditForm({ kind, entity, busy, error, onSave, onCancel, onDeleted, affiliations = 0, name }) {
   const spec = kind === 'person' ? PERSON_FORM : ORG_FORM;
   const [values, setValues] = useState(() =>
     Object.fromEntries(spec.map(f => [f.key, entity[f.key] ?? ''])));
@@ -289,6 +344,10 @@ function EditForm({ kind, entity, busy, error, onSave, onCancel }) {
           onClick={() => onSave(changed)}>{busy ? 'Saving…' : 'Save'}</button>
       </div>
       {!valid && <p className="c2-note">A person needs a first or last name.</p>}
+      {onDeleted && (
+        <DeleteContact kind={kind} entity={entity} name={name}
+          affiliations={affiliations} busy={busy} onDeleted={onDeleted} />
+      )}
     </div>
   );
 }
@@ -438,6 +497,18 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect } = {
     } finally { setBusy(false); }
   }
 
+  // Clearing the selection is not enough — the row would sit in the sidebar
+  // until a reload, and clicking it would 404.
+  function afterDelete(result) {
+    const id = result?.deleted;
+    if (result?.kind === 'person') setPeople(list => list.filter(r => r.id !== id));
+    else setOrgs(list => list.filter(r => r.id !== id));
+    selectedId.current = null;
+    setSelected(null);
+    setEditing(false);
+    onRecordSelect?.(null);
+  }
+
   const person = selected?.kind === 'person' ? selected.person : null;
   const org = selected?.kind === 'organization' ? selected.organization : null;
 
@@ -514,8 +585,10 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect } = {
               <>
                 <h1>Editing</h1>
                 <EditForm kind="person" entity={person} busy={busy} error={actionError}
+                  name={person.displayName} affiliations={selected.affiliations?.length || 0}
                   onCancel={() => { setEditing(false); setActionError(null); }}
-                  onSave={fields => act(() => updateContact(person.id, fields))} />
+                  onSave={fields => act(() => updateContact(person.id, fields))}
+                  onDeleted={r => afterDelete(r)} />
               </>
             ) : (
               <>
@@ -584,8 +657,10 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect } = {
               <>
                 <h1>Editing</h1>
                 <EditForm kind="organization" entity={org} busy={busy} error={actionError}
+                  name={org.name} affiliations={selected.peopleCount || 0}
                   onCancel={() => { setEditing(false); setActionError(null); }}
-                  onSave={fields => act(() => updateContact(org.id, fields))} />
+                  onSave={fields => act(() => updateContact(org.id, fields))}
+                  onDeleted={r => afterDelete(r)} />
               </>
             ) : (
               <>
