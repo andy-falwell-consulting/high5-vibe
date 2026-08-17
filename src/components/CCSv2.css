@@ -214,6 +214,20 @@
 /* Auto-grown by JS to fit content, so no manual resize and no inner scrollbar. */
 .cv2-inline-area { resize: none; overflow: hidden; min-height: 56px; line-height: 1.5; }
 .cv2-inline-area-lg { min-height: 250px; }
+
+/* Fixed-height, scrolling variant (Notes, Work Order). These fields hold long
+   free text; letting them grow to fit pushed the rest of the pane out of
+   reach. resize: vertical so anyone who wants more room can still drag it. */
+.cv2-inline-area-fixed {
+  height: 170px;
+  min-height: 0;
+  overflow-y: auto;
+  resize: vertical;
+}
+.cv2-inline-area-fixed.cv2-inline-area-lg { height: 260px; min-height: 0; }
+.cv2-inline-area-fixed::-webkit-scrollbar { width: 6px; }
+.cv2-inline-area-fixed::-webkit-scrollbar-track { background: transparent; }
+.cv2-inline-area-fixed::-webkit-scrollbar-thumb { background: var(--cv2-border-2); border-radius: 3px; }
 .cv2-stamp-btn {
   margin-left: 8px; font-size: 11px; padding: 1px 8px; border-radius: 4px;
   background: #1a1d27; border: 1px solid var(--cv2-border); color: var(--cv2-muted);

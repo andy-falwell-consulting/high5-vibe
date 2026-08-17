@@ -223,7 +223,20 @@ function AutoGrowArea({ value, className, placeholder, onChange }) {
   return <textarea ref={ref} className={className} rows={2} value={value || ''} placeholder={placeholder} onChange={e => onChange(e.target.value)} />;
 }
 
-function InlineText({ value, onChange, placeholder, area, big }) {
+// `fixed` opts out of auto-growing: the box keeps a set height and scrolls.
+// Notes and Work Order both run to hundreds of lines on a real project, and a
+// box that grows to fit pushed everything below them off the pane. The
+// job-prep group notes stay auto-grow — they are a few words each.
+function InlineText({ value, onChange, placeholder, area, big, fixed }) {
+  if (area && fixed) {
+    return (
+      <textarea
+        className={`cv2-inline cv2-inline-area cv2-inline-area-fixed${big ? ' cv2-inline-area-lg' : ''}`}
+        value={value || ''} placeholder={placeholder}
+        onChange={e => onChange(e.target.value)}
+      />
+    );
+  }
   if (area) return <AutoGrowArea className={`cv2-inline cv2-inline-area${big ? ' cv2-inline-area-lg' : ''}`} value={value} placeholder={placeholder} onChange={onChange} />;
   return <input className="cv2-inline" value={value || ''} placeholder={placeholder} onChange={e => onChange(e.target.value)} />;
 }
@@ -871,7 +884,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
                   </div>
                   <div className="cv2-field-block">
                     <label>Work order</label>
-                    <InlineText value={val('Work Order')} onChange={v => stage('Work Order', v)} placeholder="Add a work order…" area big />
+                    <InlineText value={val('Work Order')} onChange={v => stage('Work Order', v)} placeholder="Add a work order…" area big fixed />
                     <div className="cv2-wo-actions">
                       <button type="button" className="cv2-wo-btn" disabled={!!woBusy} onClick={handleGenerateWorkOrder}>
                         {woBusy ? (woStage || 'Working…') : '⤓ Download work order'}
@@ -881,7 +894,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
                   </div>
                   <div className="cv2-field-block">
                     <label>Notes <button type="button" className="cv2-stamp-btn" onClick={() => stampNote('Notes')}>⏱ Stamp</button></label>
-                    <InlineText value={val('Notes')} onChange={v => stage('Notes', v)} placeholder="Add notes…" area />
+                    <InlineText value={val('Notes')} onChange={v => stage('Notes', v)} placeholder="Add notes…" area fixed />
                   </div>
                 </div>
 

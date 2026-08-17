@@ -2,6 +2,60 @@
 // matching the FileMaker "Work Order" report. Client-side pdfmake, same
 // pattern as inspectionReport.js.
 import { uploadCcsAttachment } from './ccsAttachments';
+import { getContact } from './vibeContacts';
+import { formatPhone } from '../../api/_phone';
+
+// Phone and e-mail for the work order come from VIBE'S contact store, not from
+// FileMaker's related fields on RCD_New.
+//
+// Those fields (rcd_cntct_PHONE__work::Number, rcd_cntct_PHONE__mobile::Number,
+// rcd_cntct_INADR__email::zz__Address__ct) are on the layout and readable, but
+// measured across all 6,436 CCS projects they are populated on ZERO of them —
+// the relationships resolve empty over the Data API, the same way the CCS
+// financial portals do. So every work order ever generated printed "—" for
+// Phone, Cell and E-mail.
+//
+// Vibe holds the same contacts keyed by _kft__Contact_ID (populated on 958 of
+// 1,000 projects) and fills at least one of the three for 115 of a 120-contact
+// sample. Numbers are stored E.164 and formatted here for print.
+//
+// Type vocabularies match METHOD_SPEC in ContactsV2 — the values actually in
+// the data, in preference order. A fax is never offered as a phone number.
+const WORK_TYPES = ['Work', 'Main Office', 'Work Parent'];
+const CELL_TYPES = ['Mobile', 'Personal Mobile', 'Mobile Parent'];
+const MAIL_TYPES = ['Email', 'Home Email', 'Billing'];
+
+const pickByType = (rows, types) => {
+  for (const t of types) {
+    const hit = (rows || []).find(r => String(r.type || '').toLowerCase() === t.toLowerCase());
+    if (hit) return hit;
+  }
+  return null;
+};
+
+// The contact a work order is associated with, reduced to what the sheet prints.
+// Returns empty strings rather than throwing: a missing or unreachable contact
+// should still produce a work order, just without the contact block filled.
+export async function workOrderContact(record) {
+  const id = String(record?.fieldData?._kft__Contact_ID || '').trim();
+  if (!id) return { workPhone: '', cellPhone: '', email: '' };
+  try {
+    const d = await getContact(id);
+    const e = d?.person || d?.organization;
+    if (!e) return { workPhone: '', cellPhone: '', email: '' };
+    const w = pickByType(e.phones, WORK_TYPES);
+    const c = pickByType(e.phones, CELL_TYPES);
+    const m = pickByType(e.emails, MAIL_TYPES)
+      || (e.emails || []).find(x => String(x.type || '') !== 'Web');
+    return {
+      workPhone: w ? formatPhone(w.number, w.ext) : '',
+      cellPhone: c ? formatPhone(c.number, c.ext) : '',
+      email: m?.address || '',
+    };
+  } catch {
+    return { workPhone: '', cellPhone: '', email: '' };
+  }
+}
 
 const fmtDateNoZero = v => {
   if (!v) return '';
@@ -16,14 +70,18 @@ export function workOrderMeta(record) {
   return { id, org, filename: `Work Order ${org} ${id}.pdf` };
 }
 
-export function buildWorkOrderDoc(record, logos) {
+export function buildWorkOrderDoc(record, logos, contactInfo) {
   const f = record.fieldData || {};
   const org = f.zz__Display_Organization__ct || '—';
   const contact = f.zz__Display_Contact__ct || '';
   const addrLines = String(f['Address_Block_Billing'] || '').split(/\r|\n/).map(s => s.trim()).filter(Boolean);
-  const email = f['rcd_cntct_INADR__email::zz__Address__ct'] || '';
-  const workPhone = f['rcd_cntct_PHONE__work::Number'] || '';
-  const cellPhone = f['rcd_cntct_PHONE__mobile::Number'] || '';
+  // Vibe's values, with FileMaker's related fields left as the fallback. They
+  // are empty on every record measured, so this is belt-and-braces rather than
+  // a real second source — but it costs nothing and keeps the sheet working if
+  // the contact lookup fails.
+  const email = contactInfo?.email || f['rcd_cntct_INADR__email::zz__Address__ct'] || '';
+  const workPhone = contactInfo?.workPhone || f['rcd_cntct_PHONE__work::Number'] || '';
+  const cellPhone = contactInfo?.cellPhone || f['rcd_cntct_PHONE__mobile::Number'] || '';
   const staff = ['Lead Builder', 'Builder1', 'Builder2', 'Builder3'].map(k => f[k]).filter(Boolean).join(', ');
   const start = fmtDateNoZero(f['rcd start date']);
   const end = fmtDateNoZero(f['rcd end date']);
@@ -90,10 +148,14 @@ export function buildWorkOrderDoc(record, logos) {
   };
 }
 
-async function generateWorkOrderPdf(record) {
-  const [pdfmakeMod, assets] = await Promise.all([
+async function generateWorkOrderPdf(record, onStage) {
+  // The contact lookup runs alongside the (heavy) pdfmake and font imports
+  // rather than after them, so it costs no extra wall-clock.
+  onStage?.('Reading contact…');
+  const [pdfmakeMod, assets, contactInfo] = await Promise.all([
     import('pdfmake/build/pdfmake'),
     import('../assets/reportAssets.js'),
+    workOrderContact(record),
   ]);
   const pdfMake = pdfmakeMod.default || pdfmakeMod;
   pdfMake.vfs = assets.reportFonts;
@@ -103,7 +165,8 @@ async function generateWorkOrderPdf(record) {
       italics: 'LiberationSans-Italic.ttf', bolditalics: 'LiberationSans-BoldItalic.ttf',
     },
   };
-  const doc = buildWorkOrderDoc(record, assets.reportLogos);
+  onStage?.('Building PDF…');
+  const doc = buildWorkOrderDoc(record, assets.reportLogos, contactInfo);
   const { filename } = workOrderMeta(record);
   const blob = await new Promise((resolve, reject) => {
     try { pdfMake.createPdf(doc).getBlob(resolve); } catch (e) { reject(e); }
@@ -115,7 +178,7 @@ async function generateWorkOrderPdf(record) {
 // table (RCD_Pics, via the shared ccsAttachments pipeline).
 export async function generateAndAttachWorkOrder(record, onStage) {
   onStage?.('Building PDF…');
-  const { blob, filename } = await generateWorkOrderPdf(record);
+  const { blob, filename } = await generateWorkOrderPdf(record, onStage);
   const file = new File([blob], filename, { type: 'application/pdf' });
   const rcdId = record.fieldData?._kpt__RCD_ID;
   onStage?.('Uploading…');
@@ -125,7 +188,7 @@ export async function generateAndAttachWorkOrder(record, onStage) {
 // Generate + download (no attach).
 export async function downloadWorkOrder(record, onStage) {
   onStage?.('Building PDF…');
-  const { blob, filename } = await generateWorkOrderPdf(record);
+  const { blob, filename } = await generateWorkOrderPdf(record, onStage);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = filename; document.body.appendChild(a); a.click();
