@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
+import { BRAND, UI } from '../config/brandColors';
 import {
   listPeople, listOrganizations, getContact, getOrganizationPeople,
   createPerson, createOrganization, updateContact,
@@ -20,6 +21,14 @@ import './ContactsV2.css';
 // type flag and a single name field, which is how a person called Ryan Doak was
 // filed as a company and then rendered blank everywhere. Here they are separate
 // kinds, and a person has a first and last name.
+
+// Status colours, matching the original Contacts module so a record reads the
+// same in both. Brand tones rather than arbitrary ones — see config/brandColors.
+const statusColor = status => ({
+  Active: UI.success,
+  Inactive: UI.neutral,
+  Prospect: BRAND.gold,
+}[status] || UI.neutral);
 
 // What each kind exposes for editing. These lists must stay in step with
 // PERSON_FIELDS / ORG_FIELDS in api/contacts-write.js, which rejects anything
@@ -78,6 +87,22 @@ const METHOD_SPEC = {
     href: null,
   },
 };
+
+// The original Contacts module groups everything into bordered cards with a
+// red-accented icon and an uppercase title. Same component here so a record
+// reads the same in both modules.
+function Section({ icon, title, children, aside }) {
+  return (
+    <section className="c2-section">
+      <div className="c2-section-header">
+        <span className="c2-section-icon" aria-hidden="true">{icon}</span>
+        <h3>{title}</h3>
+        {aside}
+      </div>
+      <div className="c2-section-body">{children}</div>
+    </section>
+  );
+}
 
 function MethodForm({ kind, initial, busy, onSave, onCancel }) {
   const spec = METHOD_SPEC[kind];
@@ -419,6 +444,21 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect } = {
   return (
     <div className="c2-container">
       <aside className="c2-sidebar">
+        <div className="c2-sidebar-header">
+          <div className="c2-sidebar-title">
+            <div className="c2-sidebar-logo">H5</div>
+            <div>
+              <div className="c2-sidebar-module">Contacts</div>
+              <div className="c2-sidebar-count">
+                {loading ? 'Loading…' : `${(people.length + orgs.length).toLocaleString()} records`}
+              </div>
+            </div>
+            <button className="c2-new-btn" onClick={() => setCreating(kind === 'people' ? 'person' : 'organization')}>
+              ＋ New
+            </button>
+          </div>
+        </div>
+
         <div className="c2-kindtabs">
           <button className={kind === 'people' ? 'active' : ''} onClick={() => { setKind('people'); setSelected(null); }}>
             People <span>{people.length.toLocaleString()}</span>
@@ -444,9 +484,12 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect } = {
               <div key={r.id}
                 className={`c2-row${selected?.id === r.id ? ' active' : ''}`}
                 onClick={() => open(r)}>
-                <div className="c2-row-name">{r.name || <em>(no name)</em>}</div>
-                {kind === 'people' && r.title && <div className="c2-row-sub">{r.title}</div>}
-                {kind === 'organizations' && r.parentOrganizationId && <div className="c2-row-sub">has a parent organization</div>}
+                <span className="c2-row-dot" style={{ background: statusColor(r.status) }} />
+                <div className="c2-row-text">
+                  <div className="c2-row-name">{r.name || <em>(no name)</em>}</div>
+                  {kind === 'people' && r.title && <div className="c2-row-sub">{r.title}</div>}
+                  {kind === 'organizations' && r.parentOrganizationId && <div className="c2-row-sub">has a parent organization</div>}
+                </div>
               </div>
             )} />
           )}
@@ -489,12 +532,14 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect } = {
                 {person.notes && <p className="c2-notes">{person.notes}</p>}
                 {actionError && <div className="c2-error">{actionError}</div>}
 
-                <ContactMethods contact={person} busy={busy}
-                  onAdd={(k, v) => act(() => addMethod(person.id, k, v))}
-                  onUpdate={(k, id, v) => act(() => updateMethod(person.id, k, id, v))}
-                  onRemove={(k, id) => act(() => removeMethod(person.id, k, id))} />
+                <Section icon="✉" title="Contact details">
+                  <ContactMethods contact={person} busy={busy}
+                    onAdd={(k, v) => act(() => addMethod(person.id, k, v))}
+                    onUpdate={(k, id, v) => act(() => updateMethod(person.id, k, id, v))}
+                    onRemove={(k, id) => act(() => removeMethod(person.id, k, id))} />
+                </Section>
 
-                <h3>Affiliations</h3>
+                <Section icon="◎" title="Affiliations">
                 {selected.affiliations.length === 0 ? (
                   <p className="c2-none">Not attached to any organization.</p>
                 ) : (
@@ -524,12 +569,12 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect } = {
                   <p className="c2-note">No primary organization chosen.</p>
                 )}
 
-                <div className="c2-picker-block">
-                  <h3>Attach to an organization</h3>
-                  <OrgPicker orgs={orgs} busy={busy} withTitle actionLabel="Attach"
-                    placeholder="Search organizations…"
-                    onPick={(o, title) => act(() => affiliate(person.id, o.id, title))} />
-                </div>
+                  <div className="c2-picker-block">
+                    <OrgPicker orgs={orgs} busy={busy} withTitle actionLabel="Attach"
+                      placeholder="Attach to an organization…"
+                      onPick={(o, title) => act(() => affiliate(person.id, o.id, title))} />
+                  </div>
+                </Section>
               </>
             )}
           </div>
@@ -555,12 +600,14 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect } = {
                 {org.notes && <p className="c2-notes">{org.notes}</p>}
                 {actionError && <div className="c2-error">{actionError}</div>}
 
-                <ContactMethods contact={org} busy={busy}
-                  onAdd={(k, v) => act(() => addMethod(org.id, k, v))}
-                  onUpdate={(k, id, v) => act(() => updateMethod(org.id, k, id, v))}
-                  onRemove={(k, id) => act(() => removeMethod(org.id, k, id))} />
+                <Section icon="✉" title="Contact details">
+                  <ContactMethods contact={org} busy={busy}
+                    onAdd={(k, v) => act(() => addMethod(org.id, k, v))}
+                    onUpdate={(k, id, v) => act(() => updateMethod(org.id, k, id, v))}
+                    onRemove={(k, id) => act(() => removeMethod(org.id, k, id))} />
+                </Section>
 
-                <h3>Parent organization</h3>
+                <Section icon="⌂" title="Parent organization">
                 {org.parent ? (
                   <p className="c2-parent">Part of{' '}
                     <button className="c2-link c2-link--strong" onClick={() => goTo(org.parent.id)}>{org.parent.name}</button>
@@ -578,8 +625,9 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect } = {
                       onPick={o => act(() => setParent(org.id, o.id))} />
                   </>
                 )}
+                </Section>
 
-                <h3>People {orgPeople ? `(${orgPeople.length})` : ''}</h3>
+                <Section icon="◎" title={`People${orgPeople ? ` (${orgPeople.length})` : ''}`}>
                 {!orgPeople ? <p className="c2-none">Loading…</p>
                   : orgPeople.length === 0 ? <p className="c2-none">Nobody attached yet.</p>
                   : (
@@ -593,6 +641,7 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect } = {
                       ))}
                     </ul>
                   )}
+                </Section>
               </>
             )}
           </div>
