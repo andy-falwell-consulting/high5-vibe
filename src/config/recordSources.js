@@ -20,7 +20,7 @@ export const RECORD_SOURCES = [
     sub: f => [f['Type of Project(1)'], f.kanban_status].filter(Boolean).join(' · ') },
   { module: 'products', layout: 'Products & Services_New', cv: 5, type: 'Product', icon: '◫', color: '#d97706',
     title: f => f.Name, sub: f => f.SKU || f.Category || '' },
-  { module: 'estimates', layout: 'Estimates_New', cv: 1, type: 'Estimate', icon: '▤', color: '#10b981',
+  { module: 'estimates', layout: 'Estimates_New', cv: 2, type: 'Estimate', icon: '▤', color: '#10b981',
     title: f => f.zz__Display_Contact__ct || f.Title, sub: f => f.Title !== (f.zz__Display_Contact__ct || f.Title) ? f.Title : '' },
   { module: 'rmi', layout: 'RMI_New', cv: 1, type: 'RMI', icon: '⚠', color: '#f43f5e',
     title: f => f.zz__Display_Organization__ct || f.zz__Display_Contact__ct,

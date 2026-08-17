@@ -191,3 +191,22 @@ export async function getMetaPublic(db, key) {
   if (!cfg) return null;
   return (await redis.get(rk(db, cfg.layout, 'meta'))) || null;
 }
+
+// Force the next runSync to re-page the whole layout from FileMaker.
+//
+// Incremental layouts ask FileMaker "what changed since?", and adding a FIELD
+// to a layout changes no record's modification date — so the replica keeps
+// serving the old, narrower field set indefinitely and the new field simply
+// never appears in the app. That is not hypothetical: _kft__Contact_ID was
+// placed on Estimates_New on 2026-08-17 and stayed invisible until this existed.
+//
+// The stored records are left in place rather than deleted, so the app keeps
+// reading the old set while the re-page runs instead of seeing an empty layout.
+export async function resetReplica(db, key) {
+  const cfg = REPLICATED[key];
+  if (!cfg) throw new Error('layout not replicated: ' + key);
+  const meta = (await redis.get(rk(db, cfg.layout, 'meta'))) || {};
+  const next = { ...meta, phase: 'backfill', cursor: 1, count: 0, total: null, lastModifiedMs: 0 };
+  await redis.set(rk(db, cfg.layout, 'meta'), next);
+  return next;
+}

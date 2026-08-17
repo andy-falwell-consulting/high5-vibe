@@ -151,7 +151,7 @@ export default function App() {
     const PREWARM = [
       { id: 'projects',    layout: RCD_LAYOUT,                opts: { cacheVersion: RCD_CACHE_VERSION, findQuery: RCD_FIND_QUERY, sort: RCD_SORT } },
       { id: 'contacts',    layout: 'Contacts_New',            opts: { cacheVersion: 2, batchSize: 100 } },
-      { id: 'estimates',   layout: 'Estimates_New',           opts: { cacheVersion: 1, batchSize: 100 } },
+      { id: 'estimates',   layout: 'Estimates_New',           opts: { cacheVersion: 2, batchSize: 100 } },
       { id: 'inspections', layout: 'Inspections_New',         opts: { cacheVersion: 1, batchSize: 100 } },
       { id: 'rmi',         layout: 'RMI_New',                 opts: { cacheVersion: 1, batchSize: 100 } },
       { id: 'trainings',   layout: 'trainings_New',           opts: { cacheVersion: 1, batchSize: 100 } },
@@ -284,7 +284,7 @@ export default function App() {
         {visited.has('home') && <div style={{ display: activeModule === 'home' ? 'contents' : 'none' }}><Home onOpen={handlePalettePick} onGoto={handleSelect} onOpenView={(m, v) => navigateTo(m, null, v)} onOpenPalette={() => setPaletteOpen(true)} /></div>}
         {visited.has('reminders') && <div style={{ display: activeModule === 'reminders' ? 'contents' : 'none' }}><Reminders navTarget={navTarget} onClearNav={clearNavTarget} onNavigateTo={navigateTo} /></div>}
         {visited.has('contacts') && <div style={{ display: activeModule === 'contacts' ? 'contents' : 'none' }}><Contacts navTarget={navTarget} onClearNav={clearNavTarget} onNavigateTo={navigateTo} onRecordSelect={makeRecordSelectHandler('contacts')} /></div>}
-        {visited.has('contacts-v2') && <div style={{ display: activeModule === 'contacts-v2' ? 'contents' : 'none' }}><ContactsV2 navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('contacts-v2')} /></div>}
+        {visited.has('contacts-v2') && <div style={{ display: activeModule === 'contacts-v2' ? 'contents' : 'none' }}><ContactsV2 navTarget={navTarget} onClearNav={clearNavTarget} onNavigateTo={navigateTo} onRecordSelect={makeRecordSelectHandler('contacts-v2')} /></div>}
         {visited.has('estimates') && <div style={{ display: activeModule === 'estimates' ? 'contents' : 'none' }}><Estimates navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('estimates')} /></div>}
         {visited.has('inspections') && <div style={{ display: activeModule === 'inspections' ? 'contents' : 'none' }}><Inspections navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('inspections')} /></div>}
         {visited.has('rmi') && <div style={{ display: activeModule === 'rmi' ? 'contents' : 'none' }}><RMI navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('rmi')} /></div>}
