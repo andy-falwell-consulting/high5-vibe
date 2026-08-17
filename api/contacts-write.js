@@ -27,7 +27,7 @@ import { Redis } from '@upstash/redis';
 import {
   K, parse, nextId, getEntity, putEntity, readHash, writeHash,
   reindexPerson, reindexOrg, wouldCycle, displayName, isVibeId,
-  METHODS, methodList, nextMethodId,
+  METHODS, methodList, nextMethodId, tombstoneContact,
 } from './_contacts.js';
 
 const redis = Redis.fromEnv();
@@ -248,13 +248,6 @@ export default async function handler(req, res) {
       const id = str(body.id);
       const { kind, entity } = await getEntity(db, id);
       if (!kind) return res.status(404).json({ error: 'no such contact' });
-      // Only records BORN in Vibe can be removed outright. One derived from
-      // FileMaker still exists there and would simply return on the next sync,
-      // so removing it needs a tombstone — which is Phase 2c, not something to
-      // fake here.
-      if (!isVibeId(id)) {
-        return res.status(400).json({ error: 'that contact came from FileMaker; removing it needs a tombstone, which is not built yet' });
-      }
       const all = await readHash(K.aff(db));
       const mine = [...all.values()].filter(a =>
         String(a.personId) === id || String(a.organizationId) === id);
@@ -264,7 +257,30 @@ export default async function handler(req, res) {
       for (const oid of new Set(mine.map(a => String(a.organizationId)))) await reindexOrg(db, oid);
       await redis.hdel(kind === 'person' ? K.person(db) : K.org(db), id);
       await redis.hdel(kind === 'person' ? K.byPerson(db) : K.byOrg(db), id);
-      return res.status(200).json({ deleted: id, kind, affiliationsRemoved: mine.length, was: entity?.name || displayName(entity || {}) });
+      // A record born in Vibe has nothing to come back from, so only a
+      // FileMaker-derived one is remembered.
+      if (!isVibeId(id)) await tombstoneContact(db, id);
+
+      // An organization that was somebody's parent would leave that child
+      // pointing at nothing, which reads as "part of" with a blank name.
+      let orphanedChildren = 0;
+      if (kind === 'organization') {
+        const orgs = await readHash(K.org(db));
+        const writes = {};
+        for (const o of orgs.values()) {
+          if (String(o.parentOrganizationId ?? '') === id) {
+            writes[o.id] = JSON.stringify({ ...o, parentOrganizationId: null, ...stamp });
+            orphanedChildren++;
+          }
+        }
+        if (orphanedChildren) await writeHash(K.org(db), writes);
+      }
+
+      return res.status(200).json({
+        deleted: id, kind, affiliationsRemoved: mine.length, orphanedChildren,
+        tombstoned: !isVibeId(id),
+        was: entity?.name || displayName(entity || {}),
+      });
     }
 
     return res.status(400).json({ error: `unknown action "${action}"` });

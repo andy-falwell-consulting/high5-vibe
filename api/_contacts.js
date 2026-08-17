@@ -186,6 +186,16 @@ export async function nextId(db, prefix = 'V') {
 
 export const isVibeId = id => /^V[A]?-/.test(String(id));
 
+// Deleting a contact that came from FileMaker has to be REMEMBERED, not just
+// done. Its FileMaker row still exists and `step=contacts` writes every row it
+// reads, so without this the next migration run would faithfully restore
+// someone deliberately removed. Same shape as the file store's tombstones
+// (api/_vibeFiles.js), which hit this first.
+export const contactTombKey = db => `vibe:${db}:contact:deleted`;
+export const tombstoneContact = (db, id) => redis.sadd(contactTombKey(db), String(id));
+export const contactTombstones = db => redis.smembers(contactTombKey(db));
+export const untombstoneContact = (db, id) => redis.srem(contactTombKey(db), String(id));
+
 // ── Contact methods: phones, emails and addresses ─────────────────
 //
 // Stored as arrays ON the contact, not as their own keyspaces. Unlike an
