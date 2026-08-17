@@ -9,6 +9,7 @@
 import { getRecordWithPortals } from './filemaker';
 import { makeVibeAttachments } from './vibeFiles';
 import { generateInspectionReport, inspectionMeta } from './inspectionReport';
+import { listLines } from './inspectionLinesVibe';
 
 const INSPECTIONS_LAYOUT = 'Inspections_New';
 
@@ -19,8 +20,13 @@ export const uploadAttachment = attachments.upload;
 export const deleteAttachment = attachments.remove;
 export const getFreshAttachmentUrl = attachments.freshUrl;
 
-// The report needs every line item; the default getRecord caps portals at 50,
-// so re-fetch the record with a high portal limit before generating.
+// The report needs every line item. They come from Vibe's store, keyed by the
+// inspection's own _kpt__Inspection_ID.
+//
+// The record is still re-fetched with a high portal limit: it supplies the
+// cover-page fields, and its portal is the fallback the report falls back to
+// when Vibe holds no lines for this inspection (getRecord otherwise caps
+// portals at 50, which is what used to truncate long reports).
 async function fullRecord(record) {
   try {
     const res = await getRecordWithPortals(INSPECTIONS_LAYOUT, record.recordId, { inspt_INSPLI: 2000 });
@@ -30,15 +36,21 @@ async function fullRecord(record) {
   }
 }
 
+async function reportInputs(record) {
+  const full = await fullRecord(record);
+  const inspectionId = full.fieldData?._kpt__Inspection_ID || record.fieldData?._kpt__Inspection_ID;
+  const lines = await listLines(inspectionId).catch(() => []);
+  return { full, inspectionId, lines };
+}
+
 // Generate the inspection report PDF and attach it. `onStage` reports progress
 // ('Building PDF…' → 'Uploading…') and the returned card lets the caller show
 // the new attachment immediately.
 export async function generateAndAttachReport(record, onStage) {
   onStage?.('Building PDF…');
-  const full = await fullRecord(record);
-  const { blob, filename } = await generateInspectionReport(full);
+  const { full, inspectionId, lines } = await reportInputs(record);
+  const { blob, filename } = await generateInspectionReport(full, lines);
   const file = new File([blob], filename, { type: 'application/pdf' });
-  const inspectionId = full.fieldData?._kpt__Inspection_ID || record.fieldData?._kpt__Inspection_ID;
   onStage?.('Uploading…');
   return uploadAttachment(inspectionId, file, filename);
 }
@@ -46,8 +58,8 @@ export async function generateAndAttachReport(record, onStage) {
 // Generate + download (no attach).
 export async function downloadReport(record, onStage) {
   onStage?.('Building PDF…');
-  const full = await fullRecord(record);
-  const { blob, filename } = await generateInspectionReport(full);
+  const { full, lines } = await reportInputs(record);
+  const { blob, filename } = await generateInspectionReport(full, lines);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = filename; document.body.appendChild(a); a.click();

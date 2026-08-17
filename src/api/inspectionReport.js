@@ -39,9 +39,21 @@ export function inspectionMeta(record) {
   return { id, site, filename: `Inspection Report ${id}.pdf` };
 }
 
-export function buildInspectionDoc(record, logos) {
+// `lines` are UI-shape rows (see inspectionLinesVibe.toLine): plain keys, not
+// the `inspt_INSPLI::` portal prefixes. Passing them in rather than digging
+// them out of the record is what lets the findings come from Vibe's own store.
+// The portal is still read when no lines are supplied, so a caller that has
+// only a FileMaker record — and any inspection not yet migrated — still works.
+export function buildInspectionDoc(record, logos, lines) {
   const f = record.fieldData || {};
-  const li = (record.portalData && record.portalData['inspt_INSPLI']) || [];
+  const li = Array.isArray(lines) && lines.length
+    ? lines
+    : ((record.portalData && record.portalData['inspt_INSPLI']) || []).map(r => ({
+        Category: r['inspt_INSPLI::Category'] || '',
+        Description: r['inspt_INSPLI::Description'] || '',
+        Element_Grade: r['inspt_INSPLI::Element_Grade'] || '',
+        Quantity: r['inspt_INSPLI::Quantity'] ?? '',
+      }));
   const site = f['inspt_CNTCT__site::Name_Organization'] || f.Organization || '';
   const courseDate = fmtDateNoZero(f.Date);
   const inspector = f['Inspectors Name'] || '';
@@ -57,7 +69,7 @@ export function buildInspectionDoc(record, logos) {
   // rows. Categories not on the list keep their relative position at the end.
   const groups = {};
   li.forEach(r => {
-    const c = r['inspt_INSPLI::Category'] || '';
+    const c = r.Category || '';
     (groups[c] = groups[c] || []).push(r);
   });
   const order = Object.keys(groups).sort((a, b) => {
@@ -117,7 +129,7 @@ export function buildInspectionDoc(record, logos) {
     if (cat === 'History') {
       content.push(
         { text: title, fontSize: 22, alignment: 'center', margin: [0, 6, 0, 30], pageBreak: 'before' },
-        ...rows.map((r, i) => ({ text: descRuns(r['inspt_INSPLI::Description']), margin: [44, i === 0 ? 64 : 0, 0, 10] })),
+        ...rows.map((r, i) => ({ text: descRuns(r.Description), margin: [44, i === 0 ? 64 : 0, 0, 10] })),
       );
       return;
     }
@@ -131,9 +143,9 @@ export function buildInspectionDoc(record, logos) {
       : [{}, { text: 'Grade', bold: true, fontSize: 11 }, { text: 'Description', bold: true, fontSize: 11 }];
     const body = [titleRow, headRow];
     rows.forEach(r => {
-      const g = r['inspt_INSPLI::Element_Grade'] || '';
-      const desc = { text: descRuns(r['inspt_INSPLI::Description']), fontSize: 10, lineHeight: 1.04 };
-      if (hasQty) body.push([{}, { text: g, alignment: 'center', fontSize: 10 }, { text: String(r['inspt_INSPLI::Quantity'] ?? ''), alignment: 'center', fontSize: 10 }, desc]);
+      const g = r.Element_Grade || '';
+      const desc = { text: descRuns(r.Description), fontSize: 10, lineHeight: 1.04 };
+      if (hasQty) body.push([{}, { text: g, alignment: 'center', fontSize: 10 }, { text: String(r.Quantity ?? ''), alignment: 'center', fontSize: 10 }, desc]);
       else body.push([{}, { text: g, alignment: 'center', fontSize: 10 }, desc]);
     });
     content.push({
@@ -154,7 +166,7 @@ export function buildInspectionDoc(record, logos) {
 }
 
 // Lazy-load pdfmake + assets, return { blob, filename }
-export async function generateInspectionReport(record) {
+export async function generateInspectionReport(record, lines) {
   const [pdfmakeMod, assets] = await Promise.all([
     import('pdfmake/build/pdfmake'),
     import('../assets/reportAssets.js'),
@@ -167,7 +179,7 @@ export async function generateInspectionReport(record) {
       italics: 'LiberationSans-Italic.ttf', bolditalics: 'LiberationSans-BoldItalic.ttf',
     },
   };
-  const doc = buildInspectionDoc(record, assets.reportLogos);
+  const doc = buildInspectionDoc(record, assets.reportLogos, lines);
   const { filename } = inspectionMeta(record);
   const blob = await new Promise((resolve, reject) => {
     try { pdfMake.createPdf(doc).getBlob(resolve); } catch (e) { reject(e); }

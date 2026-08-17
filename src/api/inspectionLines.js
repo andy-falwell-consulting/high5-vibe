@@ -1,3 +1,14 @@
+// SUPERSEDED — do not import this module.
+//
+// Inspection line items moved to Vibe's own store in v1.0.337; every consumer
+// now imports inspectionLinesVibe.js. This file still writes FileMaker portals
+// and is kept only as the reference for what the portal shape was.
+//
+// It is a genuine hazard rather than harmless dead code: the two modules export
+// the SAME names (listLines, addLines, updateLine, deleteLine, copyLines) but
+// take different keys — FileMaker recordIds here, _kpt__Inspection_ID and line
+// ids there. Importing this one by mistake would write under keys that look
+// valid and belong to nothing, silently, with no error.
 // Inspection line items — the findings that make up an inspection report.
 // They live in the `inspt_INSPLI` portal on Inspections_New; there is no
 // standalone layout for them in this app, so every write goes through the
