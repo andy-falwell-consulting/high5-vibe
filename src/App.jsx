@@ -151,7 +151,7 @@ export default function App() {
     const PREWARM = [
       { id: 'projects',    layout: RCD_LAYOUT,                opts: { cacheVersion: RCD_CACHE_VERSION, findQuery: RCD_FIND_QUERY, sort: RCD_SORT } },
       { id: 'contacts',    layout: 'Contacts_New',            opts: { cacheVersion: 2, batchSize: 100 } },
-      { id: 'estimates',   layout: 'Estimates_New',           opts: { cacheVersion: 1, batchSize: 100 } },
+      { id: 'estimates',   layout: 'Estimates_New',           opts: { cacheVersion: 2, batchSize: 100 } },
       { id: 'inspections', layout: 'Inspections_New',         opts: { cacheVersion: 1, batchSize: 100 } },
       { id: 'rmi',         layout: 'RMI_New',                 opts: { cacheVersion: 1, batchSize: 100 } },
       { id: 'trainings',   layout: 'trainings_New',           opts: { cacheVersion: 1, batchSize: 100 } },

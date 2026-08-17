@@ -96,7 +96,7 @@ export const RELATED_SOURCES = [
     label: 'Estimates',
     module: 'estimates',
     layout: 'Estimates_New',
-    cv: 1,
+    cv: 2,
     // _kft__Contact_ID was placed on this layout on 2026-08-17. Unlike every
     // other source here it names the organization itself, so it is trusted
     // exclusively — see fkIsOrg and the table above.

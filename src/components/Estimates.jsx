@@ -20,7 +20,9 @@ import DeleteRecordButton from './DeleteRecordButton'
 const toIsoDate = v => { if (!v) return undefined; const [m, d, y] = String(v).split(' ')[0].split('/'); return y ? `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}` : undefined }
 
 const LAYOUT = 'Estimates_New'
-const CACHE_VERSION = 1
+// 2: _kft__Contact_ID was added to the layout on 2026-08-17. A cached copy
+// from before then has no such field, and nothing else would invalidate it.
+const CACHE_VERSION = 2
 
 const STATUS_COLOR = {
   'Draft':       UI.neutral,
