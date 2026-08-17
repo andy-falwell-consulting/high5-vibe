@@ -294,7 +294,7 @@ export default function App() {
         {visited.has('oe-lookup') && <div style={{ display: activeModule === 'oe-lookup' ? 'contents' : 'none' }}><OELookup navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('oe-lookup')} /></div>}
         {visited.has('products') && <div style={{ display: activeModule === 'products' ? 'contents' : 'none' }}><ProductsAndServicesV2 navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('products')} /></div>}
         {visited.has('transactions') && <div style={{ display: activeModule === 'transactions' ? 'contents' : 'none' }}><Transactions onRecordSelect={makeRecordSelectHandler('transactions')} /></div>}
-        {visited.has('projects') && <div style={{ display: activeModule === 'projects' ? 'contents' : 'none' }}><ProjectsWorkspace navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('projects')} /></div>}
+        {visited.has('projects') && <div style={{ display: activeModule === 'projects' ? 'contents' : 'none' }}><ProjectsWorkspace navTarget={navTarget} onClearNav={clearNavTarget} onNavigateApp={navigateTo} onRecordSelect={makeRecordSelectHandler('projects')} /></div>}
         {isAdmin && visited.has('admin') && <div style={{ display: activeModule === 'admin' ? 'contents' : 'none' }}><Admin /></div>}
         {visited.has('help') && <div style={{ display: activeModule === 'help' ? 'contents' : 'none' }}><Help /></div>}
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onPick={handlePalettePick} onAsk={handleAsk} modules={visibleModules} theme={theme} onToggleTheme={toggleTheme} />

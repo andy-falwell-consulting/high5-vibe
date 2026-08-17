@@ -22,6 +22,7 @@
 import { getGoogleSession } from './_googleSession.js';
 import { fmpToken, ALLOWED_DBS } from './_fmp.js';
 import { qboQuery } from './_qbo.js';
+import { readFragment, mergeRecord } from './_vibeStore.js';
 
 export const config = { maxDuration: 30 };
 
@@ -203,12 +204,21 @@ async function fetchPayments(rawInvoices) {
 }
 
 // Read the CCS record's estimate + invoice id reps and parse both.
+//
+// Through the Vibe overlay, not straight from FileMaker. RCD_New is Vibe-owned,
+// so an estimate or invoice number corrected in the app lives in the fragment
+// and never reaches FileMaker — reading FileMaker alone would keep resolving
+// the old number, and the correction would look like it had not saved.
 async function refsFromRecord(db, recordId) {
   const token = await fmpToken(db);
   const r = await fetch(`${FMP_HOST}/fmi/data/v2/databases/${db}/layouts/RCD_New/records/${recordId}`,
     { headers: { Authorization: `Bearer ${token}` } });
   const j = await r.json().catch(() => ({}));
-  const fd = j?.response?.data?.[0]?.fieldData;
+  const rec = j?.response?.data?.[0];
+  const frag = await readFragment(db, 'RCD_New', recordId);
+  // A project created in Vibe has no FileMaker record at all; the fragment is
+  // the whole of it.
+  const fd = rec ? mergeRecord(rec, frag)?.fieldData : (frag?.__created ? frag.fieldData : null);
   if (!fd) return { docs: [], invoiceRefs: [], org: null };
   const rawEst = [1, 2, 3, 4, 5].map(i => fd[`_kat__QuickBooks_Estimate_ID(${i})`]).filter(Boolean).join(' ');
   const rawInv = [1, 2, 3].map(i => fd[`_kat__QuickBooks_Invoice_ID(${i})`]).filter(Boolean).join(' ');

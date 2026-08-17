@@ -96,6 +96,17 @@
 .cv2-pick-btn:hover { color: var(--cv2-text); border-color: var(--cv2-text-3); }
 .cv2-hero-none { color: var(--cv2-text-4); font-style: italic; }
 
+/* Organization / contact as links to their own record. Inherits the type it
+   sits in — the org line is Oswald 31px, the contact line 17px — so the link
+   reads as the heading it replaces rather than as a control. */
+.cv2-hero-link {
+  font: inherit; color: inherit; background: none; border: 0; padding: 0;
+  cursor: pointer; text-align: left;
+  border-bottom: 1px solid transparent; transition: color .12s, border-color .12s;
+}
+.cv2-hero-link:hover { color: var(--h5-red); border-bottom-color: var(--h5-red); }
+.cv2-hero-link:focus-visible { outline: 2px solid var(--h5-red); outline-offset: 2px; }
+
 .cv2-ic { color: var(--cv2-text-4); font-size: 15px; }
 .cv2-status { flex-shrink: 0; border: 1px solid; border-radius: 20px; padding: 5px 12px; font-size: 15px; font-weight: 600; outline: none; cursor: pointer; font-family: inherit; appearance: none; }
 

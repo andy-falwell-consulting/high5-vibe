@@ -15,7 +15,7 @@ import ListToolbar, { useListControls, ListBody } from './ListControls';
 import AttachmentsPanel from './AttachmentsPanel';
 import ContactPicker from './ContactPicker';
 import { listCcsAttachments, uploadCcsAttachment, deleteCcsAttachment, ccsAttachmentUrl } from '../api/ccsAttachments';
-import { generateAndAttachWorkOrder, downloadWorkOrder } from '../api/ccsWorkOrder';
+import { downloadWorkOrder } from '../api/ccsWorkOrder';
 import './CCSv2.css';
 import DeleteRecordButton from './DeleteRecordButton';
 
@@ -116,14 +116,21 @@ const PHASES = [
 
 // Contract & financials block — mirrors the RCD_New "Additional Info" form.
 // `sent` is a date/text field; `rcv` is the "Received" checkbox (optional).
-// `ref: true` rows are read-only QBO identifiers.
+//
+// Estimate # and Invoice # are editable. They were read-only on the grounds
+// that they are QuickBooks' identifiers, but they are not — they are this
+// record's *reference* to a QuickBooks document, typed by hand, and getting one
+// wrong is exactly what the "belongs to another customer" warning below exists
+// to catch. Making them read-only meant seeing the warning and being unable to
+// act on it. RCD_New is Vibe-owned, so these save to the overlay; api/ccs-
+// estimate.js reads the overlay too, so a corrected number re-resolves live.
 const FIN_ROWS = [
-  { label: 'Estimate #',        sent: '_kat__QuickBooks_Estimate_ID(1)', type: 'text', ref: true },
+  { label: 'Estimate #',        sent: '_kat__QuickBooks_Estimate_ID(1)', type: 'text' },
   { label: 'Contract Sent',     sent: 'Contract_Date_Sent',           type: 'date', rcv: 'cd_Received Contract' },
   { label: 'Deposit Inv. Sent', sent: 'Report Date Sent',             type: 'date', rcv: 'cd_Received Deposit' },
   { label: 'PO #',              sent: 'po_number',                    type: 'text', rcv: 'cd_Received PO' },
   { label: 'Final Inv. Sent',   sent: 'Final Sent',                   type: 'date', rcv: 'Final_Invoice_Received' },
-  { label: 'Invoice #',         sent: '_kat__QuickBooks_Invoice_ID(1)', type: 'text', ref: true },
+  { label: 'Invoice #',         sent: '_kat__QuickBooks_Invoice_ID(1)', type: 'text' },
 ];
 
 // Prominent one-click actions → checklist field they satisfy.
@@ -233,7 +240,9 @@ function InlineDate({ value, onChange }) {
 }
 
 // ── Main ─────────────────────────────────────────────────────────
-export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSelect }) {
+// onNavigateTo moves between CCS's own views (workspace ↔ board);
+// onNavigateApp leaves the module entirely, for the contact links in the hero.
+export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearNav, onRecordSelect }) {
   const { records, total } = useAllRecords(LAYOUT, { cacheVersion: RCD_CACHE_VERSION, findQuery: RCD_FIND_QUERY, sort: RCD_SORT });
   const valueLists = useValueLists(LAYOUT, { [VL_PROJECT_TYPE]: PROJECT_TYPES, [VL_BUILDER]: BUILDER_OPTIONS });
   const board = useKanbanBoard();
@@ -251,6 +260,26 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   const contactsById = useMemo(() => {
     const m = new Map();
     for (const c of contactRecords) m.set(String(c.fieldData?._kpt__Contact_ID), c.fieldData);
+    return m;
+  }, [contactRecords]);
+
+  // Organization name → its contact id, so the organization in the hero can
+  // link to its own record. Most projects have no Vibe organization assignment,
+  // and FileMaker's zz__Display_Organization__ct is a calculated name carrying
+  // no key — without this the link would almost never appear.
+  //
+  // Ambiguous names are deliberately dropped rather than resolved to whichever
+  // matched first: 19 organization names are shared by more than one record, and
+  // silently opening the wrong one is worse than not linking.
+  const orgIdByName = useMemo(() => {
+    const m = new Map();
+    for (const c of contactRecords) {
+      const fd = c.fieldData;
+      if (String(fd?.Organization) !== '1') continue;
+      const name = String(fd?.Name_Organization || '').trim().toLowerCase();
+      if (!name) continue;
+      m.set(name, m.has(name) ? null : String(fd._kpt__Contact_ID));
+    }
     return m;
   }, [contactRecords]);
   const opsLead = useOpsLeads(getCurrentEnv().db);
@@ -274,7 +303,6 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   const [woBusy, setWoBusy]     = useState(null); // 'attach' | 'download' | null
   const [woStage, setWoStage]   = useState(null);
   const [woError, setWoError]   = useState(null);
-  const [attReload, setAttReload] = useState(0); // bump to make AttachmentsPanel re-list
   const [contactPicker, setContactPicker] = useState(false);
   const [orgPicker, setOrgPicker] = useState(false);
   const isResizing = useRef(false);
@@ -299,19 +327,18 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   }, [f]);
   const toggle = useCallback(fk => setEdits(p => ({ ...p, [fk]: isOn(fk in p ? p[fk] : f[fk]) ? 0 : 1 })), [f]);
 
-  // Work order PDF for the builder crew — client-side render, attached (or
-  // downloaded) via the same pipeline CCS photos already use.
-  async function handleGenerateWorkOrder(attach) {
+  // Work order PDF for the builder crew — client-side render, downloaded.
+  //
+  // The "generate & attach" variant was removed on request: it filed a copy on
+  // the record, which nobody wanted, and left two buttons doing nearly the same
+  // thing. Attaching is still available generally through the attachments panel
+  // if a work order ever does need to live on the record.
+  async function handleGenerateWorkOrder() {
     if (!selected) return;
-    setWoBusy(attach ? 'attach' : 'download');
+    setWoBusy('download');
     setWoStage('Building PDF…'); setWoError(null);
     try {
-      if (attach) {
-        await generateAndAttachWorkOrder(selected, setWoStage);
-        setAttReload(n => n + 1); // tell the attachments panel to re-list
-      } else {
-        await downloadWorkOrder(selected, setWoStage);
-      }
+      await downloadWorkOrder(selected, setWoStage);
     } catch (e) { setWoError(e.message || 'Work order failed'); }
     finally { setWoBusy(null); setWoStage(null); }
   }
@@ -545,6 +572,17 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
   const org = vibeOrgName || f.zz__Display_Organization__ct || '—';
   const orgIsFromVibe = !!vibeOrgName;
 
+  // Vibe's assignment is an id already; otherwise resolve the displayed name,
+  // which yields null when more than one organization answers to it.
+  const orgLinkId = vibeOrgId || orgIdByName.get(String(org).trim().toLowerCase()) || '';
+
+  // '<unassigned>' is what the FileMaker calc renders when no contact is set —
+  // a label, not a name, so it must never read as one or be linked.
+  const hasContact = !!f.zz__Display_Contact__ct && f.zz__Display_Contact__ct !== '<unassigned>';
+  // Contacts v2 keys on _kpt__Contact_ID, which is exactly what this FK holds,
+  // and resolves either a person or an organization from the one id.
+  const contactId = String(f._kft__Contact_ID || '').trim();
+
   return (
     <div className="cv2-root">
       <nav className="cv2-nav" style={{ width: navWidth }}>
@@ -612,18 +650,26 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                   <div className="cv2-hero-id">
                     <div className="cv2-hero-type">{projectTypeSelected.join(' · ') || 'Project'}</div>
                     <h1 className="cv2-hero-org">
-                      {org}
+                      {/* Plain text when no id can be established — a link that
+                          opens the wrong organization is worse than none. */}
+                      {orgLinkId
+                        ? <button type="button" className="cv2-hero-link" title="Open this organization"
+                            onClick={() => onNavigateApp?.('contacts-v2', orgLinkId)}>{org}</button>
+                        : org}
                       <button className="cv2-pick-btn" onClick={() => setOrgPicker(true)} title="Assign this project to an organization">
                         {orgIsFromVibe || f.zz__Display_Organization__ct ? 'Change' : 'Assign'}
                       </button>
                     </h1>
                     <div className="cv2-hero-contact">
                       <span className="cv2-ic">◉</span>
-                      {f.zz__Display_Contact__ct && f.zz__Display_Contact__ct !== '<unassigned>'
-                        ? f.zz__Display_Contact__ct
+                      {hasContact
+                        ? (contactId
+                            ? <button type="button" className="cv2-hero-link" title="Open this contact"
+                                onClick={() => onNavigateApp?.('contacts-v2', String(contactId))}>{f.zz__Display_Contact__ct}</button>
+                            : f.zz__Display_Contact__ct)
                         : <span className="cv2-hero-none">No contact</span>}
                       <button className="cv2-pick-btn" onClick={() => setContactPicker(true)} title="Choose the contact for this project">
-                        {f.zz__Display_Contact__ct && f.zz__Display_Contact__ct !== '<unassigned>' ? 'Change' : 'Assign'}
+                        {hasContact ? 'Change' : 'Assign'}
                       </button>
                     </div>
                   </div>
@@ -717,11 +763,9 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                       <div className="cv2-fin-line" key={row.label}>
                         <span className="cv2-fin-label">{row.label}</span>
                         <div className="cv2-fin-input">
-                          {row.ref
-                            ? <span className="cv2-fin-ref">{val(row.sent) || '—'}</span>
-                            : row.type === 'date'
-                              ? <InlineDate value={val(row.sent)} onChange={v => stage(row.sent, v)} />
-                              : <InlineText value={val(row.sent)} onChange={v => stage(row.sent, v)} placeholder="—" />}
+                          {row.type === 'date'
+                            ? <InlineDate value={val(row.sent)} onChange={v => stage(row.sent, v)} />
+                            : <InlineText value={val(row.sent)} onChange={v => stage(row.sent, v)} placeholder="—" />}
                         </div>
                         {row.rcv
                           ? <button className={`cv2-fin-rcv${isOn(val(row.rcv)) ? ' on' : ''}`} onClick={() => toggle(row.rcv)}>
@@ -829,11 +873,8 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                     <label>Work order</label>
                     <InlineText value={val('Work Order')} onChange={v => stage('Work Order', v)} placeholder="Add a work order…" area big />
                     <div className="cv2-wo-actions">
-                      <button type="button" className="cv2-wo-btn" disabled={!!woBusy} onClick={() => handleGenerateWorkOrder(true)}>
-                        {woBusy === 'attach' ? (woStage || 'Working…') : '＋ Generate work order & attach'}
-                      </button>
-                      <button type="button" className="cv2-wo-btn" disabled={!!woBusy} onClick={() => handleGenerateWorkOrder(false)}>
-                        {woBusy === 'download' ? (woStage || 'Working…') : '⤓ Download work order'}
+                      <button type="button" className="cv2-wo-btn" disabled={!!woBusy} onClick={handleGenerateWorkOrder}>
+                        {woBusy ? (woStage || 'Working…') : '⤓ Download work order'}
                       </button>
                     </div>
                     {woError && <p className="cv2-wo-error">{woError}</p>}
@@ -974,7 +1015,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onClearNav, onRecordSel
                 </div>
               )}
 
-              <AttachmentsPanel parentId={f._kpt__RCD_ID} api={CCS_ATT_API} invoiceDocNumber={f['_kat__QuickBooks_Invoice_ID(1)']} reloadSignal={attReload} />
+              <AttachmentsPanel parentId={f._kpt__RCD_ID} api={CCS_ATT_API} invoiceDocNumber={f['_kat__QuickBooks_Invoice_ID(1)']} />
 
               <div className="cv2-meta">
                 ID {f._kpt__RCD_ID} · Record {selected.recordId} · Created {f.zz__Created_On?.split(' ')[0] || '—'} by {f.zz__Created_By} · Modified {f.zz__Modified_On?.split(' ')[0] || '—'} by {f.zz__Modified_By}
