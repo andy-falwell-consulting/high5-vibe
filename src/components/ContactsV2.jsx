@@ -204,54 +204,70 @@ function Fields({ spec, values, onChange, autoFocusFirst }) {
   ));
 }
 
-function CreateModal({ kind, onClose, onCreated }) {
-  const [fields, setFields] = useState({ first: '', last: '', title: '', name: '' });
+// One modal for both kinds, with the choice made inside it.
+//
+// It used to be two buttons deciding for you before the modal opened, which
+// meant getting it wrong cost a cancel and a restart. The kind is a control
+// here, and the fields follow it.
+//
+// Deliberately the SHORTEST form that produces a valid record: an organization
+// needs only its name, a person only a name and what they do. Everything else —
+// status, type, site number, notes, and the phones, emails and addresses — is
+// edited on the record once it exists, where there is room to show it properly.
+// A create form that asks for everything gets abandoned or filled with guesses.
+const CREATE_FIELDS = {
+  person: PERSON_FORM.filter(f => ['first', 'last', 'title'].includes(f.key)),
+  organization: ORG_FORM.filter(f => f.key === 'name'),
+};
+function CreateModal({ initialKind, onClose, onCreated }) {
+  const [kind, setKind] = useState(initialKind === 'organizations' ? 'organization' : 'person');
+  // One store across both kinds. `status` and `notes` are on both forms, so
+  // switching keeps what was typed rather than quietly discarding it.
+  const [values, setValues] = useState({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
-  const set = (k, v) => setFields(p => ({ ...p, [k]: v }));
+  const set = (k, v) => setValues(p => ({ ...p, [k]: v }));
 
+  const spec = CREATE_FIELDS[kind];
   const canSave = kind === 'person'
-    ? !!(fields.first.trim() || fields.last.trim())
-    : !!fields.name.trim();
+    ? !!(String(values.first || '').trim() || String(values.last || '').trim())
+    : !!String(values.name || '').trim();
 
   async function save() {
+    if (!canSave || busy) return;
     setBusy(true); setError(null);
     try {
-      const r = kind === 'person'
-        ? await createPerson({ first: fields.first, last: fields.last, title: fields.title })
-        : await createOrganization({ name: fields.name });
-      onCreated(kind === 'person' ? r.person : r.organization);
-    } catch (e) { setError(e.message); }
-    finally { setBusy(false); }
+      // Only the chosen kind's fields are sent. The shared store may hold a
+      // name typed before switching to Person, and the endpoint rejects a field
+      // it does not own rather than storing it quietly. Status is left out
+      // entirely so the server applies its own default rather than an empty
+      // string standing in for one.
+      const payload = Object.fromEntries(spec.map(f => [f.key, values[f.key] ?? '']));
+      const r = kind === 'person' ? await createPerson(payload) : await createOrganization(payload);
+      onCreated(kind === 'person' ? r.person : r.organization, kind);
+    } catch (e) { setError(e.message); setBusy(false); }
   }
 
   return (
     <div className="c2-overlay" onClick={onClose}>
-      <div className="c2-modal" onClick={e => e.stopPropagation()}>
-        <h2>{kind === 'person' ? 'New person' : 'New organization'}</h2>
-        {kind === 'person' ? (
-          <>
-            {/* Two name fields, which is the entire point. */}
-            <label className="c2-lbl">First name
-              <input className="c2-input" autoFocus value={fields.first} onChange={e => set('first', e.target.value)} />
-            </label>
-            <label className="c2-lbl">Last name
-              <input className="c2-input" value={fields.last} onChange={e => set('last', e.target.value)} />
-            </label>
-            <label className="c2-lbl">Title
-              <input className="c2-input" value={fields.title} onChange={e => set('title', e.target.value)} />
-            </label>
-          </>
-        ) : (
-          <label className="c2-lbl">Organization name
-            <input className="c2-input" autoFocus value={fields.name} onChange={e => set('name', e.target.value)} />
-          </label>
-        )}
+      <div className="c2-modal" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
+        <h2>New contact</h2>
+
+        <div className="c2-kindpick" role="radiogroup" aria-label="What are you adding?">
+          {[['person', 'Person'], ['organization', 'Organization']].map(([k, label]) => (
+            <button key={k} type="button" role="radio" aria-checked={kind === k}
+              className={kind === k ? 'active' : ''}
+              disabled={busy} onClick={() => setKind(k)}>{label}</button>
+          ))}
+        </div>
+
+        <Fields spec={spec} values={values} onChange={set} autoFocusFirst key={kind} />
+
         {error && <div className="c2-error">{error}</div>}
         <div className="c2-modal-actions">
           <button className="c2-btn" onClick={onClose} disabled={busy}>Cancel</button>
           <button className="c2-btn c2-btn--primary" onClick={save} disabled={busy || !canSave}>
-            {busy ? 'Saving…' : 'Create'}
+            {busy ? 'Saving…' : `Create ${kind}`}
           </button>
         </div>
       </div>
@@ -320,6 +336,8 @@ function DeleteContact({ kind, entity, name, affiliations, busy, onDeleted }) {
 }
 
 function EditForm({ kind, entity, busy, error, onSave, onCancel, onDeleted, affiliations = 0, name }) {
+  // The FULL field set, not the short create form — everything the create modal
+  // leaves out is meant to be filled in here.
   const spec = kind === 'person' ? PERSON_FORM : ORG_FORM;
   const [values, setValues] = useState(() =>
     Object.fromEntries(spec.map(f => [f.key, entity[f.key] ?? ''])));
@@ -524,9 +542,7 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect } = {
                 {loading ? 'Loading…' : `${(people.length + orgs.length).toLocaleString()} records`}
               </div>
             </div>
-            <button className="c2-new-btn" onClick={() => setCreating(kind === 'people' ? 'person' : 'organization')}>
-              ＋ New
-            </button>
+            <button className="c2-new-btn" onClick={() => setCreating(kind)}>＋ New</button>
           </div>
         </div>
 
@@ -567,8 +583,7 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect } = {
         </div>
 
         <div className="c2-newbar">
-          <button className="c2-btn" onClick={() => setCreating('person')}>+ Person</button>
-          <button className="c2-btn" onClick={() => setCreating('organization')}>+ Organization</button>
+          <button className="c2-btn" onClick={() => setCreating(kind)}>＋ New contact</button>
         </div>
       </aside>
 
@@ -725,12 +740,14 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect } = {
 
       {creating && (
         <CreateModal
-          kind={creating}
+          initialKind={creating}
           onClose={() => setCreating(null)}
-          onCreated={rec => {
+          onCreated={(rec, madeKind) => {
             setCreating(null);
-            if (creating === 'person') { setPeople(p => [rec, ...p]); setKind('people'); }
-            else { setOrgs(o => [rec, ...o]); setKind('organizations'); }
+            // The modal reports which kind it made — the choice happens inside
+            // it, so what was pre-selected when it opened means nothing here.
+            if (madeKind === 'person') setPeople(p => [rec, ...p]);
+            else setOrgs(o => [rec, ...o]);
             open(rec);
           }}
         />
