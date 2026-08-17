@@ -375,7 +375,13 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect } = {
       // a bug, so the kind comes from what the server actually returned rather
       // than from whatever tab happened to be open.
       setKind(d.kind === 'organization' ? 'organizations' : 'people');
-      setSelected(d);
+      // The id has to be carried onto the resolved record. /api/contacts
+      // answers { kind, person|organization, … } with no id at the top level,
+      // so setting the response alone dropped `selected.id` — which is what the
+      // sidebar highlight and ListBody's scroll-into-view both key on. The row
+      // for the open record has been silently unhighlighted since this module
+      // shipped; it only became obvious once records could link to each other.
+      setSelected({ ...d, id: rec.id });
       syncList(d);
       if (d.kind === 'organization') {
         const op = await getOrganizationPeople(rec.id);
