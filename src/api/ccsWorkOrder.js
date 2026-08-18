@@ -70,11 +70,39 @@ export function workOrderMeta(record) {
   return { id, org, filename: `Work Order ${org} ${id}.pdf` };
 }
 
+// Two names are "the same" for de-duplication if they match once case and
+// punctuation are ignored, or if one is a prefix of the other. The prefix case
+// is not hypothetical: one RPI project's billing block opens with "Rensselaer
+// Polytechnic Institute " while the organization field reads "Rensselaer
+// Polytechnic Institute RPI", so an exact comparison would print both.
+const nameKey = v => String(v || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+function sameish(a, b) {
+  const x = nameKey(a), y = nameKey(b);
+  if (!x || !y) return false;
+  return x === y || x.startsWith(y) || y.startsWith(x);
+}
+
 export function buildWorkOrderDoc(record, logos, contactInfo) {
   const f = record.fieldData || {};
   const org = f.zz__Display_Organization__ct || '—';
   const contact = f.zz__Display_Contact__ct || '';
   const addrLines = String(f['Address_Block_Billing'] || '').split(/\r|\n/).map(s => s.trim()).filter(Boolean);
+  // The billing block ALREADY opens with the organization and contact names,
+  // so prepending them printed each one twice. They are still prepended when
+  // the block does not carry them — 189 of 1,000 projects have no block at all,
+  // and those would otherwise lose the name entirely.
+  const blockHasOrg = addrLines.some(l => sameish(l, org));
+  const blockHasContact = addrLines.some(l => sameish(l, contact));
+  const addressStack = [
+    ...(blockHasOrg ? [] : [org]),
+    ...(blockHasContact ? [] : [contact]),
+    ...addrLines,
+  ].filter(Boolean);
+
+  // The project's type(s), not its organization name — the organization is
+  // already the first line of the address above. Type of Project is a 3-rep
+  // field and a project can carry more than one.
+  const projectTypes = [1, 2, 3].map(i => f[`Type of Project(${i})`]).filter(Boolean).join(' · ');
   // Vibe's values, with FileMaker's related fields left as the fallback. They
   // are empty on every record measured, so this is belt-and-braces rather than
   // a real second source — but it costs nothing and keeps the sheet working if
@@ -101,7 +129,7 @@ export function buildWorkOrderDoc(record, logos, contactInfo) {
       {
         columns: [
           { image: logos.header, width: 58 },
-          { text: 'Work order', fontSize: 22, alignment: 'right', margin: [0, 10, 0, 0] },
+          { text: 'Work Order', fontSize: 22, alignment: 'right', margin: [0, 10, 0, 0] },
         ],
         margin: [0, 0, 0, 10],
       },
@@ -113,7 +141,7 @@ export function buildWorkOrderDoc(record, logos, contactInfo) {
             width: '*',
             stack: [
               { text: 'Address', color: '#444444', fontSize: 10, margin: [0, 0, 0, 3] },
-              { text: [org, contact, ...addrLines].filter(Boolean).join('\n'), fontSize: 11, lineHeight: 1.3 },
+              { text: addressStack.join('\n'), fontSize: 11, lineHeight: 1.3 },
             ],
           },
           {
@@ -130,7 +158,7 @@ export function buildWorkOrderDoc(record, logos, contactInfo) {
 
       { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 486, y2: 0, dash: { length: 3 }, lineWidth: 0.75, lineColor: '#999999' }], margin: [0, 0, 0, 14] },
 
-      row('Project', org),
+      row('Project', projectTypes),
       row('Staff', staff),
       row('Dates', dates),
 
