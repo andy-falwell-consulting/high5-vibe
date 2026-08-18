@@ -8,7 +8,7 @@ import { formatPhone, telHref } from '../../api/_phone';
 import { useRelatedRecords, sharedNameCount } from '../hooks/useRelatedRecords';
 import { addCachedRecord } from '../api/filemaker';
 import { createVibeRecord } from '../api/vibeRecords';
-import { contactDisplayFields } from '../config/contactDisplay';
+import { displayFieldsForContact } from '../api/contactDisplay';
 import {
   listPeople, listOrganizations, getContact, getOrganizationPeople,
   createPerson, createOrganization, updateContact,
@@ -975,15 +975,13 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
     setRiskBusy(true); setRiskError(null);
     try {
       // Stamp the names FileMaker would have calculated — without them the RMI
-      // is unsearchable by organization in its own module. Contacts v2 holds
-      // its own entities rather than Contacts_New fieldData, so the names come
-      // from there; whichever kind is selected is the one we can name.
-      const names = selected?.kind === 'organization'
-        ? { org: selected.organization?.name || '' }
-        : { person: selected.person?.displayName || '' };
+      // is unsearchable by organization in its own module. Resolved server-side
+      // from the same contact model this page is already showing, so a person's
+      // organization comes from their affiliation rather than being left blank.
+      const { fields: display } = await displayFieldsForContact('RMI_New', id);
       const fieldData = {
         _kft__Contact_ID: String(id),
-        ...contactDisplayFields('RMI_New', names),
+        ...display,
         Status: 'Active',
         Level_of_Risk: 'High',
         Entry_Date: new Date().toLocaleDateString('en-US'),

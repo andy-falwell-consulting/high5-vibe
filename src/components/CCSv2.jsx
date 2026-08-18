@@ -7,8 +7,9 @@ import { useNaFlags } from '../hooks/useNaFlags';
 import { useCcsOrgs } from '../hooks/useCcsOrgs';
 import { useOpsLeads } from '../hooks/useOpsLeads';
 import { RCD_LAYOUT, RCD_CACHE_VERSION, RCD_FIND_QUERY, RCD_SORT } from '../config/ccsCache';
-import { getRecord, prefetchRecord, updateRecord, patchCachedRecord, invalidateRecord } from '../api/filemaker';
+import { getRecord, patchCachedRecord, invalidateRecord } from '../api/filemaker';
 import { updateVibeRecord } from '../api/vibeRecords';
+import { displayFieldsForContact } from '../api/contactDisplay';
 import { getCurrentEnv } from '../config/fmpEnvironments';
 import { qboLink } from '../config/qboLinks';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
@@ -483,13 +484,16 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
   // sent. Staging it would leave the panel showing the old contact's details
   // next to the new name until Save.
   //
-  // STILL WRITES TO FILEMAKER — the one exception left on this layout after
-  // Phase 1c, and deliberately so. Reassigning the contact re-derives a whole
-  // family of FileMaker calcs (zz__Display_Contact__ct, the billing address
-  // block, the related phone and email). Writing just _kft__Contact_ID to a Vibe
-  // fragment would change the id and leave every one of those showing the
-  // previous contact. Moving it needs a decision about which of those fields
-  // Vibe stores itself — see Phase 1d.
+  // Writes to VIBE as of Phase C1. This was the last FileMaker write on this
+  // layout, kept there because reassigning the contact re-derives a family of
+  // FileMaker calcs that a Vibe fragment could not reproduce. It can now:
+  // api/_contactDisplay.js resolves the names and the billing address block
+  // from Vibe's own contact model, measured at 295/295 names and 294/295
+  // organizations over 300 production projects (docs/derived-fields-audit.md).
+  //
+  // The related phone and email are NOT reproduced, and deliberately: they are
+  // empty on all 1,000 sampled production records, so there has never been
+  // anything there to carry over.
   //
   // NOTE: this sets the CONTACT only. A CCS record's Organization comes from a
   // second link that is not writable over the Data API (nothing on any
@@ -503,13 +507,27 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
     if (!selected || !contactId) return;
     setSaving(true); setSaveStatus(null); setSaveErrorMsg(null);
     try {
-      const res = await updateRecord(LAYOUT, selected.recordId, { _kft__Contact_ID: contactId });
-      if (res.messages?.[0]?.code !== '0') { setSaveStatus('error'); return; }
-      invalidateRecord(LAYOUT, selected.recordId);
-      const fresh = (await getRecord(LAYOUT, selected.recordId))?.response?.data?.[0];
-      if (fresh) {
-        setSelected(fresh);
-        patchCachedRecord(RCD_LAYOUT, RCD_CACHE_VERSION, selected.recordId, fresh.fieldData);
+      // Vibe resolves what FileMaker used to re-derive. No organization hint:
+      // the whole point is that the contact is CHANGING, so the organization
+      // already on the record describes the OLD one and would drag it forward.
+      const { fields: display, resolved } = await displayFieldsForContact(
+        LAYOUT, contactId, { clearAddress: true });
+
+      // clearAddress above is deliberate. The block currently on the record is
+      // the previous contact's, so leaving it when the new one cannot be
+      // resolved would keep printing a real address for the wrong organization
+      // on work orders. Blank is recoverable; wrong is not.
+      const edits = { _kft__Contact_ID: contactId, ...display };
+      await updateVibeRecord(LAYOUT, selected.recordId, edits);
+      patchCachedRecord(RCD_LAYOUT, RCD_CACHE_VERSION, selected.recordId, edits);
+      setSelected(prev => ({ ...prev, fieldData: { ...prev.fieldData, ...edits } }));
+
+      if (resolved && !resolved.addressBlock) {
+        setSaveStatus('error');
+        setSaveErrorMsg(resolved.ambiguous
+          ? 'Contact changed. This person belongs to more than one organization, so the billing address was cleared rather than guessed — set it on the contact.'
+          : 'Contact changed. No address is on file for this contact, so the billing address was cleared.');
+        return;
       }
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus(null), 2500);
