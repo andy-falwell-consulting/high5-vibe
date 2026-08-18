@@ -1,12 +1,17 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { BRAND, UI } from '../config/brandColors'
-import { getRecord, prefetchRecord, updateRecord, invalidateRecord, patchCachedRecord } from '../api/filemaker';
+import { getRecord, prefetchRecord, invalidateRecord, patchCachedRecord } from '../api/filemaker';
 import { useAllRecords } from '../hooks/useAllRecords';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
 import RecordSaveBar from './RecordSaveBar';
 import AttachmentsPanel from './AttachmentsPanel';
 import { trainingAttachments } from '../api/trainingAttachments';
 import { generateAndAttachWorkOrder, downloadWorkOrder } from '../api/trainingWorkOrder';
+import { LayoutCard, StatTiles, Pipeline, FinancialRows, ThirdsRow, ContactDetails } from './RecordLayout';
+import { PIPELINE_STAGES, PIPELINE_SHORT, ALL_STATUSES, stageIndex, statusColor as trnStatusColor } from '../config/trainingStatus';
+import { contactDetails } from '../api/contactLookup';
+import { updateVibeRecord } from '../api/vibeRecords';
+import { getCurrentEnv } from '../config/fmpEnvironments';
 import './Trainings.css';
 import DeleteRecordButton from './DeleteRecordButton'
 
@@ -62,7 +67,6 @@ const LOGISTICS_FIELDS = [
 ];
 
 // Dropdown options mirrored from the trainings_New layout's FileMaker value lists.
-const STATUS_OPTIONS = ['Inquiry', 'Follow-up Needed', 'Proposed', 'Approved/Needs to be D-Invoiced & TC', 'Waiting on $ & Signed TC', 'Confirmed/Scheduled', 'Completed', 'Final Invoiced', 'No Go', 'Keene EOL/C&S', 'Out Reach', 'Other'];
 const AUDIENCE_OPTIONS = ['Corporate', 'Adult', 'College', 'Youth Public', 'Youth Private', 'EOL'];
 const PROGRAM_TYPES = ['Adventure Basics: Level 1 Training', 'Adventure Facilitaton Training', 'Beyond Basics: Level 2 Training', 'CATSEL - custom', 'Certification Exam - custom', 'CIT Training', 'Climbing Wall/Tower & Belay Skills Training', 'Corporate Program', 'Curriculum Writing', 'Consultation', 'Dialogue', 'EOL/SEL', 'EOL Sports', 'Game Bag Training', 'Gathering Again (Games & Lows)', 'Gathering Again 2 (High Elements)', 'High Elements and Belay Skills Training', 'Leadership Development', 'Low Elements Course Training', 'Low Traverse Wall Training', 'Managing an Adventure Program', 'Mastermind/Adventure Circuit', 'New Student Orientation ', 'Portable Adventure', 'Program Review', 'Team-building', 'Team Development', 'Technical Skills Refresher', 'Technical Skills Training', 'Technical Skills Verification', 'Therapeutic', 'Virtual Team-building', 'Virtual Team Development', 'Virtual Training', 'Keynote', 'Playnote', 'Other'];
 const TRAINER_OPTIONS = ['Phil Brown', 'Lisa Hunt', 'Kyra Richardson', 'Elyse Norton', 'Cam Miller', 'Chris Damboise', 'Rich Keegan', 'Joshua Fisher', 'Alison Jackson-Frasier', 'Lisa Howard', 'Sadie Graham', 'Andrew  Wood', 'Olivia Howry', 'Hanne Bailey', 'Sam Copland', 'Stefanie Frazee', 'Jeff Frigon', 'Chris Ortiz', 'Ryan McCormick', 'Anne Louise Wagner', 'Chris Sanchez', 'Ky Schroeher', 'Jim Grout', 'Jiin Cruz', 'Sarah Morse', 'Phoebe Connolly', 'Ana Devlin Gauthier', 'Julia Stifler', 'Becky Proulx', 'Ron Vercellone', 'Amanda Klein', 'Mark Flynn', 'Beth Sayers', 'Nate Folan', 'Hutch Hutchinson', 'Stephanie Globus-Hoenig', 'Emily Kehoe', 'Tim Abraham', 'Ian Doak', 'Todd Brown', 'Jamie Thibodeau', 'Geoff Ward', "Constance O'Brien", 'Morgan Wiseman', 'Other'];
@@ -187,6 +191,25 @@ function Section({ title, icon, children }) {
   );
 }
 
+// Bare inputs for the layout blocks. The tabs below keep using TextField /
+// SelectField, which carry their own labels and dirty dots; these take a value
+// and a setter because the layout components supply the label themselves.
+function InlineValue({ value, onChange, placeholder = '—' }) {
+  return <input className="trn-inline" value={value ?? ''} placeholder={placeholder} onChange={e => onChange(e.target.value)} />;
+}
+
+function SelectValue({ value, options, onChange }) {
+  const opts = value && !options.includes(value) ? [value, ...options] : options;
+  return (
+    <select className="trn-inline" value={value ?? ''} onChange={e => onChange(e.target.value)}>
+      <option value=""></option>
+      {opts.map(o => <option key={o} value={o}>{o}</option>)}
+    </select>
+  );
+}
+
+const isOn = v => v === 1 || v === '1';
+
 export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}) {
   const { records, total } = useAllRecords(LAYOUT, { cacheVersion: CACHE_VERSION });
   const [selected, setSelected] = useState(null);
@@ -200,6 +223,10 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
   const [woStage, setWoStage] = useState(null);
   const [woError, setWoError] = useState(null);
   const [attReload, setAttReload] = useState(0); // bump to make AttachmentsPanel re-list
+  // Contact phone/e-mail from Vibe, and live QuickBooks figures — both keyed so
+  // a slow answer cannot land on a record the user has already moved off.
+  const [contactInfo, setContactInfo] = useState(null);
+  const [fin, setFin] = useState(null);
   const isResizing = useRef(false);
 
   const orgName = f => f.zz__Display_Organization__ct || '';
@@ -287,7 +314,10 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
     if (!dirtyCount) { return; }
     setSaving(true); setSaveStatus(null); setSaveErrorMsg(null);
     try {
-      await updateRecord(LAYOUT, selected.recordId, edits);
+      // trainings_New is Vibe-owned (api/_vibeStore.js), so edits go to the
+      // overlay rather than back to FileMaker — and no longer need a per-user
+      // FileMaker account to succeed.
+      await updateVibeRecord(LAYOUT, selected.recordId, edits);
       patchCachedRecord(LAYOUT, CACHE_VERSION, selected.recordId, edits);
       invalidateRecord(LAYOUT, selected.recordId);
       setSelected(prev => ({ ...prev, fieldData: { ...prev.fieldData, ...edits } }));
@@ -322,7 +352,35 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
   const f = selected?.fieldData;
   const dirtyCount = Object.keys(edits).length;
   const status = f ? (val(f, edits, 'Status') || '') : '';
-  const statusColor = STATUS_COLOR[status] || STATUS_COLOR.default;
+  const statusColor = trnStatusColor(status) || STATUS_COLOR[status] || STATUS_COLOR.default;
+  const stage = stageIndex(status);
+
+  const contactFk = String(f?._kft__Contact_ID || '').trim();
+  useEffect(() => {
+    if (!contactFk) return undefined;
+    let alive = true;
+    contactDetails(contactFk)
+      .then(d => { if (alive) setContactInfo({ id: contactFk, ...d }); })
+      .catch(() => { if (alive) setContactInfo({ id: contactFk }); });
+    return () => { alive = false; };
+  }, [contactFk]);
+  const ci = contactInfo?.id === contactFk ? contactInfo : null;
+
+  // Live QuickBooks figures. `source=trainings` tells the endpoint to read the
+  // single-value reference fields rather than RCD's repeating ones.
+  const recId = selected?.recordId;
+  useEffect(() => {
+    if (!recId) return undefined;
+    let alive = true;
+    fetch(`/api/ccs-estimate?db=${encodeURIComponent(getCurrentEnv().db)}&recordId=${recId}&source=trainings`,
+      { credentials: 'include' })
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then(j => { if (alive) setFin({ id: recId, ...j }); })
+      .catch(() => { if (alive) setFin({ id: recId }); });
+    return () => { alive = false; };
+  }, [recId]);
+  const qb = fin?.id === recId ? fin : null;
+  const money = v => (v == null ? '—' : '$' + Number(v).toLocaleString('en-US', { maximumFractionDigits: 0 }));
 
 
   return (
@@ -397,6 +455,138 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
               </div>
             </div>
 
+            {/* ── The CCS record layout, applied to a training ──────────
+                Everything above the tab strip is always visible; the tabs
+                below keep the deeper content (costs, logistics, attachments)
+                exactly where it was. See src/components/RecordLayout.jsx. */}
+            <div className="trn-canvas">
+
+              {/* A pipeline is shown only for a record actually in flight.
+                  1,493 trainings are Final Invoiced and 753 are No Go — 91% of
+                  the table — and for those the status pill above says it all;
+                  a stage bar would just read "not a stage" forever. */}
+              {stage >= 0 && (
+                <Pipeline
+                  stages={PIPELINE_STAGES}
+                  shortLabels={PIPELINE_SHORT}
+                  index={stage}
+                  fallbackLabel={status}
+                  fallbackColor={statusColor}
+                />
+              )}
+
+              <StatTiles tiles={[
+                { label: 'Estimated', value: money(qb?.totals?.estimated) },
+                { label: 'Invoiced', value: money(qb?.totals?.invoiced) },
+                { label: 'Received', value: money(qb?.totals?.received) },
+                { label: 'Balance due', value: money(qb?.totals?.balanceDue),
+                  tone: qb?.totals?.balanceDue > 0 ? statusColor : undefined },
+              ]} />
+
+              <ThirdsRow
+                left={<>
+                  <LayoutCard title="Contact">
+                    <ContactDetails
+                      addressBlock={f.Address_Block_Billing}
+                      info={ci}
+                      hasContact={!!contactFk}
+                    />
+                  </LayoutCard>
+
+                  <LayoutCard title="Trainers">
+                    <div className="cv2-team">
+                      {[['Lead Trainer', 'Lead trainer'], ...TRAINER_SLOTS.map((k, i) => [k, `Trainer ${i + 1}`])]
+                        .filter(([k]) => String(val(f, edits, k) || '').trim())
+                        .map(([k, label]) => (
+                          <div className="cv2-team-row" key={k}>
+                            <span className="trn-avatar">{String(val(f, edits, k)).split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}</span>
+                            <div className="cv2-team-pick">
+                              <label>{label}</label>
+                              <div className="trn-team-name">{val(f, edits, k)}</div>
+                            </div>
+                          </div>
+                        ))}
+                      {![['Lead Trainer'], ...TRAINER_SLOTS.map(k => [k])]
+                        .some(([k]) => String(val(f, edits, k) || '').trim()) && (
+                          <p className="trn-none">No trainers assigned.</p>
+                        )}
+                    </div>
+                  </LayoutCard>
+                </>}
+                right={
+                  <LayoutCard title="Contract and financials">
+                    <FinancialRows
+                      InlineText={InlineValue}
+                      InlineDate={InlineValue}
+                      rows={[
+                        { label: 'Estimate / D#', value: val(f, edits, '_kat__QuickBooks_Estimate_ID') || '', onChange: v => handleFieldChange('_kat__QuickBooks_Estimate_ID', v) },
+                        { label: 'Proposed', value: val(f, edits, 'Proposed') || '', onChange: v => handleFieldChange('Proposed', v),
+                          received: isOn(val(f, edits, 'proposed_recvd')), onToggle: () => handleFieldChange('proposed_recvd', isOn(val(f, edits, 'proposed_recvd')) ? 0 : 1) },
+                        { label: 'Confirmed', value: val(f, edits, 'Confirmed') || '', onChange: v => handleFieldChange('Confirmed', v),
+                          received: isOn(val(f, edits, 'confirmed_recvd')), onToggle: () => handleFieldChange('confirmed_recvd', isOn(val(f, edits, 'confirmed_recvd')) ? 0 : 1) },
+                        { label: 'Sent in-house', value: val(f, edits, 'sent in-house') || '', onChange: v => handleFieldChange('sent in-house', v) },
+                        { label: 'Final sent', value: val(f, edits, 'Final Sent') || '', onChange: v => handleFieldChange('Final Sent', v) },
+                        { label: 'Deposit #', value: val(f, edits, 'deposit_number') || '', onChange: v => handleFieldChange('deposit_number', v) },
+                        { label: 'Invoice #', value: val(f, edits, '_kat__QuickBooks_Invoice_ID') || '', onChange: v => handleFieldChange('_kat__QuickBooks_Invoice_ID', v) },
+                      ]}
+                    />
+                    {qb?.estimates?.length > 0 && (
+                      <div className="cv2-qboest">
+                        <div className="cv2-qboest-head">QuickBooks estimate{qb.estimates.length > 1 ? 's' : ''} · live</div>
+                        {qb.estimates.map(e => (
+                          <div className="cv2-qboest-row" key={e.docNumber}>
+                            <span className="cv2-qboest-doc">{e.docNumber}</span>
+                            {e.missing
+                              ? <span className="cv2-qboest-missing">not found in QuickBooks</span>
+                              : <span className={`cv2-qboest-status ${String(e.status || '').toLowerCase()}`}>{e.status || '—'}</span>}
+                            {!e.missing && <span className="cv2-qboest-total">{money(e.total)}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </LayoutCard>
+                }
+              />
+
+              <LayoutCard title="Details">
+                <div className="trn-detail-grid">
+                  <label>Program type</label><SelectValue value={val(f, edits, 'Type of Program')} options={PROGRAM_TYPES} onChange={v => handleFieldChange('Type of Program', v)} />
+                  <label>Audience</label><SelectValue value={val(f, edits, 'Audience')} options={AUDIENCE_OPTIONS} onChange={v => handleFieldChange('Audience', v)} />
+                  <label>Start date</label><InlineValue value={val(f, edits, 'Start Date')} onChange={v => handleFieldChange('Start Date', v)} />
+                  <label>End date</label><InlineValue value={val(f, edits, 'End Date')} onChange={v => handleFieldChange('End Date', v)} />
+                  <label># Days</label><InlineValue value={val(f, edits, '# Days')} onChange={v => handleFieldChange('# Days', v)} />
+                  <label># Hours</label><InlineValue value={val(f, edits, '# Hours')} onChange={v => handleFieldChange('# Hours', v)} />
+                  <label>Group size</label><InlineValue value={val(f, edits, 'Group Size')} onChange={v => handleFieldChange('Group Size', v)} />
+                  <label>Workshop location</label><InlineValue value={val(f, edits, 'Workshop Location')} onChange={v => handleFieldChange('Workshop Location', v)} />
+                  <label>Distance to HQ</label><InlineValue value={val(f, edits, 'Distance To High5')} onChange={v => handleFieldChange('Distance To High5', v)} />
+                  <label>Drive time</label><InlineValue value={val(f, edits, 'Drive Time')} onChange={v => handleFieldChange('Drive Time', v)} />
+                </div>
+              </LayoutCard>
+
+              {/* One Notes field, not a pair: the work order prints this same
+                  text as its body, so a second box would be the same content
+                  under a different name. */}
+              <LayoutCard
+                title="Notes"
+                action={<button type="button" className="trn-stamp-btn" onClick={() => stampNote('Notes')}>⏱ Stamp</button>}
+              >
+                <div className="cv2-field-block cv2-field-block--card">
+                  <textarea
+                    className="trn-notes-area"
+                    value={val(f, edits, 'Notes') || ''}
+                    placeholder="Add notes…"
+                    onChange={e => handleFieldChange('Notes', e.target.value)}
+                  />
+                  <div className="cv2-wo-actions">
+                    <button type="button" className="cv2-wo-btn" disabled={!!woBusy} onClick={() => handleGenerateWorkOrder(false)}>
+                      {woBusy === 'download' ? (woStage || 'Working…') : '⤓ Download work order'}
+                    </button>
+                  </div>
+                  {woError && <p className="cv2-wo-error">{woError}</p>}
+                </div>
+              </LayoutCard>
+            </div>
+
             <div className="trn-tabs">
               {[['info', 'Training Info'], ['costs', 'Costs / Expenses'], ['logistics', 'Logistics'], ['attachments', 'Attachments'], ['extra', 'Extra']].map(([id, label]) => (
                 <button key={id} className={`trn-tab${tab === id ? ' on' : ''}`} onClick={() => setTab(id)}>{label}</button>
@@ -410,7 +600,7 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
                   <TextField label="Organization" fieldKey="zz__Display_Organization__ct" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} />
                   <TextField label="Contact" fieldKey="zz__Display_Contact__ct" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} />
                   <SelectField label="Type of program" fieldKey="Type of Program" f={f} edits={edits} onChange={handleFieldChange} options={PROGRAM_TYPES} />
-                  <SelectField label="Status" fieldKey="Status" f={f} edits={edits} onChange={handleFieldChange} options={STATUS_OPTIONS} />
+                  <SelectField label="Status" fieldKey="Status" f={f} edits={edits} onChange={handleFieldChange} options={ALL_STATUSES} />
                   <TextField label="Start date" fieldKey="Start Date" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
                   <TextField label="End date" fieldKey="End Date" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
                   <TextField label="# Days" fieldKey="# Days" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
@@ -422,7 +612,6 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
                   <TextField label="Report printed" fieldKey="Report Printed" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
                   <TextField label="Location address" fieldKey="Location Address" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable wide />
                   <TextAreaField label="Description of training" fieldKey="Description of Training" f={f} edits={edits} onChange={handleFieldChange} rows={3} />
-                  <TextAreaField label="Notes" fieldKey="Notes" f={f} edits={edits} onChange={handleFieldChange} onStamp={stampNote} rows={7} />
                   <div className="trn-field wide">
                     <div className="trn-wo-actions">
                       <button type="button" className="trn-wo-btn" disabled={!!woBusy} onClick={() => handleGenerateWorkOrder(true)}>

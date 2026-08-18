@@ -205,23 +205,39 @@ async function fetchPayments(rawInvoices) {
 
 // Read the CCS record's estimate + invoice id reps and parse both.
 //
-// Through the Vibe overlay, not straight from FileMaker. RCD_New is Vibe-owned,
-// so an estimate or invoice number corrected in the app lives in the fragment
-// and never reaches FileMaker — reading FileMaker alone would keep resolving
-// the old number, and the correction would look like it had not saved.
-async function refsFromRecord(db, recordId) {
+// Which layouts this can read, and how each one stores its QuickBooks
+// references. They are NOT the same shape: RCD_New uses repeating fields
+// (5 estimate reps, 3 invoice reps) while trainings_New has a single field for
+// each. Reading reps off a layout that has none silently yields nothing, which
+// is why this is a table rather than a shared loop.
+const SOURCES = {
+  rcd:       { layout: 'RCD_New',       estReps: 5, invReps: 3 },
+  trainings: { layout: 'trainings_New', estReps: 0, invReps: 0 },
+};
+
+const readRefs = (fd, base, reps) => (reps
+  ? Array.from({ length: reps }, (_, i) => fd[`${base}(${i + 1})`])
+  : [fd[base]]
+).filter(Boolean).join(' ');
+
+// Through the Vibe overlay, not straight from FileMaker. Both layouts are
+// Vibe-owned, so an estimate or invoice number corrected in the app lives in
+// the fragment and never reaches FileMaker — reading FileMaker alone would keep
+// resolving the old number, and the correction would look like it had not saved.
+async function refsFromRecord(db, recordId, sourceKey = 'rcd') {
+  const src = SOURCES[sourceKey] || SOURCES.rcd;
   const token = await fmpToken(db);
-  const r = await fetch(`${FMP_HOST}/fmi/data/v2/databases/${db}/layouts/RCD_New/records/${recordId}`,
+  const r = await fetch(`${FMP_HOST}/fmi/data/v2/databases/${db}/layouts/${encodeURIComponent(src.layout)}/records/${recordId}`,
     { headers: { Authorization: `Bearer ${token}` } });
   const j = await r.json().catch(() => ({}));
   const rec = j?.response?.data?.[0];
-  const frag = await readFragment(db, 'RCD_New', recordId);
-  // A project created in Vibe has no FileMaker record at all; the fragment is
-  // the whole of it.
+  const frag = await readFragment(db, src.layout, recordId);
+  // A record created in Vibe has no FileMaker counterpart at all; the fragment
+  // is the whole of it.
   const fd = rec ? mergeRecord(rec, frag)?.fieldData : (frag?.__created ? frag.fieldData : null);
   if (!fd) return { docs: [], invoiceRefs: [], org: null };
-  const rawEst = [1, 2, 3, 4, 5].map(i => fd[`_kat__QuickBooks_Estimate_ID(${i})`]).filter(Boolean).join(' ');
-  const rawInv = [1, 2, 3].map(i => fd[`_kat__QuickBooks_Invoice_ID(${i})`]).filter(Boolean).join(' ');
+  const rawEst = readRefs(fd, '_kat__QuickBooks_Estimate_ID', src.estReps);
+  const rawInv = readRefs(fd, '_kat__QuickBooks_Invoice_ID', src.invReps);
   return {
     docs: parseDocs(rawEst),
     invoiceRefs: parseInvoiceRefs(rawInv),
@@ -269,7 +285,7 @@ export default async function handler(req, res) {
       const db = req.query?.db || 'High5_Core4';
       if (!ALLOWED_DBS.has(db)) return res.status(400).json({ error: 'db not allowed' });
       if (!req.query?.recordId) return res.status(400).json({ error: 'recordId or doc required' });
-      ({ docs, invoiceRefs, org } = await refsFromRecord(db, String(req.query.recordId)));
+      ({ docs, invoiceRefs, org } = await refsFromRecord(db, String(req.query.recordId), String(req.query.source || 'rcd')));
     }
 
     // Estimates and invoices are independent — a record can have either, both,

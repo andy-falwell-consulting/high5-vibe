@@ -259,3 +259,42 @@
 [data-theme="light"] .trn-btn-edit, [data-theme="light"] .trn-btn-discard { background: #f1f5f9; border-color: #e2e8f0; color: #4f5a69; }
 [data-theme="light"] .trn-btn-edit:hover, [data-theme="light"] .trn-btn-discard:hover { background: #e2e8f0; color: #0f172a; }
 [data-theme="light"] .trn-input { background: #f8fafc; border-color: #e2e8f0; color: #0f172a; }
+
+/* ── CCS-style header above the tab strip ──────────────────────── */
+/* The blocks themselves are styled by CCSv2.css (shared via RecordLayout);
+   only what is specific to this module lives here. */
+.trn-canvas { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+.trn-inline {
+  width: 100%; font: inherit; font-size: 15px; color: inherit;
+  background: transparent; border: none; border-bottom: 1px solid #1e2130;
+  padding: 3px 0; border-radius: 0;
+}
+.trn-inline:focus { outline: none; border-bottom-color: var(--h5-red); }
+.trn-detail-grid {
+  display: grid; grid-template-columns: 130px minmax(0, 1fr) 130px minmax(0, 1fr);
+  gap: 8px 14px; align-items: center; padding: 14px 16px;
+}
+.trn-detail-grid > label {
+  font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: #79859a;
+}
+.trn-avatar {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  background: #1e2130; color: #94a3b8;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600;
+}
+.trn-team-name { font-size: 15px; color: #cbd5e1; }
+.trn-none { color: #79859a; font-size: 15px; margin: 0; }
+.trn-notes-area {
+  width: 100%; min-height: 200px; resize: vertical;
+  font: inherit; font-size: 15px; line-height: 1.5; color: inherit;
+  background: transparent; border: 1px solid #1e2130; border-radius: 8px; padding: 8px;
+}
+.trn-notes-area:focus { outline: none; border-color: var(--h5-red); }
+@media (max-width: 920px) { .trn-detail-grid { grid-template-columns: 130px minmax(0, 1fr); } }
+
+[data-theme="light"] .trn-inline { border-bottom-color: #e2e8f0; }
+[data-theme="light"] .trn-detail-grid > label { color: #64748b; }
+[data-theme="light"] .trn-avatar { background: #f1f5f9; color: #475569; }
+[data-theme="light"] .trn-team-name { color: #334155; }
+[data-theme="light"] .trn-notes-area { border-color: #e2e8f0; }
