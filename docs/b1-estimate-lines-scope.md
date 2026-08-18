@@ -94,11 +94,27 @@ have written 1,267 product records into the estimate-lines store under keys that
 mean nothing. `peek` exists precisely so a layout is inspected before it is
 migrated, and it paid for itself the first time it ran.
 
-**Still needed:** a layout on the table behind the `estmt_ESTLI` portal exposing
-the line's own key, its parent estimate key, and `Item_Name`, `Description`,
-`Quantity`, `Unit_Price`, `Amount`, `Taxable`, `Sort_Order`. The migration takes
-the layout name as a parameter and has no default, so it cannot be pointed at
-the wrong table by accident.
+### The right layout is `est_li_vibe_2`
+
+Peeked 2026-08-18 — it has everything this needs:
+
+- **10,858 rows** (the plan's "~25,000" was an overestimate)
+- `_kft__Estimate_ID` — **the parent key**, which is what makes the migration
+  possible at all
+- `_kpt__Estimate_Line_Item_ID`, `Item_Name`, `Description`, `Quantity`,
+  `Unit_Price`, `Amount`, `Taxable`, `Sort_Order`
+- arithmetic checks out on inspection: estimate 1004, qty 30 x $1.09 = $32.70
+
+Two layouts one character apart — `estimate_li_vibe` and `est_li_vibe_2` — and
+only the second is the line items. That is why the migration still takes the
+layout as a required parameter with no default, and why `peek` runs first.
+
+**One wrinkle it surfaced:** `zz__Is_Subtotal__cn`. FileMaker has a notion of a
+subtotal MARKER row, which is a display artefact rather than a line to add up —
+counting one would double every amount above it. Measured: set on **0 of 234**
+sampled production lines, so none exist today. `totalsFor` excludes them anyway;
+the cost is one filter and the failure it prevents is an estimate whose total
+silently doubles.
 
 ---
 

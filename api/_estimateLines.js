@@ -61,9 +61,18 @@ export const lineAmount = line => {
 // hard-coding the zero would silently under-charge the first estimate that
 // needs tax. Arriving at 0 by arithmetic stays correct on the day that changes.
 // No rate is stored anywhere in the file — it has to be supplied.
+// A subtotal MARKER row is a display artefact, not a line to be added up —
+// counting one would double the amounts above it. FileMaker has the concept
+// (`zz__Is_Subtotal__cn` on est_li_vibe_2) but it is set on 0 of 234 sampled
+// production lines, so none exist today. Excluded anyway: the cost is one
+// filter, and the failure it prevents is an estimate whose total silently
+// doubles.
+const isSubtotalRow = l => Number(l?.Is_Subtotal) === 1;
+
 export function totalsFor(lines, { taxRate = 0 } = {}) {
-  const subtotal = (lines || []).reduce((a, l) => a + money(l.Amount), 0);
-  const taxable = (lines || []).reduce(
+  const real = (lines || []).filter(l => !isSubtotalRow(l));
+  const subtotal = real.reduce((a, l) => a + money(l.Amount), 0);
+  const taxable = real.reduce(
     (a, l) => a + (Number(l.Taxable) ? money(l.Amount) : 0), 0);
   const tax = Math.round(taxable * taxRate * 100) / 100;
   const round = n => Math.round(n * 100) / 100;

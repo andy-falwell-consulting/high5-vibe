@@ -31,11 +31,14 @@ const FMP_HOST = 'https://ILELLCO.pcifmhosting.com';
 // ids; 1,267 rows, matching Products & Services_New exactly, with item 1000 the
 // same "1/2\" x 8\" Staple" that is in the products replica).
 //
-// The layout this migration needs does not exist yet: one on the table behind
-// the `estmt_ESTLI` portal, exposing the line's own key, its parent estimate
-// key, Item_Name, Description, Quantity, Unit_Price, Amount, Taxable and
-// Sort_Order. Until it does, the layout must be named explicitly with
-// `?layout=` — and `peek=1` used first, which is what caught this.
+// The right layout is `est_li_vibe_2`, confirmed by peeking it on 2026-08-18:
+// 10,858 rows carrying `_kft__Estimate_ID` (the parent key this needs),
+// `_kpt__Estimate_Line_Item_ID`, Item_Name, Description, Quantity, Unit_Price,
+// Amount, Taxable and Sort_Order.
+//
+// Still no default, deliberately: two plausibly-named layouts differ by one
+// character and one of them is the wrong table entirely. Naming it explicitly
+// and peeking first costs one call and prevents writing the wrong data.
 const PAGE = 1000;
 
 const stageKey = db => `vibe:${db}:estli:staging`;
