@@ -269,11 +269,47 @@ export async function reindexPerson(db, personId) {
   return mine;
 }
 
+// The byOrg array is the ORDER an organization's people are shown in, and that
+// order is dragged by hand (see the reorder-org-people action). So this
+// preserves it: ids already stored keep their positions, newly affiliated
+// people are appended, and people no longer affiliated drop out. Rebuilding the
+// array from the hash — which is what this used to do — silently threw the
+// team's ordering away the next time anyone was attached or detached.
 export async function reindexOrg(db, organizationId) {
   const all = await readHash(K.aff(db));
-  const ids = [...all.values()].filter(a => String(a.organizationId) === String(organizationId)).map(a => a.id);
+  const live = new Set([...all.values()]
+    .filter(a => String(a.organizationId) === String(organizationId))
+    .map(a => String(a.id)));
+
+  const stored = parse(await redis.hget(K.byOrg(db), String(organizationId))) || [];
+  const kept = stored.map(String).filter(id => live.has(id));
+  const seen = new Set(kept);
+  const ids = [...kept, ...[...live].filter(id => !seen.has(id))];
+
   if (ids.length) await redis.hset(K.byOrg(db), { [String(organizationId)]: JSON.stringify(ids) });
   else await redis.hdel(K.byOrg(db), String(organizationId));
+  return ids;
+}
+
+// Store an explicit order for one organization's people. Only ids that really
+// belong to the organization are accepted, and any it holds that the caller
+// omitted are appended rather than dropped — a stale client must not be able to
+// delete affiliations by sending a short list.
+export async function setOrgPeopleOrder(db, organizationId, affiliationIds) {
+  const all = await readHash(K.aff(db));
+  const live = new Set([...all.values()]
+    .filter(a => String(a.organizationId) === String(organizationId))
+    .map(a => String(a.id)));
+
+  const wanted = [];
+  const seen = new Set();
+  for (const id of affiliationIds || []) {
+    const s = String(id);
+    if (!live.has(s) || seen.has(s)) continue;
+    seen.add(s); wanted.push(s);
+  }
+  const ids = [...wanted, ...[...live].filter(id => !seen.has(id))];
+  if (ids.length) await redis.hset(K.byOrg(db), { [String(organizationId)]: JSON.stringify(ids) });
   return ids;
 }
 

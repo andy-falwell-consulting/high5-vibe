@@ -143,6 +143,62 @@
 .c2-noname { color: #79859a; font-style: italic; }
 .c2-notes { color: #94a3b8; font-size: 15px; margin: 0; white-space: pre-wrap; }
 
+/* ── Drag-to-sort people, risk badge, distance ─────────────────── */
+.c2-person-row { position: relative; }
+.c2-person-row.dragging { opacity: .4; }
+.c2-drag {
+  cursor: grab; color: #4b5563; font-size: 15px; line-height: 1;
+  padding: 2px 4px; user-select: none; touch-action: none;
+  border-radius: 4px; flex-shrink: 0;
+}
+.c2-drag:hover { color: #94a3b8; background: #1a1d2e; }
+.c2-drag:active { cursor: grabbing; }
+.c2-section-hint { margin-left: auto; font-size: 13px; color: #4b5563; }
+
+/* Red, and a button rather than a chip: it goes somewhere. */
+.c2-riskbadge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: inherit; font-size: 14px; font-weight: 600;
+  padding: 2px 9px; border-radius: 20px; cursor: pointer;
+  background: #2a1f24; border: 1px solid #7f1d1d; color: #fca5a5;
+  transition: all .15s;
+}
+.c2-riskbadge:hover { background: var(--h5-red); border-color: var(--h5-red); color: #fff; }
+.c2-riskbadge--high { background: var(--h5-red); border-color: var(--h5-red); color: #fff; }
+.c2-riskbadge--high:hover { filter: brightness(1.12); }
+.c2-riskbadge-count {
+  font-size: 12px; background: rgba(0,0,0,.28); border-radius: 8px; padding: 0 5px;
+}
+
+.c2-distance { display: flex; gap: 28px; flex-wrap: wrap; font-size: 17px; color: #cbd5e1; }
+.c2-dist-label {
+  display: block; font-size: 12px; text-transform: uppercase;
+  letter-spacing: .06em; color: #79859a; margin-bottom: 2px;
+}
+
+/* ── Confirmation modal ────────────────────────────────────────── */
+.c2-modal-backdrop {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(0,0,0,.55);
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+}
+.c2-modal {
+  width: min(520px, 100%);
+  background: #13151c; border: 1px solid #1e2130; border-radius: 12px;
+  padding: 20px 22px; box-shadow: 0 24px 60px rgba(0,0,0,.5);
+}
+.c2-modal h2 {
+  margin: 0 0 8px; font-family: 'Oswald', sans-serif; font-size: 21px;
+  font-weight: 600; text-transform: uppercase; letter-spacing: .02em; color: #f1f5f9;
+}
+.c2-modal-note { margin: 0 0 14px; font-size: 15px; color: #8b97aa; }
+.c2-label {
+  display: block; font-size: 12px; text-transform: uppercase;
+  letter-spacing: .06em; color: #79859a; margin-bottom: 5px;
+}
+.c2-input--area { width: 100%; resize: vertical; font-family: inherit; line-height: 1.5; }
+.c2-modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+
 /* ── Detail tabs ───────────────────────────────────────────────── */
 /* Mirrors .ct-tabs on the original Contacts module: underline on the active
    tab, count pill, same type scale — so a record reads the same in both. */
@@ -393,3 +449,15 @@ a.c2-methodvalue:hover { color: var(--h5-red); text-decoration: underline; }
 [data-theme="light"] .c2-tab.on { color: #0f172a; }
 [data-theme="light"] .c2-tab-count { background: #f1f5f9; color: #475569; }
 [data-theme="light"] .c2-tab.on .c2-tab-count { background: #fef2f2; color: #b91c1c; }
+
+[data-theme="light"] .c2-drag { color: #94a3b8; }
+[data-theme="light"] .c2-drag:hover { color: #475569; background: #f1f5f9; }
+[data-theme="light"] .c2-section-hint { color: #94a3b8; }
+[data-theme="light"] .c2-riskbadge { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
+[data-theme="light"] .c2-riskbadge--high { background: var(--h5-red); border-color: var(--h5-red); color: #fff; }
+[data-theme="light"] .c2-distance { color: #334155; }
+[data-theme="light"] .c2-dist-label { color: #64748b; }
+[data-theme="light"] .c2-modal { background: #fff; border-color: #e2e8f0; }
+[data-theme="light"] .c2-modal h2 { color: #0f172a; }
+[data-theme="light"] .c2-modal-note { color: #5e6b7c; }
+[data-theme="light"] .c2-label { color: #64748b; }

@@ -66,6 +66,17 @@ export const setParent = (organizationId, parentOrganizationId) =>
   write({ action: 'set-parent', organizationId, parentOrganizationId });
 export const deleteContact = id => write({ action: 'delete', id });
 
+// Drag-to-sort order for an organization's people. Persisted in the same byOrg
+// index that drives the read, so no extra field was introduced.
+export const reorderOrgPeople = (organizationId, affiliationIds) =>
+  write({ action: 'reorder-org-people', organizationId, affiliationIds });
+
+// Driving distance and time from this contact's address to HQ. Served from the
+// address cache distance-sync already fills, so a site High 5 has driven to for
+// a project costs nothing to show here.
+export const contactDistance = id =>
+  fetch(`/api/contact-distance?${qs(`id=${encodeURIComponent(id)}`)}`, { credentials: 'include' }).then(json);
+
 // Phones, emails and addresses. `kind` is 'phone' | 'email' | 'address'; the
 // server owns the array and returns the whole of it back, so the caller never
 // posts a list it might have read before someone else changed it.
