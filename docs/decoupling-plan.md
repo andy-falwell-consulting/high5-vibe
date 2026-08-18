@@ -223,6 +223,24 @@ the app outside `ContactsV2.jsx` itself still assumes the old one.
 
 The highest-risk phase, and the risk is not the record data.
 
+**The C1 audit is done — see [derived-fields-audit.md](derived-fields-audit.md)**
+(2026-08-18, measured against production). It changed this phase materially, so
+read it before acting on the C1 text below, which predates it:
+
+- `Address_Block_Billing` is **stored data, not a calculation** — it replicates
+  correctly and needs no migration. Only the display *names* are genuinely
+  calculated. C1 is smaller than written here.
+- **Five displayed fields have never held a value in production.** Part of C1 is
+  deleting them from the UI, not migrating them.
+- Vibe's contact model can supply the rest and joins on the id records already
+  hold, but composition must walk person → organization, choose between multiple
+  affiliations, and respect address *type*.
+- **Hard prerequisite: Contacts v2 is empty in Dev** (0 of 26,257 entities).
+  C1 cannot be developed or verified anywhere but production until that is
+  fixed.
+- Historical address blocks must **not** be backfilled — they are snapshots of
+  where work was actually invoiced.
+
 **C1. Derived fields.** The app displays FileMaker calculations everywhere —
 `zz__Display_Organization__ct`, `zz__Display_Contact__ct`, `zz__Display__ct`,
 `Address_Block_Billing`. These are not decoration: the entire Contacts v2
