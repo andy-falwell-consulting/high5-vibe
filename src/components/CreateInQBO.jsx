@@ -1,6 +1,6 @@
 import { qboLink } from '../config/qboLinks';
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { updateRecord } from '../api/filemaker';
+import { updateVibeRecord } from '../api/vibeRecords';
 import './CreateInQBO.css';
 
 // Shared "Create in QBO" panel. Any module builds a `draft` and drops this in.
@@ -128,8 +128,13 @@ export default function CreateInQBO({ type = 'estimate', env = 'production', dra
   const doCreate = async () => {
     setCreating(true); setError(null);
     try {
+      // Products & Services_New is Vibe-owned (api/_vibeStore.js), so this
+      // remembered mapping is a Vibe write like the other external-system id
+      // write-backs on that layout — it was the last one still going to
+      // FileMaker. Still best-effort: failing to remember the mapping must not
+      // stop the QBO document being created.
       await Promise.all(lines.filter(l => l.picked && l.productRecordId && l.itemId)
-        .map(l => updateRecord(PROD_LAYOUT, l.productRecordId, { _kat__Item_ID_QuickBooks: String(l.itemId) }).catch(() => {})));
+        .map(l => updateVibeRecord(PROD_LAYOUT, l.productRecordId, { _kat__Item_ID_QuickBooks: String(l.itemId) }).catch(() => {})));
       const body = {
         env, type, customerId: customer.id, txnDate: draft.txnDate, memo: draft.memo, docNumber: draft.docNumber,
         lines: lines.map(l => ({ itemId: l.itemId, qty: l.qty, unitPrice: l.unitPrice, amount: l.amount, description: l.description || l.productName })),
