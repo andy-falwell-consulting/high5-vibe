@@ -8,6 +8,7 @@ import { formatPhone, telHref } from '../../api/_phone';
 import { useRelatedRecords, sharedNameCount } from '../hooks/useRelatedRecords';
 import { addCachedRecord } from '../api/filemaker';
 import { createVibeRecord } from '../api/vibeRecords';
+import { contactDisplayFields } from '../config/contactDisplay';
 import {
   listPeople, listOrganizations, getContact, getOrganizationPeople,
   createPerson, createOrganization, updateContact,
@@ -965,17 +966,24 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
 
   // Mark a contact high risk: create an active RMI against it and open it.
   //
-  // This writes to FILEMAKER, not Vibe — RMI_New is not Vibe-owned yet, so it
-  // goes through createRecord exactly as RMI.jsx does. It therefore needs a real
-  // FileMaker session and cannot run on the preview bypass. It moves to Vibe
-  // with Phase A1 of docs/decoupling-plan.md.
+  // Writes to Vibe, not FileMaker (Phase A1 of docs/decoupling-plan.md, done
+  // 2026-08-18), so it needs no FileMaker session and works on the preview
+  // bypass.
   async function confirmHighRisk(note) {
     const id = selected?.kind === 'organization' ? selected.organization?.id : selected?.person?.id;
     if (!id) return;
     setRiskBusy(true); setRiskError(null);
     try {
+      // Stamp the names FileMaker would have calculated — without them the RMI
+      // is unsearchable by organization in its own module. Contacts v2 holds
+      // its own entities rather than Contacts_New fieldData, so the names come
+      // from there; whichever kind is selected is the one we can name.
+      const names = selected?.kind === 'organization'
+        ? { org: selected.organization?.name || '' }
+        : { person: selected.person?.displayName || '' };
       const fieldData = {
         _kft__Contact_ID: String(id),
+        ...contactDisplayFields('RMI_New', names),
         Status: 'Active',
         Level_of_Risk: 'High',
         Entry_Date: new Date().toLocaleDateString('en-US'),

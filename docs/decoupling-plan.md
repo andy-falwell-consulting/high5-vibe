@@ -200,9 +200,21 @@ correct `_kft__Contact_ID` and a blank organization/contact *name*, because the
 name was never stored — it was calculated by FileMaker, which has no row to
 calculate it from. Observed directly: a test CCS project created from a contact
 showed "No contact" on its own record while holding that contact's id. The
-records are correct; the display is not. C1 is therefore the first thing worth
-doing after Phase A rather than something Phase C can hold, and it grows worse
-with every record created from here on.
+records are correct; the display is not. Worse than a blank label: CCS,
+Estimates and RMI all *search* those fields, so such a record could not be found
+by typing its organization's name.
+
+**Stopgapped the same day (v1.0.379), not fixed.** `src/config/contactDisplay.js`
+stamps the names onto a record as it is created, from the contact already in
+hand — so Vibe-born records display and search normally again. That pins a copy
+which won't follow a later rename of the contact, where the calculation would
+have; it is safe to pin only because these records have no FileMaker counterpart
+to recalculate. Two things it deliberately does NOT cover, both still real C1
+work: **addresses** (`Address_Block_Billing` can't be derived this way — the
+contact replica's address fields read back empty, since contact addresses now
+live in Vibe's own store, so printed work orders on Vibe-born records are still
+blank), and **every record that already exists**. C1 remains the first thing
+worth doing after Phase A.
 
 **C2. Audit the calculations before trusting any of them.** `Sort_Order` on
 inspection line items evaluates to `"?"` on every row — a broken calculation
