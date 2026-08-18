@@ -57,7 +57,12 @@ export default async function handler(req, res) {
   // sense that it hands the record back to FileMaker; `{ delete: true }` hides
   // it. Kept on separate verbs so neither can be reached by accident.
   if (req.method === 'DELETE') {
-    if (!VIBE_OWNED.has(layout)) return refuse(VIBE_OWNED);
+    // Either set, not just VIBE_OWNED: this is the ONLY way to undo a tombstone,
+    // and tombstones are allowed on the wider VIBE_DELETES. Gating the undo on
+    // the narrower set made deletion irreversible on exactly the two layouts
+    // that can be deleted but not edited — OELookup_New and Contacts_New —
+    // while the confirmation dialog says the FileMaker copy survives.
+    if (!VIBE_OWNED.has(layout) && !VIBE_DELETES.has(layout)) return refuse(VIBE_DELETES);
     const id = String(req.query?.recordId || '').trim();
     if (!id) return res.status(400).json({ error: 'recordId required' });
     const removed = await dropFragment(db, layout, id);
