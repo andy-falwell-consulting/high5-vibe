@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { getRecord, updateRecord, updatePortalRow, deletePortalRow, invalidateRecord, patchCachedRecord, containerImageUrl, createRecord } from '../api/filemaker';
+import { getRecord, updatePortalRow, deletePortalRow, invalidateRecord, patchCachedRecord, containerImageUrl, createRecord } from '../api/filemaker';
+import { updateVibeRecord } from '../api/vibeRecords';
 import { getCurrentEnv } from '../config/fmpEnvironments';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
 import BomPickerModal from './BomPickerModal';
@@ -274,8 +275,13 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
     setSaving(true); setSaveStatus(null); setSaveErrorMsg(null);
     try {
       if (hasFieldEdits) {
-        const res = await updateRecord(LAYOUT, selected.recordId, edits);
-        if (res.messages?.[0]?.code !== '0') { setSaveStatus('error'); return; }
+        // Products & Services_New is Vibe-owned (api/_vibeStore.js) for field
+        // edits — same pattern as RCD_New/Inspections_New/trainings_New/
+        // RMI_New. Bill-of-Materials portal writes (applyBomOps below) and
+        // record creation (handleCreate) still go to FileMaker: BOM is its
+        // own migration phase (B2 in docs/decoupling-plan.md), and creation
+        // is entangled with SKU assignment plus live Shopify/QBO pushes.
+        await updateVibeRecord(LAYOUT, selected.recordId, edits);
         const merged = { ...selected.fieldData, ...edits };
         setSelected(p => ({ ...p, fieldData: merged }));
         // Push the edit into the shared caches too. Without this the sidebar row
@@ -313,7 +319,7 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
         if (!existing) fmpUpdates._kat__Item_ID_Shopify = shopifyId;
         if (variantId && variantId !== f._kat__Item_Variant_Id) fmpUpdates._kat__Item_Variant_Id = variantId;
         if (Object.keys(fmpUpdates).length) {
-          await updateRecord(LAYOUT, selected.recordId, fmpUpdates);
+          await updateVibeRecord(LAYOUT, selected.recordId, fmpUpdates);
           setSelected(p => ({ ...p, fieldData: { ...p.fieldData, ...fmpUpdates } }));
         }
       } else if (target === 'qbo') {
@@ -321,7 +327,7 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
         const incomeAccount = f.QuickBooks_Account_Income || '155';
         const { qboId } = await pushToQBO(fPush, existing, incomeAccount);
         if (!existing && qboId) {
-          await updateRecord(LAYOUT, selected.recordId, { _kat__Item_ID_QuickBooks: qboId });
+          await updateVibeRecord(LAYOUT, selected.recordId, { _kat__Item_ID_QuickBooks: qboId });
           setSelected(p => ({ ...p, fieldData: { ...p.fieldData, _kat__Item_ID_QuickBooks: qboId } }));
         }
       }
@@ -353,10 +359,16 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
       const { qboId } = await pushToQBO(fields, null, fields.QuickBooks_Account_Income || '155');
       if (qboId) updates._kat__Item_ID_QuickBooks = qboId;
     }
-    if (Object.keys(updates).length) await updateRecord(LAYOUT, newRecordId, updates);
+    // The record itself is still created via FileMaker (see the comment on
+    // handleSave), but writing the Shopify/QBO ids back onto it afterward is
+    // an EDIT, not part of creation — so it goes to Vibe like any other edit
+    // on this now Vibe-owned layout. getRecord reads FileMaker directly and
+    // won't see that overlay, so `updates` is merged in by hand rather than
+    // trusting the read-back to already carry it.
+    if (Object.keys(updates).length) await updateVibeRecord(LAYOUT, newRecordId, updates);
     const detail = await getRecord(LAYOUT, newRecordId);
     const newRecord = detail.response?.data?.[0];
-    if (newRecord) setSelected(newRecord);
+    if (newRecord) setSelected({ ...newRecord, fieldData: { ...newRecord.fieldData, ...updates } });
   };
 
   const handleImageUpload = async (e) => {
