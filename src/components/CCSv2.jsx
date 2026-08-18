@@ -16,6 +16,7 @@ import AttachmentsPanel from './AttachmentsPanel';
 import ContactPicker from './ContactPicker';
 import { listCcsAttachments, uploadCcsAttachment, deleteCcsAttachment, ccsAttachmentUrl } from '../api/ccsAttachments';
 import { downloadWorkOrder } from '../api/ccsWorkOrder';
+import { contactDetails } from '../api/contactLookup';
 import './CCSv2.css';
 import DeleteRecordButton from './DeleteRecordButton';
 
@@ -318,6 +319,9 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
   const [woError, setWoError]   = useState(null);
   const [contactPicker, setContactPicker] = useState(false);
   const [orgPicker, setOrgPicker] = useState(false);
+  // Phone and e-mail for the project's contact. Keyed by contact id so switching
+  // records cannot land a slow answer on the wrong project.
+  const [contactInfo, setContactInfo] = useState(null);
   const isResizing = useRef(false);
   const selectedRef = useRef(null); // guards async estimate fetch against stale selections
 
@@ -580,6 +584,20 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
   const sc = statusColor(merged);
   // Vibe's assignment wins when present; otherwise FileMaker's calculated
   // value still shows, so records that already have one are unaffected.
+  // Contact details come from Vibe, not FileMaker's related fields: those are on
+  // the layout but empty on all 6,436 CCS projects, which is why this card only
+  // ever showed an address. See src/api/contactLookup.js.
+  const contactFk = String(f?._kft__Contact_ID || '').trim();
+  useEffect(() => {
+    if (!contactFk) return undefined;
+    let alive = true;
+    contactDetails(contactFk)
+      .then(d => { if (alive) setContactInfo({ id: contactFk, ...d }); })
+      .catch(() => { if (alive) setContactInfo({ id: contactFk }); });
+    return () => { alive = false; };
+  }, [contactFk]);
+  const ci = contactInfo?.id === contactFk ? contactInfo : null;
+
   const vibeOrgId = selected ? ccsOrgs.orgIdFor(selected.recordId) : '';
   const vibeOrgName = vibeOrgId ? (contactsById.get(String(vibeOrgId))?.Name_Organization || '') : '';
   const org = vibeOrgName || f.zz__Display_Organization__ct || '—';
@@ -768,7 +786,48 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
 
                 {/* BODY: contract & financials → details → phases → contact/team */}
                 <div className="cv2-body">
-                {/* contract & financials — full width */}
+                {/* Contact beside Contract & Financials — the contact is who you
+                    call about the money, so the two belong on one line. */}
+                <div className="cv2-cols cv2-cols-third">
+                {/* contact */}
+                  <div className="cv2-card">
+                    <div className="cv2-card-head">
+                      <span>Contact</span>
+                      <button className="cv2-contact-change" onClick={() => setContactPicker(true)} disabled={saving}>
+                        {f.zz__Display_Contact__ct && f.zz__Display_Contact__ct !== '<unassigned>' ? 'Change' : 'Assign'}
+                      </button>
+                    </div>
+                    {/* Details come from Vibe (contactLookup). FileMaker's own
+                        related fields are kept only as a fallback — they are
+                        empty on all 6,436 CCS projects, which is why this card
+                        used to show nothing but an address. */}
+                    <div className="cv2-contact">
+                      {f.Address_Block_Billing && (
+                        <div className="cv2-contact-row"><span className="cv2-ic">⌖</span>
+                          <span style={{ whiteSpace: 'pre-wrap' }}>{f.Address_Block_Billing.replace(/\r/g, '\n')}</span>
+                        </div>
+                      )}
+                      {(() => {
+                        const email = ci?.email || f['rcd_cntct_INADR__email::zz__Address__ct'] || '';
+                        const work = ci?.workPhone || f['rcd_cntct_PHONE__work::Number'] || '';
+                        const cell = ci?.cellPhone || f['rcd_cntct_PHONE__mobile::Number'] || '';
+                        if (!email && !work && !cell) {
+                          return contactFk
+                            ? <div className="cv2-contact-row cv2-contact-none">{ci ? 'No phone or e-mail on this contact.' : 'Loading…'}</div>
+                            : <div className="cv2-contact-row cv2-contact-none">No contact assigned.</div>;
+                        }
+                        return (
+                          <>
+                            {email && <div className="cv2-contact-row"><span className="cv2-ic">✉</span><a href={`mailto:${email}`}>{email}</a></div>}
+                            {work && <div className="cv2-contact-row"><span className="cv2-ic">✆</span><a href={`tel:${work.replace(/[^\d+]/g, '')}`}>{work}</a><span className="cv2-contact-tag">work</span></div>}
+                            {cell && <div className="cv2-contact-row"><span className="cv2-ic">▢</span><a href={`tel:${cell.replace(/[^\d+]/g, '')}`}>{cell}</a><span className="cv2-contact-tag">mobile</span></div>}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+
                 <div className="cv2-card">
                   <div className="cv2-card-head"><span>Contract &amp; Financials</span></div>
                   <div className="cv2-fin-grid">
@@ -859,6 +918,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
                       <div className="cv2-fin-src">live from QuickBooks</div>
                     )}
                   </div>
+                </div>
                 </div>
 
                 {/* details */}
@@ -971,26 +1031,9 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
                   </div>
                 </div>
 
-                <div className="cv2-cols cv2-cols-even">
-                  {/* contact */}
-                  <div className="cv2-card">
-                    <div className="cv2-card-head">
-                      <span>Contact</span>
-                      <button className="cv2-contact-change" onClick={() => setContactPicker(true)} disabled={saving}>
-                        {f.zz__Display_Contact__ct && f.zz__Display_Contact__ct !== '<unassigned>' ? 'Change' : 'Assign'}
-                      </button>
-                    </div>
-                    <div className="cv2-contact">
-                      {f.Address_Block_Billing && <div className="cv2-contact-row"><span className="cv2-ic">⌖</span><span style={{ whiteSpace: 'pre-wrap' }}>{f.Address_Block_Billing.replace(/\r/g, '\n')}</span></div>}
-                      {f['rcd_cntct_INADR__email::zz__Address__ct'] && <div className="cv2-contact-row"><span className="cv2-ic">✉</span><a href={`mailto:${f['rcd_cntct_INADR__email::zz__Address__ct']}`}>{f['rcd_cntct_INADR__email::zz__Address__ct']}</a></div>}
-                      {f['rcd_cntct_PHONE__work::Number'] && <div className="cv2-contact-row"><span className="cv2-ic">✆</span><span>{f['rcd_cntct_PHONE__work::Number']}</span></div>}
-                      {f['rcd_cntct_PHONE__mobile::Number'] && <div className="cv2-contact-row"><span className="cv2-ic">▢</span><span>{f['rcd_cntct_PHONE__mobile::Number']}</span></div>}
-                    </div>
-                  </div>
-
-                  {/* team */}
-                  <div className="cv2-card">
-                    <div className="cv2-card-head"><span>Team</span></div>
+                {/* team */}
+                <div className="cv2-card">
+                  <div className="cv2-card-head"><span>Team</span></div>
                     <div className="cv2-team">
                       {/* Operations Lead is a Vibe-only field held in Redis, not
                           FileMaker — so it saves immediately on change rather
@@ -1018,7 +1061,6 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
                       ))}
                     </div>
                   </div>
-                </div>
                 </div>
 
               {allPhasesDone && !(status || '').toLowerCase().includes('complet') && (
