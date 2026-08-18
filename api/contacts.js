@@ -12,6 +12,7 @@ import { getGoogleSession } from './_googleSession.js';
 import { ALLOWED_DBS } from './_fmp.js';
 import { Redis } from '@upstash/redis';
 import { K, displayName, methodList } from './_contacts.js';
+import { resolveContactDisplay } from './_contactDisplay.js';
 
 const redis = Redis.fromEnv();
 const parse = v => { try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return null; } };
@@ -33,6 +34,28 @@ export default async function handler(req, res) {
   if (!ALLOWED_DBS.has(db)) return res.status(400).json({ error: 'db not allowed' });
 
   try {
+    // PHASE C1: what Vibe would show for a contact in place of FileMaker's
+    // calculated organization/contact names and billing address block.
+    //
+    // Read-only, and batched because the point of it is checking the resolver
+    // against a lot of real records at once — one call per contact would make
+    // a thousand-record comparison a thousand round trips.
+    //
+    // `org` is the organization the CALLER already knows about (a CCS record's
+    // own organization name, say). It is what makes a person with several
+    // affiliations resolvable; without it the resolver reports `ambiguous`
+    // rather than picking one. See api/_contactDisplay.js.
+    const resolve = String(req.query?.resolve || '');
+    if (resolve) {
+      const ids = resolve.split(',').map(s => s.trim()).filter(Boolean).slice(0, 500);
+      const hint = String(req.query?.org || '');
+      const results = {};
+      for (const id of ids) {
+        results[id] = await resolveContactDisplay(db, id, { preferOrganizationName: hint });
+      }
+      return res.status(200).json({ resolved: results, count: ids.length });
+    }
+
     // Cursor-paged, the same shape as /api/records, so the client accumulates
     // pages until the cursor comes back '0' and then searches locally — which
     // is how every other list in this app already works.

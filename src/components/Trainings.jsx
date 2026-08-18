@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { BRAND, UI } from '../config/brandColors'
-import { getRecord, prefetchRecord, updateRecord, invalidateRecord, patchCachedRecord } from '../api/filemaker';
+import { getRecord, invalidateRecord, patchCachedRecord } from '../api/filemaker';
 import { useAllRecords } from '../hooks/useAllRecords';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
 import RecordSaveBar from './RecordSaveBar';
@@ -11,6 +11,7 @@ import { LayoutCard, StatTiles, Pipeline, FinancialRows, NotesPair, ThirdsRow, C
 import { PIPELINE_STAGES, PIPELINE_SHORT, ALL_STATUSES, stageIndex, statusColor as trnStatusColor } from '../config/trainingStatus';
 import { contactDetails } from '../api/contactLookup';
 import { updateVibeRecord } from '../api/vibeRecords';
+import { displayFieldsForContact } from '../api/contactDisplay';
 import { useCcsOrgs } from '../hooks/useCcsOrgs';
 import { useValueLists } from '../hooks/useValueLists';
 import { useTrainingsKanbanBoard } from '../hooks/useTrainingsKanbanBoard';
@@ -418,25 +419,25 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
 
   // Reassign the training's contact.
   //
-  // STILL WRITES TO FILEMAKER, deliberately, mirroring CCSv2.jsx's own
-  // handleContactChange and for the identical reason: _kft__Contact_ID drives
-  // a family of FileMaker calcs (zz__Display_Contact__ct, the billing address
-  // block, the related phone/email) that a Vibe fragment cannot re-derive.
-  // Writing just the id there would change the id and leave every one of those
-  // fields showing the previous contact.
+  // Writes to VIBE as of Phase C1, mirroring CCSv2.jsx's own handleContactChange
+  // and for the identical reason it can now: api/_contactDisplay.js resolves the
+  // names and billing address block from Vibe's contact model, which is what
+  // kept this on FileMaker until today (docs/derived-fields-audit.md).
   async function handleContactChange(contactRecord) {
     setContactPicker(false);
     const newContactId = String(contactRecord?.fieldData?._kpt__Contact_ID || '').trim();
     if (!selected || !newContactId) return;
     try {
-      const res = await updateRecord(LAYOUT, selected.recordId, { _kft__Contact_ID: newContactId });
-      if (res.messages?.[0]?.code !== '0') return;
-      invalidateRecord(LAYOUT, selected.recordId);
-      const fresh = (await getRecord(LAYOUT, selected.recordId))?.response?.data?.[0];
-      if (fresh) {
-        setSelected(fresh);
-        patchCachedRecord(LAYOUT, CACHE_VERSION, selected.recordId, fresh.fieldData);
-      }
+      // No organization hint — the contact is changing, so the organization on
+      // the record describes the OLD one. clearAddress because the block
+      // currently stored is the previous contact's: blank is recoverable, an
+      // address for the wrong organization on a work order is not.
+      const { fields: display } = await displayFieldsForContact(
+        LAYOUT, newContactId, { clearAddress: true, fallbackRecord: contactRecord?.fieldData });
+      const edits = { _kft__Contact_ID: newContactId, ...display };
+      await updateVibeRecord(LAYOUT, selected.recordId, edits);
+      patchCachedRecord(LAYOUT, CACHE_VERSION, selected.recordId, edits);
+      setSelected(prev => ({ ...prev, fieldData: { ...prev.fieldData, ...edits } }));
     } catch { /* the picker already closed; a failed reassignment just leaves the old contact showing */ }
   }
 
