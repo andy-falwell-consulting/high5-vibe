@@ -6,7 +6,8 @@ import ListToolbar, { useListControls, ListBody } from './ListControls';
 import { BRAND, UI } from '../config/brandColors';
 import { formatPhone, telHref } from '../../api/_phone';
 import { useRelatedRecords, sharedNameCount } from '../hooks/useRelatedRecords';
-import { createRecord, getRecord } from '../api/filemaker';
+import { addCachedRecord } from '../api/filemaker';
+import { createVibeRecord } from '../api/vibeRecords';
 import {
   listPeople, listOrganizations, getContact, getOrganizationPeople,
   createPerson, createOrganization, updateContact,
@@ -980,11 +981,16 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
         Entry_Date: new Date().toLocaleDateString('en-US'),
       };
       if (note) fieldData.Note_Concern = note;
-      const res = await createRecord('RMI_New', fieldData);
-      const newId = res?.response?.recordId;
-      if (!newId) throw new Error(res?.messages?.[0]?.message || 'Could not create the risk record');
-      // Read it back so the RMI module opens a record that exists in its cache.
-      await getRecord('RMI_New', newId).catch(() => {});
+      // RMI_New is Vibe-owned for creation as well as edits, so this matches
+      // RMI.jsx's own handleCreate rather than going through FileMaker. The
+      // read-back that used to be needed here is gone: createVibeRecord returns
+      // the stored record, and the minted `V-` id is already _kpt__RMI_ID.
+      const made = await createVibeRecord('RMI_New', fieldData);
+      const newId = made?.recordId;
+      if (!newId) throw new Error('Could not create the risk record');
+      // Seed the RMI module's list cache so it opens a record it already knows
+      // about, the way the read-back used to. CACHE_VERSION 1 tracks RMI.jsx.
+      addCachedRecord('RMI_New', 1, { recordId: newId, fieldData: made.fieldData, portalData: {} });
       setRiskAsk(null);
       onNavigateTo?.('rmi', newId);
     } catch (e) {

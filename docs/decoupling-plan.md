@@ -41,11 +41,11 @@ Eight layouts are replicated (`api/_replica.js`).
 
 | Layout | Records | Edits owned by | Creation | Deletion |
 |---|---:|---|---|---|
-| `RCD_New` (CCS) | 6,436 | **Vibe** | FileMaker | FileMaker |
-| `Inspections_New` | ~4,900 | **Vibe** | FileMaker | FileMaker |
-| `trainings_New` | 2,478 | **Vibe** (2026-08-18) | FileMaker | FileMaker |
+| `RCD_New` (CCS) | 6,436 | **Vibe** | **Vibe** (2026-08-18) | FileMaker |
+| `Inspections_New` | ~4,900 | **Vibe** | **Vibe** | FileMaker |
+| `trainings_New` | 2,478 | **Vibe** (2026-08-18) | — *(no create path exists)* | FileMaker |
 | `Contacts_New` | 15,582 | FileMaker | **Vibe** (`V-` ids) | **Vibe** (tombstone) |
-| `Estimates_New` | 2,817 | **Vibe** (2026-08-18) | FileMaker | FileMaker |
+| `Estimates_New` | 2,817 | **Vibe** (2026-08-18) | **Vibe** (2026-08-18) | FileMaker |
 | `Products & Services_New` | 1,267 | **Vibe** (2026-08-18) | FileMaker | FileMaker |
 | `OELookup_New` | 1,247 | FileMaker | FileMaker | FileMaker |
 | `RMI_New` | 117 | **Vibe** (2026-08-18) | **Vibe** (2026-08-18) | FileMaker |
@@ -63,8 +63,14 @@ Child collections:
 | OE training (`cntct_WKSRG`) | — | FileMaker, no module |
 | Certifications (`cntct_CTFC`) | — | FileMaker, no module |
 
-Roughly: **6 of 8 layouts own their edits (1 of those — RMI — also owns
-creation); 3 of 8 child collections have moved.**
+Roughly: **6 of 8 layouts own their edits, 5 of 8 own creation; 3 of 8 child
+collections have moved.**
+
+Two of the three layouts that don't own creation *can't* be given it by
+rewiring, because they have no create path to rewire: nothing anywhere in the
+app creates a `trainings_New` or an `OELookup_New` record. Building one is a
+feature, not a migration, and needs its own design. The third, Products &
+Services, is deliberate — see below.
 
 Products & Services' and Estimates' moves were both scoped narrower than the
 first three, on purpose:
@@ -92,14 +98,28 @@ first three, on purpose:
 
 Nothing can be decoupled while FileMaker is still the writer.
 
-**A1. Generalise record creation — done.** `api/vibe-record.js`'s `{create:
-true, fieldData}` path is live, writing `__created: true` via the same
-per-table id allocator `api/_contacts.js` uses (`VIBE_PK`, checked in
-`api/_vibeStore.js`). Two modules call it today — Inspections (first) and RMI
-(2026-08-18) — both confirmed skipping the FileMaker create round-trip and its
-per-user-FMP-account requirement entirely. Remaining: wire the other Vibe-owned
-modules (RCD_New, trainings_New) onto it too — they still create via FileMaker
-even though their edits don't.
+**A1. Generalise record creation — done, and now fully wired.**
+`api/vibe-record.js`'s `{create: true, fieldData}` path is live, writing
+`__created: true` via the same per-table id allocator `api/_contacts.js` uses
+(`VIBE_PK`, checked in `api/_vibeStore.js`).
+
+Completed 2026-08-18. Wiring it up turned out to be smaller and wider than this
+plan assumed, because **creation is not per-module code** — most of it lives in
+one shared component, `QuickAddFromContact.jsx` (the "+ New ▾" button on a
+contact), which creates CCS projects, Inspections *and* Estimates. Converting
+that one component plus one call site in `ContactsV2.jsx` (which created RMI
+records directly) moved four layouts' creation at once.
+
+That also closed a gap this plan had recorded as done: Inspections' *module*
+create moved to Vibe first, but the shared quick-add path still went to
+FileMaker, so an inspection created from a contact bypassed Vibe entirely. Two
+read-backs disappeared with it — the minted `V-` id is already the table's
+primary key, so neither the inspection line-item copy nor the list-cache seed
+needs a round trip any more.
+
+Not wired, and not wirable by this route: `trainings_New` and `OELookup_New`
+have no create path anywhere in the app, and Products & Services' creation is
+deliberately still FileMaker's (see the note above the table).
 
 **A2. Generalise deletion.** Tombstones (`__deleted`) instead of `deleteRecord`.
 The store supports them; `DeleteRecordButton` is one shared component, so this is
@@ -173,6 +193,16 @@ related-work join runs on organization *name*, because the foreign key never
 names the organization (0 of 3,862 inspections, 0 of 6,329 CCS projects). When
 FileMaker goes, none of these compute. Every one must be derived from Vibe's own
 contact model first, and every consumer repointed.
+
+**This stopped being a future risk on 2026-08-18.** Now that CCS projects,
+inspections and estimates are born in Vibe, every newly created record has a
+correct `_kft__Contact_ID` and a blank organization/contact *name*, because the
+name was never stored — it was calculated by FileMaker, which has no row to
+calculate it from. Observed directly: a test CCS project created from a contact
+showed "No contact" on its own record while holding that contact's id. The
+records are correct; the display is not. C1 is therefore the first thing worth
+doing after Phase A rather than something Phase C can hold, and it grows worse
+with every record created from here on.
 
 **C2. Audit the calculations before trusting any of them.** `Sort_Order` on
 inspection line items evaluates to `"?"` on every row — a broken calculation
