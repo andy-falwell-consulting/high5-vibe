@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -625,6 +625,38 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
   const [riskError, setRiskError] = useState(null);
   // Distance / drive time to HQ, fetched per contact (api/contact-distance.js).
   const [distance, setDistance] = useState(null);
+  // Sidebar width, dragged by the handle between the list and the record.
+  // Persisted, unlike the other modules': the width someone picks is a
+  // preference, and losing it on every reload is the reason nobody adjusts it.
+  const [navWidth, setNavWidth] = useState(() => {
+    const saved = Number(localStorage.getItem('contacts-v2-nav-width'));
+    return saved >= 220 && saved <= 560 ? saved : 320;
+  });
+  const isResizing = useRef(false);
+
+  const startResize = useCallback(e => {
+    e.preventDefault();
+    isResizing.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    const startX = e.clientX;
+    const startW = navWidth;
+    const onMove = ev => {
+      if (!isResizing.current) return;
+      setNavWidth(Math.min(560, Math.max(220, startW + (ev.clientX - startX))));
+    };
+    const onUp = () => {
+      isResizing.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [navWidth]);
+
+  useEffect(() => { localStorage.setItem('contacts-v2-nav-width', String(navWidth)); }, [navWidth]);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState(null);
   const selectedId = useRef(null);
@@ -883,7 +915,7 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
 
   return (
     <div className="c2-container">
-      <aside className="c2-sidebar">
+      <aside className="c2-sidebar" style={{ width: navWidth }}>
         <div className="c2-sidebar-header">
           <div className="c2-sidebar-title">
             <div className="c2-sidebar-logo">H5</div>
@@ -937,6 +969,8 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
           <button className="c2-btn" onClick={() => setCreating(kind)}>＋ New contact</button>
         </div>
       </aside>
+
+      <div className="c2-resize-handle" onMouseDown={startResize} title="Drag to resize" />
 
       <main className="c2-main">
         {!selected ? (
