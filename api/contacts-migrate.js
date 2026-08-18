@@ -71,6 +71,26 @@ function toMethodRow(kind, f) {
   };
 }
 
+// Zero rows means one of two very different things, and they were previously
+// reported identically: the pages ran out (fine), or FileMaker refused the read
+// (not fine — "Layout is missing" is what a database that has never had the
+// _vibe layouts built says). Both returned `done: true`, so a driver looping
+// until done read a migration that copied NOTHING as a completed one. Hit for
+// real on 2026-08-18 against Dev, which has Contact_rltn but none of the other
+// four layouts.
+//
+// `total` is the tell: FileMaker reports a foundCount on a successful read even
+// when the page is past the end, and null when it never got that far.
+function endOfPages(res, { step, offset, total, msg }) {
+  if (total == null) {
+    return res.status(502).json({
+      step, offset, done: false, error: msg || 'FileMaker returned no rows and no found count',
+      hint: 'The layout this step reads is probably missing from that database.',
+    });
+  }
+  return res.status(200).json({ step, offset, done: true, total, msg });
+}
+
 async function fmPage(db, layout, offset, token) {
   const r = await fetch(
     `${FMP_HOST}/fmi/data/v2/databases/${db}/layouts/${encodeURIComponent(layout)}/records?_limit=${PAGE}&_offset=${offset}`,
@@ -101,7 +121,7 @@ export default async function handler(req, res) {
 
     if (step === 'contacts') {
       const { rows, total, msg } = await fmPage(db, CONTACTS_LAYOUT, offset, token);
-      if (!rows.length) return res.status(200).json({ step, offset, done: true, total, msg });
+      if (!rows.length) return endOfPages(res, { step, offset, total, msg });
       // A contact deleted in Vibe still has its FileMaker row, and this step
       // writes every row it reads — so without checking, a re-run would restore
       // it. `ignoreTombstones=1` is the way back from a mistaken delete.
@@ -126,7 +146,7 @@ export default async function handler(req, res) {
 
     if (step === 'relationships') {
       const { rows, total, msg } = await fmPage(db, RELATIONS_LAYOUT, offset, token);
-      if (!rows.length) return res.status(200).json({ step, offset, done: true, total, msg });
+      if (!rows.length) return endOfPages(res, { step, offset, total, msg });
       if (offset === 1) await redis.del(stageKey(db));
       const staged = {};
       for (const r of rows) {
@@ -150,7 +170,7 @@ export default async function handler(req, res) {
     if (METHOD_STEPS[step]) {
       const { layout, kind } = METHOD_STEPS[step];
       const { rows, total, msg } = await fmPage(db, layout, offset, token);
-      if (!rows.length) return res.status(200).json({ step, offset, done: true, total, msg });
+      if (!rows.length) return endOfPages(res, { step, offset, total, msg });
       if (offset === 1) await redis.del(methodKey(db, kind));
       const staged = {};
       let orphan = 0;
