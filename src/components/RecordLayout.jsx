@@ -73,24 +73,6 @@ export function Pipeline({ stages, shortLabels, index, fallbackLabel, fallbackCo
 }
 
 /**
- * One-click milestone toggles below the pipeline. `actions` is
- * [{ key, label, icon, on, onToggle }] — CSS classes match CCS's cv2-quick-*
- * exactly, so this is the same control, not a lookalike.
- */
-export function QuickActions({ actions }) {
-  if (!actions?.length) return null;
-  return (
-    <div className="cv2-quick">
-      {actions.map(a => (
-        <button key={a.key} className={`cv2-quick-btn${a.on ? ' on' : ''}`} onClick={a.onToggle}>
-          <span className="cv2-quick-ic">{a.on ? '✓' : a.icon}</span>{a.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/**
  * The sent-value / received-checkbox rows.
  *
  * `rows` is [{ label, value, onChange, type, received, onToggle }]. A row with

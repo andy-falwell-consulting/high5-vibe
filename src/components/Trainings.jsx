@@ -7,7 +7,7 @@ import RecordSaveBar from './RecordSaveBar';
 import AttachmentsPanel from './AttachmentsPanel';
 import { trainingAttachments } from '../api/trainingAttachments';
 import { generateAndAttachWorkOrder, downloadWorkOrder } from '../api/trainingWorkOrder';
-import { LayoutCard, StatTiles, Pipeline, QuickActions, FinancialRows, NotesPair, ThirdsRow, ContactDetails } from './RecordLayout';
+import { LayoutCard, StatTiles, Pipeline, FinancialRows, NotesPair, ThirdsRow, ContactDetails } from './RecordLayout';
 import { PIPELINE_STAGES, PIPELINE_SHORT, ALL_STATUSES, stageIndex, statusColor as trnStatusColor } from '../config/trainingStatus';
 import { contactDetails } from '../api/contactLookup';
 import { updateVibeRecord } from '../api/vibeRecords';
@@ -590,25 +590,6 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
                   fallbackColor={statusColor}
                   onSetStage={s => handleFieldChange('Status', s)}
                 />
-              )}
-
-              {/* Milestone toggles below the pipeline, same control as CCS's
-                  QUICK_ACTIONS. Only three of the four candidate fields are
-                  wired: in_house_recvd has never been set on a single one of
-                  the 2,478 trainings, so a pill for it would just be a button
-                  nobody has ever pressed, for a field nobody has ever used. */}
-              {stage >= 0 && (
-                <QuickActions actions={[
-                  { key: 'proposed_recvd', label: 'Proposal accepted', icon: '✓',
-                    on: isOn(val(f, edits, 'proposed_recvd')),
-                    onToggle: () => handleFieldChange('proposed_recvd', isOn(val(f, edits, 'proposed_recvd')) ? 0 : 1) },
-                  { key: 'confirmed_recvd', label: 'Confirmation received', icon: '✓',
-                    on: isOn(val(f, edits, 'confirmed_recvd')),
-                    onToggle: () => handleFieldChange('confirmed_recvd', isOn(val(f, edits, 'confirmed_recvd')) ? 0 : 1) },
-                  { key: 'po_received', label: 'PO received', icon: '$',
-                    on: isOn(val(f, edits, 'po_received')),
-                    onToggle: () => handleFieldChange('po_received', isOn(val(f, edits, 'po_received')) ? 0 : 1) },
-                ]} />
               )}
 
               <StatTiles tiles={[

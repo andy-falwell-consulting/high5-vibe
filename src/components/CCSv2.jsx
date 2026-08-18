@@ -134,14 +134,6 @@ const FIN_ROWS = [
   { label: 'Invoice #',         sent: '_kat__QuickBooks_Invoice_ID(1)', type: 'text' },
 ];
 
-// Prominent one-click actions → checklist field they satisfy.
-const QUICK_ACTIONS = [
-  { key: 'cd_Sent Contract',      label: 'Sent contract',   icon: '✉' },
-  { key: 'cd_Received Deposit',   label: 'Got deposit',     icon: '$' },
-  { key: 'cd_Received Contract',  label: 'Got contract',    icon: '✓' },
-  { key: 'Final_Invoice_Received',label: 'Final invoiced',  icon: '⊘' },
-];
-
 // ── Helpers ──────────────────────────────────────────────────────
 const EMPTY_FIELDS = {};
 const isOn = v => v === 1 || v === '1';
@@ -731,18 +723,6 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
                       </div>
                     ))}
                   </div>
-                </div>
-
-                {/* quick actions */}
-                <div className="cv2-quick">
-                  {QUICK_ACTIONS.map(qa => {
-                    const on = isOn(val(qa.key));
-                    return (
-                      <button key={qa.key} className={`cv2-quick-btn${on ? ' on' : ''}`} onClick={() => toggle(qa.key)}>
-                        <span className="cv2-quick-ic">{on ? '✓' : qa.icon}</span>{qa.label}
-                      </button>
-                    );
-                  })}
                 </div>
               </div>
 
