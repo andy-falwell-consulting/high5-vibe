@@ -90,6 +90,19 @@ export function applyOverlay(records, overlay, isLastPage) {
 // own phase, and a layout not named here still writes to FileMaker.
 export const VIBE_OWNED = new Set(['RCD_New', 'Inspections_New', 'trainings_New', 'RMI_New', 'Products & Services_New', 'Estimates_New']);
 
+// Layouts whose DELETION is Vibe's — PHASE A2.
+//
+// A separate list from VIBE_OWNED on purpose, even though it currently spans
+// more layouts. Edits moved one layout at a time (A3) because each needed its
+// own module changed; deletion moved in a single change because every module
+// deletes through one shared component. Folding the two together would silently
+// grant edit ownership to OELookup_New and Contacts_New, which was never
+// decided — the plan tracks them as separate columns for exactly this reason.
+export const VIBE_DELETES = new Set([
+  'RCD_New', 'Inspections_New', 'trainings_New', 'RMI_New',
+  'Products & Services_New', 'Estimates_New', 'Contacts_New', 'OELookup_New',
+]);
+
 // Each table's own primary key, which a record born in Vibe has to mint for
 // itself because FileMaker is not there to auto-enter one. Verified against the
 // live layouts rather than inferred from the naming pattern.
@@ -166,6 +179,37 @@ export async function writeFragment(db, layout, recordId, fieldData, by) {
 export async function dropFragment(db, layout, recordId) {
   const n = await redis.hdel(vibeKey(db, layout), String(recordId));
   return n > 0;
+}
+
+// Mark a record deleted — PHASE A2.
+//
+// Deliberately NOT the same operation as dropFragment above, which means the
+// opposite: drop reverts a record to FileMaker's version, tombstone hides it.
+// They are one keystroke apart in effect and total opposites in intent, so they
+// are separate functions rather than one with a flag.
+//
+// The tombstone REPLACES any field edits rather than joining them. Once a record
+// is deleted, what Vibe used to display is irrelevant, and keeping the fields
+// would resurrect stale values if the tombstone were ever lifted by hand.
+//
+// A record born in Vibe is dropped outright instead: it has no FileMaker row to
+// hide, so a tombstone for it is litter that every future read steps over.
+//
+// This is what makes a deletion survive a refresh. A sync replaces `repl:`
+// wholesale and never touches `vibe:`, so a deleted row keeps arriving back in
+// the replica and is hidden again on every read. Deleting from `repl:` alone
+// would last exactly until the next sync — the trap api/_contacts.js already
+// records for contacts, which is why they got tombstones first.
+export async function tombstoneFragment(db, layout, recordId, by) {
+  const id = String(recordId);
+  const existing = await readFragment(db, layout, id);
+  if (existing?.__created) {
+    await dropFragment(db, layout, id);
+    return { tombstoned: false, bornInVibe: true };
+  }
+  const frag = { __deleted: true, __updatedAt: new Date().toISOString(), __by: by || null };
+  await redis.hset(vibeKey(db, layout), { [id]: JSON.stringify(frag) });
+  return { tombstoned: true, bornInVibe: false };
 }
 
 // ── Shadowed FileMaker changes ────────────────────────────────────

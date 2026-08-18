@@ -7,6 +7,7 @@ import { copyLines } from '../api/inspectionLinesVibe';
 import { markCarriedLines } from '../api/naFlags';
 import { autoAssignOpsLead } from '../api/opsLead';
 import { getCurrentEnv } from '../config/fmpEnvironments';
+import { contactDisplayFields, namesFromContactRecord } from '../config/contactDisplay';
 import './QuickAddFromContact.css';
 
 // Shared "+ New" button for a contact: create a CCS project, Inspection, or
@@ -122,7 +123,16 @@ export default function QuickAddFromContact({ contact, onNavigateTo }) {
         if (!src) throw new Error('Could not load the inspection to copy.');
         v = { ...vals, sourceFull: src };
       }
-      const fieldData = { _kft__Contact_ID: String(contactId), ...cfg.build(v) };
+      // Names first, cfg.build LAST so it always wins. That ordering is what
+      // keeps a copied inspection correct: copyProfileFields carries the source
+      // inspection's own `Organization` (and address) across, and the source
+      // often points at a different site contact than the one being viewed —
+      // so the copy's org must come from the source, not from this contact.
+      const fieldData = {
+        _kft__Contact_ID: String(contactId),
+        ...contactDisplayFields(cfg.layout, namesFromContactRecord(contact?.fieldData)),
+        ...cfg.build(v),
+      };
       // All three layouts here are Vibe-owned (api/_vibeStore.js), so the record
       // is born in Vibe rather than FileMaker — same pattern as Inspections.jsx
       // and RMI.jsx. The minted `V-` id IS the record id AND the value of the

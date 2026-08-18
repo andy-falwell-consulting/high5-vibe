@@ -662,7 +662,6 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
                   layout={LAYOUT} cacheVersion={RCD_CACHE_VERSION}
                   recordId={selected.recordId}
                   name={org}
-                  replicaKey="projects"
                   onDeleted={() => setSelected(null)}
                 />
               </div>

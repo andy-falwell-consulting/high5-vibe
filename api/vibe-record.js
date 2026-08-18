@@ -3,8 +3,11 @@
 //   POST   /api/vibe-record?db=High5_Core4&layout=RCD_New
 //     { recordId, fieldData }  → merges those fields into the record's fragment
 //     { create: true, fieldData } → a record born in Vibe, with a minted V- id
+//     { recordId, delete: true } → tombstone: the record disappears from Vibe
+//       and stays gone across syncs. FileMaker's own row is left alone.
 //   DELETE /api/vibe-record?db=…&layout=…&recordId=…
-//     drops the fragment, so the record reverts to FileMaker's values
+//     drops the fragment, so the record reverts to FileMaker's values —
+//     the OPPOSITE of `{ delete: true }`, which is why they are different verbs
 //
 // PHASE 1c of docs/vibe-owns-the-record.md. For layouts Vibe owns, this
 // REPLACES the FileMaker write — projects are no longer written back to FMP.
@@ -20,7 +23,7 @@
 //    up, which is what the pending-write guard existed to paper over.
 import { getGoogleSession } from './_googleSession.js';
 import { ALLOWED_DBS } from './_fmp.js';
-import { VIBE_OWNED, VIBE_PK, writeFragment, dropFragment, createFragment } from './_vibeStore.js';
+import { VIBE_OWNED, VIBE_DELETES, VIBE_PK, writeFragment, dropFragment, createFragment, tombstoneFragment } from './_vibeStore.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'DELETE') {
@@ -32,18 +35,34 @@ export default async function handler(req, res) {
   const db = String(req.query?.db || '');
   const layout = String(req.query?.layout || '');
   if (!ALLOWED_DBS.has(db)) return res.status(400).json({ error: 'db not allowed' });
-  if (!VIBE_OWNED.has(layout)) {
-    // Refused rather than silently forwarded to FileMaker: a caller that thinks
-    // it is writing to Vibe and is actually writing to FMP is the exact
-    // confusion this phase exists to end.
-    return res.status(400).json({ error: `${layout} is not Vibe-owned yet — it still writes to FileMaker.` });
-  }
+
+  // Refused rather than silently forwarded to FileMaker: a caller that thinks
+  // it is writing to Vibe and is actually writing to FMP is the exact confusion
+  // this phase exists to end.
+  //
+  // Gated per operation, because deleting and editing are owned by different
+  // sets of layouts — OELookup_New and Contacts_New can be deleted through Vibe
+  // but are still edited through FileMaker.
+  const refuse = set => res.status(400).json({
+    error: `${layout} is not Vibe-owned for that operation yet — it still writes to FileMaker.`,
+    allowed: [...set],
+  });
 
   // Reverting an override back to FileMaker's values. Also the only way to
   // clear a fragment written against a record that does not exist — one of
   // those is inert, because applyOverlay surfaces a record with no FileMaker
   // counterpart only when it is marked __created, but it is still litter.
+  //
+  // NOTE: this is the opposite of the tombstone below. DELETE un-deletes, in the
+  // sense that it hands the record back to FileMaker; `{ delete: true }` hides
+  // it. Kept on separate verbs so neither can be reached by accident.
   if (req.method === 'DELETE') {
+    // Either set, not just VIBE_OWNED: this is the ONLY way to undo a tombstone,
+    // and tombstones are allowed on the wider VIBE_DELETES. Gating the undo on
+    // the narrower set made deletion irreversible on exactly the two layouts
+    // that can be deleted but not edited — OELookup_New and Contacts_New —
+    // while the confirmation dialog says the FileMaker copy survives.
+    if (!VIBE_OWNED.has(layout) && !VIBE_DELETES.has(layout)) return refuse(VIBE_DELETES);
     const id = String(req.query?.recordId || '').trim();
     if (!id) return res.status(400).json({ error: 'recordId required' });
     const removed = await dropFragment(db, layout, id);
@@ -51,6 +70,22 @@ export default async function handler(req, res) {
   }
 
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+
+  // PHASE A2: delete the record — hide it in Vibe, leave FileMaker's row alone.
+  // Checked before the edit gate because its allow-list is the wider one.
+  if (body.delete === true) {
+    if (!VIBE_DELETES.has(layout)) return refuse(VIBE_DELETES);
+    const id = String(body.recordId || '').trim();
+    if (!id) return res.status(400).json({ error: 'recordId required' });
+    try {
+      const result = await tombstoneFragment(db, layout, id, session.email);
+      return res.status(200).json({ recordId: id, layout, deleted: true, ...result, by: session.email });
+    } catch (e) {
+      return res.status(502).json({ error: String(e?.message || e).slice(0, 300) });
+    }
+  }
+
+  if (!VIBE_OWNED.has(layout)) return refuse(VIBE_OWNED);
   const recordId = String(body.recordId || '').trim();
   const fieldData = body.fieldData;
 
