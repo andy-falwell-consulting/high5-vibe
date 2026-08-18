@@ -848,16 +848,23 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
                             />
                           </div>
                         </div>
-                        <div className="cv2-team-row">
-                          <Avatar name={val('Lead Builder')} lead />
-                          <div className="cv2-team-pick"><label>Lead builder</label><InlineSelect value={val('Lead Builder')} options={builderOptions} onChange={v => stage('Lead Builder', v)} /></div>
-                        </div>
-                        {['Builder1', 'Builder2', 'Builder3'].map((bk, i) => (
-                          <div className="cv2-team-row" key={bk}>
-                            <Avatar name={val(bk)} />
-                            <div className="cv2-team-pick"><label>Builder {i + 1}</label><InlineSelect value={val(bk)} options={builderOptions} onChange={v => stage(bk, v)} /></div>
-                          </div>
-                        ))}
+                        {/* Every filled builder slot, editable in place, plus
+                            exactly one open slot at the end — same "add and
+                            expand" treatment as Trainings' Trainers card:
+                            filling it reveals the next blank one on the next
+                            render, instead of always showing all 4 rows. */}
+                        {(() => {
+                          const allKeys = [['Lead Builder', 'Lead builder'], ...['Builder1', 'Builder2', 'Builder3'].map((k, i) => [k, `Builder ${i + 1}`])];
+                          const filled = allKeys.filter(([k]) => String(val(k) || '').trim());
+                          const nextEmpty = allKeys.find(([k]) => !String(val(k) || '').trim());
+                          const rows = nextEmpty ? [...filled, nextEmpty] : filled;
+                          return rows.map(([k, label]) => (
+                            <div className="cv2-team-row" key={k}>
+                              <Avatar name={val(k)} lead={k === 'Lead Builder'} />
+                              <div className="cv2-team-pick"><label>{label}</label><InlineSelect value={val(k)} options={builderOptions} onChange={v => stage(k, v)} /></div>
+                            </div>
+                          ));
+                        })()}
                       </div>
                     </div>
                 </div>
