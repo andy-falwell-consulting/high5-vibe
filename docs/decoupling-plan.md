@@ -43,9 +43,9 @@ Eight layouts are replicated (`api/_replica.js`).
 |---|---:|---|---|---|
 | `RCD_New` (CCS) | 6,436 | **Vibe** | FileMaker | FileMaker |
 | `Inspections_New` | ~4,900 | **Vibe** | FileMaker | FileMaker |
+| `trainings_New` | 2,478 | **Vibe** (2026-08-18) | FileMaker | FileMaker |
 | `Contacts_New` | 15,582 | FileMaker | **Vibe** (`V-` ids) | **Vibe** (tombstone) |
 | `Estimates_New` | 2,817 | FileMaker | FileMaker | FileMaker |
-| `trainings_New` | 2,478 | FileMaker | FileMaker | FileMaker |
 | `Products & Services_New` | 1,267 | FileMaker | FileMaker | FileMaker |
 | `OELookup_New` | 1,247 | FileMaker | FileMaker | FileMaker |
 | `RMI_New` | 117 | FileMaker | FileMaker | FileMaker |
@@ -63,7 +63,7 @@ Child collections:
 | OE training (`cntct_WKSRG`) | — | FileMaker, no module |
 | Certifications (`cntct_CTFC`) | — | FileMaker, no module |
 
-Roughly: **2 of 8 layouts own their edits; 3 of 8 child collections have moved.**
+Roughly: **3 of 8 layouts own their edits; 3 of 8 child collections have moved.**
 
 ---
 
@@ -104,6 +104,27 @@ this, because Vibe computes the total itself.
 These two are the only reason the old Contacts page still exists.
 
 **B4. Retire the old Contacts module** once B3 lands.
+
+**B5. Repoint search and the agent to the new contacts model.** Contacts v2
+(organizations, people and affiliations as separate Vibe entities —
+`api/_contacts.js`, `api/contacts.js`, `api/contacts-write.js`) shipped
+2026-08-06/07, ahead of where `contacts-model.md` says it stands. But two
+other subsystems still only know about the pre-rebuild world:
+
+- **Global search (`⌘K`).** `src/config/recordSources.js`'s `contacts`
+  entry reads the old `Contacts_New` FileMaker replica (`layout:
+  'Contacts_New', cv: 2`), not Vibe's own `vibe:{db}:person` /
+  `vibe:{db}:org` stores. Reported 2026-08-18: **a global search finds
+  organizations but not people.** Needs a source pointed at the new model
+  (or a second one added alongside), same repointing C1 already calls for
+  on derived fields — this is the search index's version of that problem.
+- **The agent** (`api/agent.js`). Still references `layout: 'Contacts_New'`
+  and carries no context describing the org/person/affiliation split, so it
+  has no way to answer a contact question using Contacts v2's real data or
+  to explain the new structure to whoever asks it something.
+
+Same root cause as B4: two Contacts systems exist right now, and most of
+the app outside `ContactsV2.jsx` itself still assumes the old one.
 
 ---
 

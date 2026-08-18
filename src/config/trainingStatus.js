@@ -41,6 +41,15 @@ export const PIPELINE_SHORT = [
   'Inquiry', 'Follow-up', 'Proposed', 'Approved', 'Waiting on $', 'Confirmed', 'Ready to bill',
 ];
 
+// Kanban board columns = every in-flight stage (same set as PIPELINE_STAGES —
+// there's no separate "active" subset to carve out here the way CCS does,
+// since Trainings has no non-pipeline in-flight status). Terminal statuses
+// (Final Invoiced, Completed, No Go, ...) are not columns: a card set to one
+// drops off the board, same as CCS's board. Named to match CCS's ccsStatus.js
+// (ACTIVE_STAGES) since it's the same role — the board component and its API
+// route both key off this name.
+export const ACTIVE_STAGES = PIPELINE_STAGES;
+
 // Terminal — shown as a pill, never as a stage.
 export const TERMINAL_STATUSES = ['Final Invoiced', 'Completed', 'No Go'];
 

@@ -200,18 +200,6 @@
 }
 .trn-stamp-btn:hover { border-color: #e87722; color: #e87722; }
 
-/* ── Work order buttons ── */
-.trn-wo-actions { display: flex; gap: 8px; }
-.trn-wo-btn {
-  font-size: 13px; padding: 7px 12px; border-radius: 6px; font-family: inherit;
-  background: #1e2130; border: 1px solid #334155; color: #cbd5e1; cursor: pointer;
-}
-.trn-wo-btn:hover:not(:disabled) { border-color: #e87722; color: #e87722; }
-.trn-wo-btn:disabled { opacity: 0.6; cursor: default; }
-.trn-wo-error { color: #ef4444; font-size: 12px; margin: 6px 0 0; }
-
-[data-theme="light"] .trn-wo-btn { background: #f1f5f9; border-color: #e2e8f0; color: #334155; }
-
 [data-theme="light"] .trn-tabs { border-bottom-color: #e2e8f0; }
 [data-theme="light"] .trn-tab { color: #5e6b7c; }
 [data-theme="light"] .trn-tab:hover { color: #0f172a; }
