@@ -570,7 +570,7 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
                 title="Notes"
                 action={<button type="button" className="trn-stamp-btn" onClick={() => stampNote('Notes')}>⏱ Stamp</button>}
               >
-                <div className="cv2-field-block cv2-field-block--card">
+                <div>
                   <textarea
                     className="trn-notes-area"
                     value={val(f, edits, 'Notes') || ''}

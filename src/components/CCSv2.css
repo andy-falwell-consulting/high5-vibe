@@ -39,7 +39,11 @@
   font-family: 'Source Sans 3', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 17px;
 }
-[data-theme="light"] .cv2-root {
+/* Light values for the shared palette. Must name every consumer that the base
+   rule names — scoping this to .cv2-root alone left the Trainings header stuck
+   on the dark hexes in light mode. */
+[data-theme="light"] .cv2-root,
+[data-theme="light"] .trn-canvas {
   --cv2-bg: #f6f7f9; --cv2-surface: #ffffff; --cv2-surface-2: #f1f5f9;
   --cv2-border: #e6e8ec; --cv2-border-2: #d8dce2;
   --cv2-text: #0f172a; --cv2-text-2: #475569; --cv2-text-3: #4f5a69; --cv2-text-4: #5e6b7c;

@@ -28,7 +28,7 @@ export function StatTiles({ tiles }) {
       {tiles.map(t => (
         <div className="cv2-kpi" key={t.label}>
           <div className="cv2-kpi-label">{t.label}</div>
-          <div className="cv2-kpi-value" style={t.tone ? { color: t.tone } : undefined}>{t.value}</div>
+          <div className="cv2-kpi-num" style={t.tone ? { color: t.tone } : undefined}>{t.value}</div>
           {t.sub && <div className="cv2-kpi-sub">{t.sub}</div>}
         </div>
       ))}
