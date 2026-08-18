@@ -13,14 +13,13 @@ import { contactDetails } from '../api/contactLookup';
 import { updateVibeRecord } from '../api/vibeRecords';
 import { useCcsOrgs } from '../hooks/useCcsOrgs';
 import { useValueLists } from '../hooks/useValueLists';
+import { useTrainingsKanbanBoard } from '../hooks/useTrainingsKanbanBoard';
 import ContactPicker from './ContactPicker';
 import { getCurrentEnv } from '../config/fmpEnvironments';
 import { qboLink } from '../config/qboLinks';
 import './Trainings.css';
 import DeleteRecordButton from './DeleteRecordButton'
-
-const LAYOUT = 'trainings_New';
-const CACHE_VERSION = 1;
+import { TRAININGS_LAYOUT as LAYOUT, TRAININGS_CACHE_VERSION as CACHE_VERSION, TRAINER_SLOTS } from '../config/trainingsCache';
 
 const STATUS_COLOR = {
   'Final Invoiced': UI.success,
@@ -76,12 +75,6 @@ const PROGRAM_TYPES = ['Adventure Basics: Level 1 Training', 'Adventure Facilita
 // Fallback for first paint / if FileMaker's value list is unreachable — see
 // useValueLists below, which reads the live "Trainers" value list instead.
 const TRAINER_OPTIONS = ['Phil Brown', 'Lisa Hunt', 'Kyra Richardson', 'Elyse Norton', 'Cam Miller', 'Chris Damboise', 'Rich Keegan', 'Joshua Fisher', 'Alison Jackson-Frasier', 'Lisa Howard', 'Sadie Graham', 'Andrew  Wood', 'Olivia Howry', 'Hanne Bailey', 'Sam Copland', 'Stefanie Frazee', 'Jeff Frigon', 'Chris Ortiz', 'Ryan McCormick', 'Anne Louise Wagner', 'Chris Sanchez', 'Ky Schroeher', 'Jim Grout', 'Jiin Cruz', 'Sarah Morse', 'Phoebe Connolly', 'Ana Devlin Gauthier', 'Julia Stifler', 'Becky Proulx', 'Ron Vercellone', 'Amanda Klein', 'Mark Flynn', 'Beth Sayers', 'Nate Folan', 'Hutch Hutchinson', 'Stephanie Globus-Hoenig', 'Emily Kehoe', 'Tim Abraham', 'Ian Doak', 'Todd Brown', 'Jamie Thibodeau', 'Geoff Ward', "Constance O'Brien", 'Morgan Wiseman', 'Other'];
-// trainers10-trainers18 are Vibe-only — trainings_New's real FileMaker fields
-// stop at trainers9, so these nine slots exist only as Vibe overlay fields
-// (fine: trainings_New is Vibe-owned, see api/_vibeStore.js).
-const TRAINER_SLOTS = ['Trainers', 'trainers2', 'trainers3', 'trainers4', 'trainers5', 'trainers6', 'trainers7', 'trainers8', 'trainers9',
-  'trainers10', 'trainers11', 'trainers12', 'trainers13', 'trainers14', 'trainers15', 'trainers16', 'trainers17', 'trainers18'];
-
 const num = v => Number(v || 0);
 const money = v => '$' + num(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 // FileMaker stores line breaks as \r, which pre-wrap won't break on.
@@ -240,7 +233,9 @@ function InlineDate({ value, onChange }) {
 
 const isOn = v => v === 1 || v === '1';
 
-export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNavigateApp } = {}) {
+// onNavigateTo moves between Trainings' own views (workspace ↔ board);
+// onNavigateApp leaves the module entirely, for the contact links in the hero.
+export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNavigateApp, onNavigateTo } = {}) {
   const { records, total } = useAllRecords(LAYOUT, { cacheVersion: CACHE_VERSION });
   const [selected, setSelected] = useState(null);
   const [navWidth, setNavWidth] = useState(300);
@@ -256,6 +251,7 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
   const [orgPicker, setOrgPicker] = useState(false);
   const [contactPicker, setContactPicker] = useState(false);
   const trainingOrgs = useCcsOrgs(getCurrentEnv().db, 'trainings');
+  const board = useTrainingsKanbanBoard();
   const valueLists = useValueLists(LAYOUT, { Trainers: TRAINER_OPTIONS });
   const trainerOptions = valueLists.Trainers ?? TRAINER_OPTIONS;
 
@@ -524,6 +520,20 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
           <>
             <div className="trn-topbar">
               <div className="trn-topbar-actions">
+                {/* Same board-membership toggle + nav CCS's crumb bar uses
+                    (CCSv2.jsx) — cv2-ghost-btn/cv2-on-board are already
+                    loaded via RecordLayout.jsx's CCSv2.css import. */}
+                {(() => {
+                  const onBoard = board.ids.has(String(selected.recordId));
+                  return (
+                    <button className={`cv2-ghost-btn${onBoard ? ' cv2-on-board' : ''}`}
+                      onClick={() => board.toggle(selected.recordId, !onBoard)}
+                      title={onBoard ? 'Remove this training from the Kanban board' : 'Add this training to the Kanban board'}>
+                      {onBoard ? '⊞ On board ✓' : '⊞ Add to board'}
+                    </button>
+                  );
+                })()}
+                <button className="cv2-ghost-btn" onClick={() => onNavigateTo?.('trainings-kanban', selected.recordId)}>Board →</button>
                 <DeleteRecordButton
                   layout={LAYOUT} cacheVersion={CACHE_VERSION}
                   recordId={selected.recordId}
