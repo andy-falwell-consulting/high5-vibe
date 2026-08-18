@@ -41,7 +41,13 @@ export function StatTiles({ tiles }) {
  * a status that is not a stage at all — completed, no go — which is why the
  * caller passes a label to show instead of a position.
  */
-export function Pipeline({ stages, shortLabels, index, fallbackLabel, fallbackColor }) {
+// Dots joined by lines, matching CCS's own pipeline exactly — not an
+// approximation. The first version here was a flat bar of thin segments with
+// no connecting lines and no click target, which is what read as "cramped and
+// not spaced": there was nothing between the dots to space OUT.
+//
+// A dot is clickable and sets Status directly (`onSetStage`), same as CCS.
+export function Pipeline({ stages, shortLabels, index, fallbackLabel, fallbackColor, onSetStage }) {
   return (
     <div className="cv2-pipe-wrap">
       <div className="cv2-pipe-head">
@@ -55,10 +61,31 @@ export function Pipeline({ stages, shortLabels, index, fallbackLabel, fallbackCo
       <div className="cv2-pipe">
         {stages.map((s, i) => (
           <div key={s} className="cv2-pipe-seg">
-            <div className={`cv2-pipe-dot${i <= index ? ' on' : ''}`} title={s} />
+            {i > 0 && <span className="cv2-pipe-line" style={{ background: i <= index ? '#d85a30' : 'var(--cv2-line)' }} />}
+            <button className={`cv2-pipe-dot${i < index ? ' done' : i === index ? ' cur' : ''}`}
+              title={(shortLabels || stages)[i]} aria-label={(shortLabels || stages)[i]}
+              onClick={() => onSetStage?.(s)} />
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+/**
+ * One-click milestone toggles below the pipeline. `actions` is
+ * [{ key, label, icon, on, onToggle }] — CSS classes match CCS's cv2-quick-*
+ * exactly, so this is the same control, not a lookalike.
+ */
+export function QuickActions({ actions }) {
+  if (!actions?.length) return null;
+  return (
+    <div className="cv2-quick">
+      {actions.map(a => (
+        <button key={a.key} className={`cv2-quick-btn${a.on ? ' on' : ''}`} onClick={a.onToggle}>
+          <span className="cv2-quick-ic">{a.on ? '✓' : a.icon}</span>{a.label}
+        </button>
+      ))}
     </div>
   );
 }
