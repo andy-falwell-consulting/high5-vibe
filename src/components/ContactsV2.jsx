@@ -94,6 +94,14 @@ const METHOD_SPEC = {
     show: m => [m.street, [m.city, m.state].filter(Boolean).join(', '), m.zip, m.country]
       .map(s => String(s || '').trim()).filter(Boolean).join(' · '),
     href: null,
+    // Google's documented search URL, which drops a pin on the address rather
+    // than just centring the map near it. Opened in a new tab so nobody loses
+    // the record they were reading.
+    map: m => {
+      const q = [m.street, m.city, m.state, m.zip, m.country]
+        .map(v => String(v || '').trim()).filter(Boolean).join(', ');
+      return q ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}` : null;
+    },
   },
 };
 
@@ -393,6 +401,10 @@ function ContactMethods({ contact, busy, onAdd, onUpdate, onRemove }) {
                   {spec.href
                     ? <a className="c2-methodvalue" href={spec.href(m)}>{spec.show(m)}</a>
                     : <span className="c2-methodvalue">{spec.show(m)}</span>}
+                  {spec.map?.(m) && (
+                    <a className="c2-mini c2-mini--map" href={spec.map(m)}
+                      target="_blank" rel="noreferrer" title="Open in Google Maps">Map</a>
+                  )}
                   <button className="c2-mini" disabled={busy}
                     onClick={() => setForm({ kind, id: m.id })}>edit</button>
                   <button className="c2-mini c2-mini--danger" disabled={busy}
@@ -662,13 +674,16 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
   const selectedOrg = selected?.kind === 'organization' ? selected.organization : null;
   const sharedNames = selectedOrg ? sharedNameCount(selectedOrg, orgs) : 0;
 
-  // Overview always; People only for an organization. Work sources get a tab
-  // each — for an organization always, so the strip is the same shape on every
-  // record, but for a PERSON only when there is something in it: a person's
-  // work is the exception (records key to the site, not the employee), and five
-  // permanently empty tabs on 10,831 people would be noise.
+  // Overview always; People only for an organization. Every work source gets a
+  // tab on BOTH kinds, so the strip is the same shape on every record.
+  //
+  // People were once filtered to non-empty tabs, on the belief that a person's
+  // work was rare. Measured, that was wrong: the foreign key names a PERSON on
+  // four of the five sources — 1,090 of 1,091 inspection keys, 1,597 of 1,605
+  // CCS, 1,170 of 1,176 training, 98 of 98 RMI (only estimates key to the
+  // organization). 2,326 of 10,831 people, 21.5%, have work of their own, so
+  // hiding an empty tab was hiding a real one just as often.
   const workTabs = (related.groups || [])
-    .filter(g => selected?.kind === 'organization' || g.rows.length)
     .map(g => ({ id: g.src.id, label: g.src.label, count: g.rows.length }));
 
   const detailTabs = [
