@@ -90,6 +90,57 @@ export function applyOverlay(records, overlay, isLastPage) {
 // own phase, and a layout not named here still writes to FileMaker.
 export const VIBE_OWNED = new Set(['RCD_New', 'Inspections_New']);
 
+// Each table's own primary key, which a record born in Vibe has to mint for
+// itself because FileMaker is not there to auto-enter one. Verified against the
+// live layouts rather than inferred from the naming pattern.
+export const VIBE_PK = {
+  'RCD_New': '_kpt__RCD_ID',
+  'Inspections_New': '_kpt__Inspection_ID',
+  'RMI_New': '_kpt__RMI_ID',
+  'Estimates_New': '_kpt__Estimate_ID',
+  'trainings_New': '_kpt__TrainingProposal_ID',
+  'Products & Services_New': '_kpt__Item_ID',
+};
+
+// Ids for records born in Vibe: `V-100001`, from a per-layout counter.
+//
+// The prefix is deliberate and is shown wherever the id is shown, including on
+// printed reports (decided 2026-08-17). FileMaker's ids are bare integers, so
+// anything prefixed is unambiguously Vibe's, and when FileMaker is retired the
+// prefixed set is exactly the set with no counterpart to reconcile. Minting
+// numbers inside FileMaker's own sequence would have risked a silent collision
+// for the sake of cosmetics.
+//
+// Ids are opaque STRINGS everywhere; a codebase audit before Contacts shipped
+// found no numeric coercion of record ids, and a re-check before this one found
+// none either. That property has to be preserved, not assumed.
+const SEQ_START = 100000;
+
+export async function nextRecordId(db, layout) {
+  const n = await redis.incr(`vibe:${db}:seq:${layout}`);
+  return `V-${SEQ_START + n}`;
+}
+
+export const isVibeRecordId = id => /^V-/.test(String(id ?? ''));
+
+// Create a record that exists only in Vibe. `__created` is what makes
+// applyOverlay append it to the last page of a list read and api/record.js
+// serve it when FileMaker has no counterpart — both already built and, until
+// now, unreachable because nothing wrote this flag.
+export async function createFragment(db, layout, fieldData, by) {
+  const pk = VIBE_PK[layout];
+  if (!pk) throw new Error(`no primary key known for ${layout}`);
+  const id = await nextRecordId(db, layout);
+  const frag = {
+    fieldData: { ...fieldData, [pk]: id },
+    __created: true,
+    __updatedAt: new Date().toISOString(),
+    __by: by || null,
+  };
+  await redis.hset(vibeKey(db, layout), { [id]: JSON.stringify(frag) });
+  return { recordId: id, fragment: frag };
+}
+
 // Merge a set of changed fields into a record's fragment.
 //
 // Read-modify-write rather than blind overwrite, so two people editing
