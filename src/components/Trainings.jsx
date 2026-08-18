@@ -238,7 +238,7 @@ const toIso = v => {
 };
 const fromIso = iso => { if (!iso) return ''; const [y, m, d] = iso.split('-'); return `${m}/${d}/${y}`; };
 function InlineDate({ value, onChange }) {
-  return <input type="date" className="trn-inline" value={toIso(value)} onChange={e => onChange(fromIso(e.target.value))} />;
+  return <input type="date" className="trn-inline trn-inline-date" value={toIso(value)} onChange={e => onChange(fromIso(e.target.value))} />;
 }
 
 const isOn = v => v === 1 || v === '1';

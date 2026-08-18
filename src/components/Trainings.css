@@ -272,6 +272,11 @@
   padding: 3px 0; border-radius: 0;
 }
 .trn-inline:focus { outline: none; border-bottom-color: var(--cv2-accent); }
+/* Without this the native calendar-picker icon renders in the browser's
+   default (light) color scheme — a dark icon that's invisible against this
+   field's dark background. Same fix CCS's own InlineDate already has. */
+.trn-inline-date { color-scheme: dark; }
+[data-theme="light"] .trn-inline-date { color-scheme: light; }
 /* A calculated field shown in the same grid as editable ones — same padding
    as .trn-inline so it lines up, but no border/focus since it isn't
    interactive. */
