@@ -304,7 +304,6 @@ export default function EOL({ navTarget, onClearNav, onRecordSelect } = {}) {
                   <TextField label="Contact" fieldKey="zz__Display_Contact__ct" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable={false} />
                   <TextField label="Phone" fieldKey="trnpp_cntct_PHONE::Number" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable={false} mono />
                   <TextField label="Mobile" fieldKey="trnpp_cntct_PHONE_mobile::Number" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable={false} mono />
-                  <TextField label="Email" fieldKey="trnpp_cntct_INADR__email::zz__Address__ct" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable={false} />
                   <TextField label="Billing address" fieldKey="Address_Block_Billing" f={f} edits={edits} onChange={handleFieldChange} editing={!RECORDS_LOCKED} editable={false} wide />
                 </div>
               </Section>

@@ -51,7 +51,7 @@ export function buildWorkOrderDoc(record, logos, contactInfo) {
   // Vibe's contact store first (see contactLookup.js — FileMaker's related
   // fields on trainings_New are largely empty, same problem CCS had), the
   // raw FileMaker related fields as fallback.
-  const email = contactInfo?.email || f['trnpp_cntct_INADR__email::zz__Address__ct'] || '';
+  const email = contactInfo?.email || '';
   const workPhone = contactInfo?.workPhone || f['trnpp_cntct_PHONE::Number'] || '';
   const cellPhone = contactInfo?.cellPhone || f['trnpp_cntct_PHONE_mobile::Number'] || '';
   const staff = STAFF_FIELDS.map(k => f[k]).filter(Boolean).join(', ');

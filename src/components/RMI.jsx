@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { getRecord, invalidateRecord, patchCachedRecord, addCachedRecord } from '../api/filemaker'
 import { updateVibeRecord, createVibeRecord } from '../api/vibeRecords'
+import { contactDetails } from '../api/contactLookup'
 import { useAllRecords } from '../hooks/useAllRecords'
 import { BRAND, UI } from '../config/brandColors'
 import ListToolbar, { useListControls, ListBody } from './ListControls'
@@ -59,6 +60,26 @@ function TextField({ label, fieldKey, f, edits, onChange, editing, editable, mon
       ) : (
         <span className={`rmi-value${mono ? ' mono' : ''}`}>{fmText(v) || '—'}</span>
       )}
+    </div>
+  )
+}
+
+// A contact detail that comes from VIBE'S contact store rather than the record.
+//
+// PHASE C1. RMI's e-mail, work phone and mobile phone were FileMaker related
+// fields — on the layout, readable, and populated on ZERO of all 119 production
+// records, so all three printed "—" for every risk item ever opened. The
+// relationships resolve empty over the Data API, exactly as they did for CCS
+// (see api/contactLookup.js, which fixed the identical defect there).
+//
+// Read-only by nature: it is the contact's detail, edited on the contact.
+function LookupField({ label, value, href, mono }) {
+  return (
+    <div className="rmi-field">
+      <label>{label}</label>
+      <span className={`rmi-value${mono ? ' mono' : ''}`}>
+        {value ? (href ? <a href={href}>{value}</a> : value) : '—'}
+      </span>
     </div>
   )
 }
@@ -127,7 +148,25 @@ export default function RMI({ navTarget, onClearNav, onRecordSelect } = {}) {
   const [saveStatus, setSaveStatus] = useState(null)
   const [saveErrorMsg, setSaveErrorMsg] = useState(null)
   const [showNew, setShowNew] = useState(false)
+  const [contactInfo, setContactInfo] = useState(null)
   const isResizing = useRef(false)
+
+  // The selected record's contact, from Vibe — see LookupField above for why.
+  // Keyed on the contact id so a stale reply for a previously selected record
+  // cannot paint over the current one.
+  const contactFk = String(selected?.fieldData?._kft__Contact_ID || '').trim()
+  useEffect(() => {
+    // No clearing when there is no contact: `ci` below is guarded on the id, so
+    // a reply for a previously selected record can never render against this
+    // one, and clearing here would be a synchronous setState in an effect.
+    if (!contactFk) return undefined
+    let alive = true
+    contactDetails(contactFk, { firstEmail: true })
+      .then(d => { if (alive) setContactInfo({ id: contactFk, ...d }) })
+      .catch(() => { if (alive) setContactInfo({ id: contactFk }) })
+    return () => { alive = false }
+  }, [contactFk])
+  const ci = contactInfo?.id === contactFk ? contactInfo : null
 
   const orgName = f => f.zz__Display_Organization__ct || f.zz__Display_Contact__ct || ''
 
@@ -335,9 +374,9 @@ export default function RMI({ navTarget, onClearNav, onRecordSelect } = {}) {
                   <TextField label="Contact" fieldKey="zz__Display_Contact__ct" f={f} edits={edits} onChange={handleChange} editing={true} editable={false} />
                   <TextField label="Site" fieldKey="rmi_CNTCT__site::zz__Display__ct" f={f} edits={edits} onChange={handleChange} editing={true} editable={false} />
                   <TextField label="Site Number" fieldKey="rmi_CNTCT__site::Site Number" f={f} edits={edits} onChange={handleChange} editing={true} editable={false} mono />
-                  <TextField label="Email" fieldKey="rmi_cntct_INADR__emailIndividual::zz__Address__ct" f={f} edits={edits} onChange={handleChange} editing={true} editable={false} />
-                  <TextField label="Work Phone" fieldKey="rmi_cntct_PHONE__workIndividual::Number" f={f} edits={edits} onChange={handleChange} editing={true} editable={false} />
-                  <TextField label="Mobile Phone" fieldKey="rmi_cntct_PHONE__mobileIndividual::Number" f={f} edits={edits} onChange={handleChange} editing={true} editable={false} />
+                  <LookupField label="Email" value={ci?.email} href={ci?.email ? `mailto:${ci.email}` : null} />
+                  <LookupField label="Work Phone" value={ci?.workPhone} href={ci?.workHref} mono />
+                  <LookupField label="Mobile Phone" value={ci?.cellPhone} href={ci?.cellHref} mono />
                   <TextField label="RMI #" fieldKey="_kpt__RMI_ID" f={f} edits={edits} onChange={handleChange} editing={true} editable={false} mono />
                 </div>
               </Section>
