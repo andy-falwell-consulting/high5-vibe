@@ -45,10 +45,10 @@ Eight layouts are replicated (`api/_replica.js`).
 | `Inspections_New` | ~4,900 | **Vibe** | FileMaker | FileMaker |
 | `trainings_New` | 2,478 | **Vibe** (2026-08-18) | FileMaker | FileMaker |
 | `Contacts_New` | 15,582 | FileMaker | **Vibe** (`V-` ids) | **Vibe** (tombstone) |
-| `Estimates_New` | 2,817 | FileMaker | FileMaker | FileMaker |
-| `Products & Services_New` | 1,267 | FileMaker | FileMaker | FileMaker |
+| `Estimates_New` | 2,817 | **Vibe** (2026-08-18) | FileMaker | FileMaker |
+| `Products & Services_New` | 1,267 | **Vibe** (2026-08-18) | FileMaker | FileMaker |
 | `OELookup_New` | 1,247 | FileMaker | FileMaker | FileMaker |
-| `RMI_New` | 117 | FileMaker | FileMaker | FileMaker |
+| `RMI_New` | 117 | **Vibe** (2026-08-18) | **Vibe** (2026-08-18) | FileMaker |
 
 Child collections:
 
@@ -63,7 +63,28 @@ Child collections:
 | OE training (`cntct_WKSRG`) | — | FileMaker, no module |
 | Certifications (`cntct_CTFC`) | — | FileMaker, no module |
 
-Roughly: **3 of 8 layouts own their edits; 3 of 8 child collections have moved.**
+Roughly: **6 of 8 layouts own their edits (1 of those — RMI — also owns
+creation); 3 of 8 child collections have moved.**
+
+Products & Services' and Estimates' moves were both scoped narrower than the
+first three, on purpose:
+
+- **Products & Services**: field edits (including the Shopify/QuickBooks id
+  write-backs after a sync push, which are just field writes) went to Vibe,
+  but its Bill-of-Materials portal writes and record creation are
+  deliberately still FileMaker — BOM is its own migration (B2 below), and
+  creation is entangled with SKU assignment plus live Shopify/QBO pushes,
+  which deserves dedicated attention rather than being carried along
+  incidentally.
+- **Estimates**: top-level record field edits (Title, Status, Class, the
+  QBO-push id write-back) went to Vibe. Line items and the stored totals did
+  not, and can't yet: `zz__Subtotal__xn`/`zz__Tax__xn`/`zz__Total__xn` reject
+  direct writes outright (`201 Field cannot be modified`), and the only way
+  the app corrects them today is by triggering a FileMaker script
+  (`RECALC_SCRIPT` in `api/estimateLines.js`) after every line change. That's
+  a real instance of the Phase C4 problem — logic living inside FileMaker's
+  own scripts — arriving early, on a layout that isn't even in Phase C yet.
+  Moving line items to Vibe means Vibe computing the totals itself first.
 
 ---
 
@@ -71,17 +92,30 @@ Roughly: **3 of 8 layouts own their edits; 3 of 8 child collections have moved.*
 
 Nothing can be decoupled while FileMaker is still the writer.
 
-**A1. Generalise record creation.** Add a create action to `api/vibe-record.js`
-writing `__created: true`, plus a per-table id allocator on the pattern
-`api/_contacts.js` already uses. The read side is built and unused: `applyOverlay`
-appends created records on the last page, and `api/record.js` serves one when
-FileMaker has no counterpart. Only the write is missing.
+**A1. Generalise record creation — done.** `api/vibe-record.js`'s `{create:
+true, fieldData}` path is live, writing `__created: true` via the same
+per-table id allocator `api/_contacts.js` uses (`VIBE_PK`, checked in
+`api/_vibeStore.js`). Two modules call it today — Inspections (first) and RMI
+(2026-08-18) — both confirmed skipping the FileMaker create round-trip and its
+per-user-FMP-account requirement entirely. Remaining: wire the other Vibe-owned
+modules (RCD_New, trainings_New) onto it too — they still create via FileMaker
+even though their edits don't.
 
 **A2. Generalise deletion.** Tombstones (`__deleted`) instead of `deleteRecord`.
 The store supports them; `DeleteRecordButton` is one shared component, so this is
-a single change covering every module.
+a single change covering every module. Still open even for the four
+edit-owning layouts — deleting a CCS project, inspection, training or RMI
+inquiry all still call FileMaker today.
 
-**A3. Extend `VIBE_OWNED`** to the remaining six layouts, one module per change.
+**A3. Extend `VIBE_OWNED`** to the remaining layouts, one module per change.
+6 of 8 done (RCD_New, Inspections_New, trainings_New, RMI_New, Products &
+Services_New, Estimates_New — the last two edits-only, see the notes above
+the table). Remaining: `OELookup_New` (currently read-only — no edit or create path exists
+in the UI at all, so "extending" it is really "building one," a bigger job
+than the others), `Contacts_New` (edits only — its creation and deletion are
+already Vibe's, per the table above; also see B5 on why Contacts_New's
+*edit* path may not even be the right thing to extend — B4 wants the whole
+legacy module retired instead once B3 lands).
 
 **A4. Delete the FileMaker write token.** `getToken({ write: true })` in
 `src/api/filemaker.js` is the single chokepoint every mutating call routes

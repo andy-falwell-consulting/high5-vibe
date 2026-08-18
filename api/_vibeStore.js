@@ -88,7 +88,7 @@ export function applyOverlay(records, overlay, isLastPage) {
 // Layouts whose EDITS are Vibe's rather than FileMaker's. Deliberately a short
 // explicit list rather than "everything replicated": each layout moves in its
 // own phase, and a layout not named here still writes to FileMaker.
-export const VIBE_OWNED = new Set(['RCD_New', 'Inspections_New', 'trainings_New']);
+export const VIBE_OWNED = new Set(['RCD_New', 'Inspections_New', 'trainings_New', 'RMI_New', 'Products & Services_New', 'Estimates_New']);
 
 // Each table's own primary key, which a record born in Vibe has to mint for
 // itself because FileMaker is not there to auto-enter one. Verified against the

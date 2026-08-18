@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { getRecord, updateRecord, invalidateRecord, patchCachedRecord, createRecord, addCachedRecord } from '../api/filemaker'
+import { getRecord, invalidateRecord, patchCachedRecord, addCachedRecord } from '../api/filemaker'
+import { updateVibeRecord, createVibeRecord } from '../api/vibeRecords'
 import { useAllRecords } from '../hooks/useAllRecords'
 import { BRAND, UI } from '../config/brandColors'
 import ListToolbar, { useListControls, ListBody } from './ListControls'
@@ -178,7 +179,10 @@ export default function RMI({ navTarget, onClearNav, onRecordSelect } = {}) {
     if (!n) { return }
     setSaving(true); setSaveStatus(null); setSaveErrorMsg(null)
     try {
-      await updateRecord(LAYOUT, selected.recordId, edits)
+      // RMI_New is Vibe-owned (api/_vibeStore.js), so edits go to the overlay
+      // rather than back to FileMaker — see RCD_New/Inspections_New/
+      // trainings_New for the same pattern.
+      await updateVibeRecord(LAYOUT, selected.recordId, edits)
       patchCachedRecord(LAYOUT, CACHE_VERSION, selected.recordId, edits)
       invalidateRecord(LAYOUT, selected.recordId)
       setSelected(prev => ({ ...prev, fieldData: { ...prev.fieldData, ...edits } }))
@@ -201,19 +205,17 @@ export default function RMI({ navTarget, onClearNav, onRecordSelect } = {}) {
   ]
 
   async function handleCreate(fieldData) {
-    // Await only the write so the modal closes promptly; enrich + select the new
-    // record in the background (the detail fetch can be starved behind prewarm).
-    const res = await createRecord(LAYOUT, fieldData)
-    const newId = res?.response?.recordId
-    if (!newId) throw new Error(res?.messages?.[0]?.message || 'Could not create the record')
-    getRecord(LAYOUT, newId).then(d => {
-      const rec = d?.response?.data?.[0]
-      if (rec) {
-        addCachedRecord(LAYOUT, CACHE_VERSION, rec)
-        handleSelect(rec)
-        onRecordSelect?.(rec.recordId, orgName(rec.fieldData))
-      }
-    }).catch(() => {})
+    // Born in Vibe, not FileMaker — see Inspections.jsx's identical pattern.
+    // The minted `V-` id IS the record id and the value of _kpt__RMI_ID, so
+    // there is no read-back to discover the key, and no per-user FileMaker
+    // session required.
+    const made = await createVibeRecord(LAYOUT, fieldData)
+    const newId = made?.recordId
+    if (!newId) throw new Error('Could not create the record')
+    const rec = { recordId: newId, fieldData: made.fieldData, portalData: {} }
+    addCachedRecord(LAYOUT, CACHE_VERSION, rec)
+    handleSelect(rec)
+    onRecordSelect?.(rec.recordId, orgName(rec.fieldData))
   }
 
   const startResize = useCallback((e) => {
