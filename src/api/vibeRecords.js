@@ -23,6 +23,28 @@ export async function updateVibeRecord(layout, recordId, fieldData) {
   return body;
 }
 
+// Delete a record — Vibe's deletion, not FileMaker's (Phase A2).
+//
+// The record disappears from every list and read in Vibe and stays gone across
+// syncs, while FileMaker's own row is left untouched. That is the decoupled
+// meaning of delete: Vibe is the system of record, so a record being gone is a
+// fact Vibe holds, not an instruction sent to FileMaker.
+//
+// Not to be confused with the DELETE verb on the same route, which drops a
+// record's Vibe fragment and hands it BACK to FileMaker — the opposite result.
+export async function deleteVibeRecord(layout, recordId) {
+  const db = getCurrentEnv().db;
+  const res = await fetch(`/api/vibe-record?db=${encodeURIComponent(db)}&layout=${encodeURIComponent(layout)}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ recordId: String(recordId), delete: true }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || `Delete failed (${res.status})`);
+  return body;
+}
+
 // Create a record that lives only in Vibe. Returns the minted `V-` record id,
 // which is also the value written to the table's own primary key — so a caller
 // needs no read-back to discover it, unlike a FileMaker create.

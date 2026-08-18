@@ -1,31 +1,38 @@
 import { useState, useEffect, useRef } from 'react';
-import { deleteRecord, removeCachedRecord, invalidateRecord } from '../api/filemaker';
-import { getCurrentEnv } from '../config/fmpEnvironments';
+import { removeCachedRecord, invalidateRecord } from '../api/filemaker';
+import { deleteVibeRecord } from '../api/vibeRecords';
 import './DeleteRecordButton.css';
 
 // Shared "Delete record" control for every records module.
 //
-// Deletion over the FileMaker Data API is IMMEDIATE AND PERMANENT — there is no
-// trash and no undo, in the app or in FileMaker's API. Hence the typed
-// confirmation rather than a plain OK.
+// PHASE A2 of docs/decoupling-plan.md: deletion is Vibe's. The record is
+// tombstoned — it disappears from every list and read in Vibe and stays gone
+// across syncs — and FileMaker's own row is deliberately left alone.
 //
-// This deletes exactly ONE record — there is deliberately no cascade logic here.
-// FileMaker may still remove children on its own side: "Delete related records"
-// on the relationship graph is not visible over the Data API, so the app can
-// neither see nor override it. The dialog says so rather than implying Vibe
-// does the cascading.
+// Two consequences worth being straight about, both reflected in the dialog:
 //
-// After a successful delete it also tells /api/replica-delete, because the
-// Redis replica is populated by an incremental sync that only ever upserts
-// modified records and never sees deletions (see api/_replica.js). Without
-// that call the row keeps coming back from the replica until the hourly
-// reconcile catches up.
+//  - Anyone still working in FileMaker Pro will keep seeing records that are
+//    gone from Vibe. That is the honest cost of one-way decoupling, not a bug,
+//    and it ends when FileMaker is retired.
+//  - Because the FileMaker row survives, a deletion is recoverable by hand
+//    (drop the tombstone) in a way the old FileMaker delete never was. The
+//    typed confirmation stays anyway: recoverable is not the same as easy, and
+//    nothing in the UI offers it.
+//
+// This deletes exactly ONE record — there is deliberately no cascade. Nothing
+// hunts down children, and nothing needs to: children of a hidden parent are
+// unreachable in the app, and the parent can be restored intact.
+//
+// The old /api/replica-delete call is gone with the FileMaker delete that
+// needed it. That call existed because an incremental sync only ever upserts
+// and never sees deletions, so a deleted row kept coming back from the replica.
+// A tombstone survives every sync by construction, and leaving `repl:` intact
+// is what keeps the record restorable.
 export default function DeleteRecordButton({
-  layout,           // FileMaker layout, e.g. 'Contacts_New'
+  layout,           // layout name, e.g. 'Contacts_New'
   cacheVersion,     // the module's cacheVersion, so the list drops the row
   recordId,
   name,             // what to show in the dialog: "Delete <name>?"
-  replicaKey,       // optional app key for /api/replica-delete when it differs
   onDeleted,        // called after a successful delete — clear the selection
   label = 'Delete',
 }) {
@@ -49,27 +56,12 @@ export default function DeleteRecordButton({
     if (typed.trim().toUpperCase() !== 'DELETE' || busy) return;
     setBusy(true); setError(null);
     try {
-      const res = await deleteRecord(layout, recordId);
-      const msg = res?.messages?.[0];
-      if (msg?.code !== '0') {
-        // 9 / 200-ish come back when the signed-in FileMaker account has no
-        // delete privilege — say so plainly rather than "something went wrong".
-        const denied = msg?.code === '9' || /privilege|permission/i.test(msg?.message || '');
-        setError(denied
-          ? 'Your FileMaker account does not have permission to delete this record.'
-          : `FileMaker refused the delete: ${msg?.message || 'unknown error'} (${msg?.code ?? '?'})`);
-        return;
-      }
+      // Throws on failure, so there is no response code to inspect — and no
+      // FileMaker privilege error to translate, since this no longer needs a
+      // per-user FileMaker account at all.
+      await deleteVibeRecord(layout, recordId);
       removeCachedRecord(layout, cacheVersion, recordId);
       invalidateRecord(layout, recordId);
-      // Best-effort: a failure here only means the row lingers in the replica
-      // until the hourly reconcile, so it must not look like the delete failed.
-      fetch('/api/replica-delete', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ db: getCurrentEnv().db, ...(replicaKey ? { key: replicaKey } : { layout }), recordId: String(recordId) }),
-      }).catch(() => {});
       close();
       onDeleted?.();
     } catch (e) {
@@ -90,9 +82,11 @@ export default function DeleteRecordButton({
           <div className="drb-panel" role="dialog" aria-modal="true">
             <div className="drb-title">Delete {name ? <strong>{name}</strong> : 'this record'}?</div>
             <p className="drb-warn">
-              This permanently deletes this one record in FileMaker. It cannot be undone.
-              Related records are not deleted by Vibe, but FileMaker may remove them
-              if the relationship is set to cascade.
+              This removes the record from Vibe for everyone, including its related
+              records here. There is no undo in the app.
+              <br /><br />
+              Its FileMaker copy is left alone, so anyone working directly in
+              FileMaker Pro will still see it.
             </p>
             <label className="drb-label" htmlFor="drb-confirm">Type <strong>DELETE</strong> to confirm</label>
             <input
@@ -110,7 +104,7 @@ export default function DeleteRecordButton({
             <div className="drb-actions">
               <button className="drb-cancel" onClick={close} disabled={busy}>Cancel</button>
               <button className="drb-confirm" onClick={handleDelete} disabled={!armed || busy}>
-                {busy ? 'Deleting…' : 'Delete permanently'}
+                {busy ? 'Deleting…' : 'Delete record'}
               </button>
             </div>
           </div>

@@ -41,14 +41,14 @@ Eight layouts are replicated (`api/_replica.js`).
 
 | Layout | Records | Edits owned by | Creation | Deletion |
 |---|---:|---|---|---|
-| `RCD_New` (CCS) | 6,436 | **Vibe** | **Vibe** (2026-08-18) | FileMaker |
-| `Inspections_New` | ~4,900 | **Vibe** | **Vibe** | FileMaker |
-| `trainings_New` | 2,478 | **Vibe** (2026-08-18) | — *(no create path exists)* | FileMaker |
+| `RCD_New` (CCS) | 6,436 | **Vibe** | **Vibe** (2026-08-18) | **Vibe** (2026-08-18) |
+| `Inspections_New` | ~4,900 | **Vibe** | **Vibe** | **Vibe** (2026-08-18) |
+| `trainings_New` | 2,478 | **Vibe** (2026-08-18) | — *(no create path exists)* | **Vibe** (2026-08-18) |
 | `Contacts_New` | 15,582 | FileMaker | **Vibe** (`V-` ids) | **Vibe** (tombstone) |
-| `Estimates_New` | 2,817 | **Vibe** (2026-08-18) | **Vibe** (2026-08-18) | FileMaker |
-| `Products & Services_New` | 1,267 | **Vibe** (2026-08-18) | FileMaker | FileMaker |
-| `OELookup_New` | 1,247 | FileMaker | FileMaker | FileMaker |
-| `RMI_New` | 117 | **Vibe** (2026-08-18) | **Vibe** (2026-08-18) | FileMaker |
+| `Estimates_New` | 2,817 | **Vibe** (2026-08-18) | **Vibe** (2026-08-18) | **Vibe** (2026-08-18) |
+| `Products & Services_New` | 1,267 | **Vibe** (2026-08-18) | FileMaker | **Vibe** (2026-08-18) |
+| `OELookup_New` | 1,247 | FileMaker | FileMaker | **Vibe** (2026-08-18) |
+| `RMI_New` | 117 | **Vibe** (2026-08-18) | **Vibe** (2026-08-18) | **Vibe** (2026-08-18) |
 
 Child collections:
 
@@ -121,11 +121,32 @@ Not wired, and not wirable by this route: `trainings_New` and `OELookup_New`
 have no create path anywhere in the app, and Products & Services' creation is
 deliberately still FileMaker's (see the note above the table).
 
-**A2. Generalise deletion.** Tombstones (`__deleted`) instead of `deleteRecord`.
-The store supports them; `DeleteRecordButton` is one shared component, so this is
-a single change covering every module. Still open even for the four
-edit-owning layouts — deleting a CCS project, inspection, training or RMI
-inquiry all still call FileMaker today.
+**A2. Generalise deletion — done 2026-08-18.** Tombstones (`__deleted`) instead
+of `deleteRecord`, across all eight layouts in one change, because
+`DeleteRecordButton` is the single control every module uses.
+
+What deleting now means, decided rather than inherited: the record disappears
+from Vibe for everyone and stays gone across syncs, and **FileMaker's row is
+left alone**. Two consequences, both said plainly in the confirmation dialog
+rather than buried here — anyone still working in FileMaker Pro keeps seeing
+records that are gone from Vibe, and a deletion is now recoverable by hand
+(drop the tombstone) in a way the old FileMaker delete never was.
+
+Three implementation notes that are easy to get wrong:
+
+- `VIBE_DELETES` is a **separate list** from `VIBE_OWNED`, and wider.
+  `OELookup_New` and `Contacts_New` can be deleted through Vibe while still
+  being edited through FileMaker. Folding the two sets together would silently
+  grant edit ownership nobody decided on.
+- The route's `DELETE` verb and its `{ delete: true }` body do **opposite**
+  things — `DELETE` drops a fragment and hands the record back to FileMaker,
+  `{ delete: true }` hides it. They are kept on different verbs so neither is
+  reachable by accident.
+- `/api/replica-delete` is gone from this path. It existed because an
+  incremental sync only ever upserts and never sees deletions, so a deleted row
+  kept returning from the replica. A tombstone survives every sync by
+  construction, and leaving `repl:` intact is exactly what keeps the record
+  restorable.
 
 **A3. Extend `VIBE_OWNED`** to the remaining layouts, one module per change.
 6 of 8 done (RCD_New, Inspections_New, trainings_New, RMI_New, Products &
@@ -141,6 +162,22 @@ legacy module retired instead once B3 lands).
 `src/api/filemaker.js` is the single chokepoint every mutating call routes
 through. Removing it makes "we still write to FileMaker" *impossible* rather
 than merely untrue, and retires the per-user-FMP-account failure class.
+
+**Not yet reachable.** As of 2026-08-18 no write to a Vibe-owned layout goes to
+FileMaker any more, but these still do, and each needs its own decision first:
+
+| Still writes to FileMaker | Why it hasn't moved |
+|---|---|
+| Estimate line items + totals (`api/estimateLines.js`) | totals are script-maintained and reject direct writes — B1 |
+| Bill of materials (`ProductsAndServicesV2.jsx`) | B2 |
+| Products & Services creation | entangled with SKU assignment and live Shopify/QBO pushes |
+| Estimates creation | not yet moved; no blocker known, just untouched |
+| Legacy Contacts module — edits, creation, portals, `Contact_rltn` | B4 wants the module retired instead |
+| Contact reassignment on CCS and Trainings | re-derives FileMaker calcs Vibe can't yet reproduce — C1 |
+
+`TandD.jsx` and `EOL.jsx` also still call `updateRecord`, but both set
+`RECORDS_LOCKED = true` and are view-only, so those calls are unreachable. They
+should be removed with the placeholder modules rather than counted as writes.
 
 ---
 
