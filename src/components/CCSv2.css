@@ -1,5 +1,10 @@
 /* ── Theme tokens ──────────────────────────────────────────────── */
-.cv2-root {
+/* The --cv2-* palette is what every block in RecordLayout.jsx paints with, so
+   it has to be in scope wherever those blocks are used — not only inside the
+   CCS module. Without .trn-canvas here the shared cards render transparent on
+   Trainings, which is exactly what happened the first time. */
+.cv2-root,
+.trn-canvas {
   --cv2-bg: #0f1117;
   --cv2-surface: #13151c;
   --cv2-surface-2: #1a1d2e;
