@@ -973,12 +973,17 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
                       onClick={() => { setRiskError(null); setRiskAsk('asking'); }}>Mark high risk</button>
                   )}
                 </div>
-                {person.notes && <p className="c2-notes">{person.notes}</p>}
                 {actionError && <div className="c2-error">{actionError}</div>}
 
                 <Tabs tabs={detailTabs} active={activeTab} onPick={setTab} />
 
                 {activeTab === 'overview' && (<>
+                {/* Notes live INSIDE Overview, not above the strip. Some run to
+                    thousands of characters — one contact carries 4,303 — and
+                    above the tabs that pushed the strip clean off the screen. */}
+                {person.notes && (
+                  <Section icon="✎" title="Notes"><p className="c2-notes">{person.notes}</p></Section>
+                )}
                 <Section icon="✉" title="Contact details">
                   <ContactMethods contact={person} busy={busy}
                     onAdd={(k, v) => act(() => addMethod(person.id, k, v))}
@@ -1060,12 +1065,14 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
                       onClick={() => { setRiskError(null); setRiskAsk('asking'); }}>Mark high risk</button>
                   )}
                 </div>
-                {org.notes && <p className="c2-notes">{org.notes}</p>}
                 {actionError && <div className="c2-error">{actionError}</div>}
 
                 <Tabs tabs={detailTabs} active={activeTab} onPick={setTab} />
 
                 {activeTab === 'overview' && (<>
+                {org.notes && (
+                  <Section icon="✎" title="Notes"><p className="c2-notes">{org.notes}</p></Section>
+                )}
                 <Section icon="✉" title="Contact details">
                   <ContactMethods contact={org} busy={busy}
                     onAdd={(k, v) => act(() => addMethod(org.id, k, v))}
