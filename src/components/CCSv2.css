@@ -366,6 +366,14 @@
 .cv2-fin-line { display: grid; grid-template-columns: 140px 1fr 110px; align-items: center; gap: 10px; padding: 3px 0; }
 .cv2-fin-label { font-size: 15px; color: var(--cv2-text-2); text-align: right; }
 .cv2-fin-input { min-width: 0; }
+/* A date input needs room for its full MM/DD/YYYY text plus the calendar
+   icon. The min-width has to live on the GRID CELL (.cv2-fin-input), not
+   the <input> inside it — a min-width on the input alone doesn't grow a
+   collapsed 1fr track, it just overflows past the cell's own edge, which
+   overlapped the Received button instead of fixing anything. Scoped to
+   date rows only (see RecordLayout.jsx), so text fields (PO #, invoice #)
+   keep shrinking freely. */
+.cv2-fin-input--date { min-width: 118px; }
 .cv2-fin-ref { display: inline-block; padding: 5px 8px; font-size: 17px; color: var(--cv2-text); }
 .cv2-fin-rcv { display: inline-flex; align-items: center; gap: 7px; padding: 5px 9px; border: 1px solid var(--cv2-border-2); border-radius: 7px; background: transparent; color: var(--cv2-text-2); font-size: 14px; font-family: inherit; cursor: pointer; transition: background 0.12s, border-color 0.12s, color 0.12s; }
 .cv2-fin-rcv:hover { background: var(--cv2-surface-2); }

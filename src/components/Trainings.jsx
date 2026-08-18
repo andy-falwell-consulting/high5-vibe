@@ -637,22 +637,27 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
                 </>}
                 right={
                   <LayoutCard title="Contract and financials">
-                    {/* Trainings' own 7 fields (kept as-is — Proposed/Confirmed
-                        etc. are not CCS's fields and aren't being renamed to
-                        match them), styled exactly like CCS's card: date
-                        fields get a real date picker, not a text box. */}
+                    {/* Same 6 labels as CCS's card, each wired to Trainings'
+                        own field. Two are not a clean 1:1: Trainings has no
+                        PO-number text field, so 'PO #' shows deposit_number
+                        (paired with the real po_received checkbox); and
+                        'Final Invoice Sent' has no matching *_recvd field, so
+                        it gets no Received button, same as CCS would show
+                        for a milestone with no checkbox. 'Sent in-house' is
+                        dropped from this card — still editable on the
+                        Logistics tab as 'Logistics sent', same field. */}
                     <FinancialRows
                       InlineText={InlineValue}
                       InlineDate={InlineDate}
                       rows={[
-                        { label: 'Estimate / D#', value: val(f, edits, '_kat__QuickBooks_Estimate_ID') || '', onChange: v => handleFieldChange('_kat__QuickBooks_Estimate_ID', v) },
-                        { label: 'Proposed', type: 'date', value: val(f, edits, 'Proposed') || '', onChange: v => handleFieldChange('Proposed', v),
+                        { label: 'Estimate #', value: val(f, edits, '_kat__QuickBooks_Estimate_ID') || '', onChange: v => handleFieldChange('_kat__QuickBooks_Estimate_ID', v) },
+                        { label: 'Contract Sent', type: 'date', value: val(f, edits, 'Proposed') || '', onChange: v => handleFieldChange('Proposed', v),
                           received: isOn(val(f, edits, 'proposed_recvd')), onToggle: () => handleFieldChange('proposed_recvd', isOn(val(f, edits, 'proposed_recvd')) ? 0 : 1) },
-                        { label: 'Confirmed', type: 'date', value: val(f, edits, 'Confirmed') || '', onChange: v => handleFieldChange('Confirmed', v),
+                        { label: 'Deposit Invoice Sent', type: 'date', value: val(f, edits, 'Confirmed') || '', onChange: v => handleFieldChange('Confirmed', v),
                           received: isOn(val(f, edits, 'confirmed_recvd')), onToggle: () => handleFieldChange('confirmed_recvd', isOn(val(f, edits, 'confirmed_recvd')) ? 0 : 1) },
-                        { label: 'Sent in-house', type: 'date', value: val(f, edits, 'sent in-house') || '', onChange: v => handleFieldChange('sent in-house', v) },
-                        { label: 'Final sent', type: 'date', value: val(f, edits, 'Final Sent') || '', onChange: v => handleFieldChange('Final Sent', v) },
-                        { label: 'Deposit #', value: val(f, edits, 'deposit_number') || '', onChange: v => handleFieldChange('deposit_number', v) },
+                        { label: 'PO #', value: val(f, edits, 'deposit_number') || '', onChange: v => handleFieldChange('deposit_number', v),
+                          received: isOn(val(f, edits, 'po_received')), onToggle: () => handleFieldChange('po_received', isOn(val(f, edits, 'po_received')) ? 0 : 1) },
+                        { label: 'Final Invoice Sent', type: 'date', value: val(f, edits, 'Final Sent') || '', onChange: v => handleFieldChange('Final Sent', v) },
                         { label: 'Invoice #', value: val(f, edits, '_kat__QuickBooks_Invoice_ID') || '', onChange: v => handleFieldChange('_kat__QuickBooks_Invoice_ID', v) },
                       ]}
                     />

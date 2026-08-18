@@ -85,7 +85,11 @@ export function FinancialRows({ rows, InlineText, InlineDate }) {
       {rows.map(row => (
         <div className="cv2-fin-line" key={row.label}>
           <span className="cv2-fin-label">{row.label}</span>
-          <div className="cv2-fin-input">
+          {/* The date-only modifier gives the GRID CELL a min-width, not just
+              the input inside it — a min-width on the input alone let it
+              overflow its own (still-collapsed) cell rather than growing it,
+              which is what clipped/overlapped the calendar icon. */}
+          <div className={`cv2-fin-input${row.type === 'date' ? ' cv2-fin-input--date' : ''}`}>
             {row.type === 'date'
               ? <InlineDate value={row.value} onChange={row.onChange} />
               : <InlineText value={row.value} onChange={row.onChange} placeholder="—" />}
