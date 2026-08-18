@@ -805,8 +805,6 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
                 <div className="trn-field-grid">
                   <CheckField label="Inspection required" fieldKey="Inspection Required" f={f} edits={edits} onChange={handleFieldChange} />
                   <TextField label="Report printed" fieldKey="Report Printed" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="Location address" fieldKey="Location Address" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable wide />
-                  <TextAreaField label="Description of training" fieldKey="Description of Training" f={f} edits={edits} onChange={handleFieldChange} rows={3} />
                   <div className="trn-field wide">
                     <div className="trn-wo-actions">
                       <button type="button" className="trn-wo-btn" disabled={!!woBusy} onClick={() => handleGenerateWorkOrder(true)}>

@@ -402,6 +402,43 @@ export default function TrainingsKanban({ navTarget, onNavigateTo, onClearNav })
   const boardRef = useRef(null)
   const scrollDir = useRef(0)
 
+  // A plain vertical mouse wheel does nothing on a horizontal-only
+  // `overflow-x: auto` container — browsers don't chain vertical wheel
+  // input into horizontal scroll on their own, only an explicit
+  // Shift+wheel or a trackpad's native horizontal swipe does. With seven
+  // columns and only 4-5 fitting on a normal laptop width, that left most
+  // of the board unreachable without knowing that trick. Translating
+  // deltaY into scrollLeft here makes an ordinary wheel scroll the board,
+  // same as Trello/GitHub Projects do.
+  //
+  // Attached as a native listener (not JSX onWheel) because React attaches
+  // wheel listeners passively by default — e.preventDefault() inside a JSX
+  // handler throws "Unable to preventDefault inside passive event
+  // listener" and silently no-ops, which would let the page try to scroll
+  // vertically at the same time as the board scrolls horizontally.
+  useEffect(() => {
+    const el = boardRef.current
+    if (!el) return undefined
+    const onWheel = e => {
+      if (e.deltaY === 0) return
+      // Defer to a column's own vertical scroll when it still has room to
+      // move in that direction — a lane that's grown past its visible
+      // height (Ready to Bill piling up over a busy month, say) should
+      // still scroll vertically under the cursor rather than the whole
+      // board lurching sideways instead.
+      const colBody = e.target.closest?.('.tkb-col-body')
+      if (colBody) {
+        const canScrollDown = e.deltaY > 0 && colBody.scrollTop + colBody.clientHeight < colBody.scrollHeight
+        const canScrollUp = e.deltaY < 0 && colBody.scrollTop > 0
+        if (canScrollDown || canScrollUp) return
+      }
+      el.scrollLeft += e.deltaY
+      e.preventDefault()
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
   useEffect(() => {
     if (!activeId) return
     const EDGE_PX = 80, STEP_PX = 16
