@@ -150,6 +150,50 @@ testing it only in production.
 
 ---
 
+## 6. The resolver, and how it measured
+
+`api/_contactDisplay.js` (v1.0.385–386) rebuilds the names and the address block
+from Vibe's contact model. Checked against **300 production CCS projects**,
+read-only, passing each record's own organization name as the hint:
+
+| | Result |
+|---|---|
+| Contact name | **295 of 295** found contacts. 0 mismatches. |
+| Organization name | **294 of 295.** |
+| Address block produced | 283 of 300 (94%) |
+| Not found in Vibe | 5 — every one of which FileMaker itself shows as `<deleted>` |
+| Ambiguous | **67 without the record's organization, 2 with it** |
+
+Two things this measured that could not have been reasoned out:
+
+- **The hint is what makes it work.** 22% of projects point at a person with
+  several affiliations and none marked primary. Passing the record's own
+  organization resolves 97% of them. Without it, a fifth of all records would
+  have needed a guess.
+- **The record's organization and the contact's employer legitimately
+  disagree** — 22 of 300. Someone employed at Lincoln School runs a project for
+  Scotia Glenville High School. FileMaker resolves the name through the
+  *record's* relationship, not the person's employment, and is right to. The
+  resolver now keeps the caller's organization for the name and **withholds the
+  address** rather than taking the employer's, because an address for the wrong
+  organization is the plausible-looking wrong answer worth most avoiding.
+
+The six "mismatches" in the first run were all FileMaker double-spacing
+(`Kevin  Kennedy`); Vibe's version is cleaner, and they are counted as matches
+above.
+
+### A divergence worth knowing about
+
+The write path and the migration disagree about primary affiliations.
+`reindexPerson` (used by every write) promotes the first affiliation to primary
+if none is set; `indexAffiliations` (used by the migration) marks primary only
+when there is exactly ONE. So "no primary organization" means *the migration
+declined to choose*, and can never arise from a contact created in the app. That
+is why the 698-person case cannot be reproduced in Dev by seeding — it was
+validated against production instead.
+
+---
+
 ## What this changes
 
 1. **C1 is smaller than the plan assumes.** The address block — the scariest
