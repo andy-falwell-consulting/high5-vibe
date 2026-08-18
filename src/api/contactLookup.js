@@ -33,8 +33,13 @@ const pickByType = (rows, types) => {
  * Reduce a contact to what these two surfaces print. Returns empty strings
  * rather than throwing: a missing or unreachable contact should still leave a
  * usable work order and a usable card, just without the details filled.
+ *
+ * `firstEmail`: Trainings wants the person's own drag-to-sorted email order
+ * respected rather than CCS's type-preference pick — see ContactsV2's email
+ * reorder UI. Still skips a bare 'Web' row, same as the default fallback
+ * below, since a website is not an email address.
  */
-export async function contactDetails(contactId) {
+export async function contactDetails(contactId, { firstEmail = false } = {}) {
   const id = String(contactId || '').trim();
   if (!id) return EMPTY;
   try {
@@ -43,8 +48,9 @@ export async function contactDetails(contactId) {
     if (!e) return EMPTY;
     const w = pickByType(e.phones, WORK_TYPES);
     const c = pickByType(e.phones, CELL_TYPES);
-    const m = pickByType(e.emails, MAIL_TYPES)
-      || (e.emails || []).find(x => String(x.type || '') !== 'Web');
+    const m = firstEmail
+      ? (e.emails || []).find(x => String(x.type || '') !== 'Web')
+      : (pickByType(e.emails, MAIL_TYPES) || (e.emails || []).find(x => String(x.type || '') !== 'Web'));
     // Display text and dial link are both returned. They differ: the display
     // reads "(781) 455-0800 ext. 2140", while the link has to be
     // "tel:+17814550800,2140" — a comma is the pause convention, and folding the

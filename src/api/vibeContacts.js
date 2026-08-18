@@ -86,3 +86,9 @@ export const updateMethod = (contactId, kind, methodId, fields) =>
   write({ action: 'update-method', contactId, kind, methodId, fields });
 export const removeMethod = (contactId, kind, methodId) =>
   write({ action: 'remove-method', contactId, kind, methodId });
+
+// Drag-to-sort a contact's own phones/emails/addresses. `order` is the full
+// list of method ids in the wanted order — same non-destructive semantics as
+// reorderOrgPeople, an id left out is appended rather than dropped.
+export const reorderMethods = (contactId, kind, order) =>
+  write({ action: 'reorder-methods', contactId, kind, order });

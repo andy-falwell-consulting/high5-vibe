@@ -29,7 +29,10 @@ export function buildWorkOrderDoc(record, logos) {
   const start = fmtDateNoZero(f['Start Date']);
   const end = fmtDateNoZero(f['End Date']);
   const dates = start && end ? `${start} to ${end}` : (start || end || '');
-  const notes = String(f['Notes'] || '').replace(/\r/g, '\n');
+  // 'Work Order' is a Vibe-only field (trainings_New is Vibe-owned, and
+  // FileMaker has no such field) — mirrors CCS's own RCD_New 'Work Order'
+  // field, which is likewise separate from its general 'Notes'.
+  const notes = String(f['Work Order'] || '').replace(/\r/g, '\n');
 
   const row = (label, value) => ({
     columns: [{ width: 70, text: label, color: '#444444', fontSize: 10 }, { width: '*', text: value || '—', fontSize: 10, margin: [0, 0, 0, 5], border: [false, false, false, true] }],

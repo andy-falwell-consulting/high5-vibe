@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { BRAND, UI } from '../config/brandColors'
 import { getRecord, prefetchRecord, updateRecord, invalidateRecord, patchCachedRecord } from '../api/filemaker';
 import { useAllRecords } from '../hooks/useAllRecords';
@@ -7,6 +7,14 @@ import RecordSaveBar from './RecordSaveBar';
 import AttachmentsPanel from './AttachmentsPanel';
 import { trainingAttachments } from '../api/trainingAttachments';
 import { generateAndAttachWorkOrder, downloadWorkOrder } from '../api/trainingWorkOrder';
+import { LayoutCard, StatTiles, Pipeline, QuickActions, FinancialRows, NotesPair, ThirdsRow, ContactDetails } from './RecordLayout';
+import { PIPELINE_STAGES, PIPELINE_SHORT, ALL_STATUSES, stageIndex, statusColor as trnStatusColor } from '../config/trainingStatus';
+import { contactDetails } from '../api/contactLookup';
+import { updateVibeRecord } from '../api/vibeRecords';
+import { useCcsOrgs } from '../hooks/useCcsOrgs';
+import { useValueLists } from '../hooks/useValueLists';
+import ContactPicker from './ContactPicker';
+import { getCurrentEnv } from '../config/fmpEnvironments';
 import './Trainings.css';
 import DeleteRecordButton from './DeleteRecordButton'
 
@@ -62,11 +70,16 @@ const LOGISTICS_FIELDS = [
 ];
 
 // Dropdown options mirrored from the trainings_New layout's FileMaker value lists.
-const STATUS_OPTIONS = ['Inquiry', 'Follow-up Needed', 'Proposed', 'Approved/Needs to be D-Invoiced & TC', 'Waiting on $ & Signed TC', 'Confirmed/Scheduled', 'Completed', 'Final Invoiced', 'No Go', 'Keene EOL/C&S', 'Out Reach', 'Other'];
 const AUDIENCE_OPTIONS = ['Corporate', 'Adult', 'College', 'Youth Public', 'Youth Private', 'EOL'];
 const PROGRAM_TYPES = ['Adventure Basics: Level 1 Training', 'Adventure Facilitaton Training', 'Beyond Basics: Level 2 Training', 'CATSEL - custom', 'Certification Exam - custom', 'CIT Training', 'Climbing Wall/Tower & Belay Skills Training', 'Corporate Program', 'Curriculum Writing', 'Consultation', 'Dialogue', 'EOL/SEL', 'EOL Sports', 'Game Bag Training', 'Gathering Again (Games & Lows)', 'Gathering Again 2 (High Elements)', 'High Elements and Belay Skills Training', 'Leadership Development', 'Low Elements Course Training', 'Low Traverse Wall Training', 'Managing an Adventure Program', 'Mastermind/Adventure Circuit', 'New Student Orientation ', 'Portable Adventure', 'Program Review', 'Team-building', 'Team Development', 'Technical Skills Refresher', 'Technical Skills Training', 'Technical Skills Verification', 'Therapeutic', 'Virtual Team-building', 'Virtual Team Development', 'Virtual Training', 'Keynote', 'Playnote', 'Other'];
+// Fallback for first paint / if FileMaker's value list is unreachable — see
+// useValueLists below, which reads the live "Trainers" value list instead.
 const TRAINER_OPTIONS = ['Phil Brown', 'Lisa Hunt', 'Kyra Richardson', 'Elyse Norton', 'Cam Miller', 'Chris Damboise', 'Rich Keegan', 'Joshua Fisher', 'Alison Jackson-Frasier', 'Lisa Howard', 'Sadie Graham', 'Andrew  Wood', 'Olivia Howry', 'Hanne Bailey', 'Sam Copland', 'Stefanie Frazee', 'Jeff Frigon', 'Chris Ortiz', 'Ryan McCormick', 'Anne Louise Wagner', 'Chris Sanchez', 'Ky Schroeher', 'Jim Grout', 'Jiin Cruz', 'Sarah Morse', 'Phoebe Connolly', 'Ana Devlin Gauthier', 'Julia Stifler', 'Becky Proulx', 'Ron Vercellone', 'Amanda Klein', 'Mark Flynn', 'Beth Sayers', 'Nate Folan', 'Hutch Hutchinson', 'Stephanie Globus-Hoenig', 'Emily Kehoe', 'Tim Abraham', 'Ian Doak', 'Todd Brown', 'Jamie Thibodeau', 'Geoff Ward', "Constance O'Brien", 'Morgan Wiseman', 'Other'];
-const TRAINER_SLOTS = ['Trainers', 'trainers2', 'trainers3', 'trainers4', 'trainers5', 'trainers6', 'trainers7', 'trainers8', 'trainers9'];
+// trainers10-trainers18 are Vibe-only — trainings_New's real FileMaker fields
+// stop at trainers9, so these nine slots exist only as Vibe overlay fields
+// (fine: trainings_New is Vibe-owned, see api/_vibeStore.js).
+const TRAINER_SLOTS = ['Trainers', 'trainers2', 'trainers3', 'trainers4', 'trainers5', 'trainers6', 'trainers7', 'trainers8', 'trainers9',
+  'trainers10', 'trainers11', 'trainers12', 'trainers13', 'trainers14', 'trainers15', 'trainers16', 'trainers17', 'trainers18'];
 
 const num = v => Number(v || 0);
 const money = v => '$' + num(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -187,7 +200,50 @@ function Section({ title, icon, children }) {
   );
 }
 
-export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}) {
+// Bare inputs for the layout blocks. The tabs below keep using TextField /
+// SelectField, which carry their own labels and dirty dots; these take a value
+// and a setter because the layout components supply the label themselves.
+function InlineValue({ value, onChange, placeholder = '—' }) {
+  return <input className="trn-inline" value={value ?? ''} placeholder={placeholder} onChange={e => onChange(e.target.value)} />;
+}
+
+function SelectValue({ value, options, onChange }) {
+  const opts = value && !options.includes(value) ? [value, ...options] : options;
+  return (
+    <select className="trn-inline" value={value ?? ''} onChange={e => onChange(e.target.value)}>
+      <option value=""></option>
+      {opts.map(o => <option key={o} value={o}>{o}</option>)}
+    </select>
+  );
+}
+
+// Same cv2-inline-select class CCS's own Team card uses — this sits inside
+// the shared cv2-team-pick markup, so it needs CCS's styling, not trn-inline's.
+function InlineSelect({ value, options, onChange }) {
+  const opts = value && !options.includes(value) ? [value, ...options] : options;
+  return (
+    <select className="cv2-inline cv2-inline-select" value={value || ''} onChange={e => onChange(e.target.value)}>
+      <option value="">—</option>
+      {opts.filter(Boolean).map(o => <option key={o} value={o}>{o}</option>)}
+    </select>
+  );
+}
+
+// Native date input, same as CCS's own InlineDate (CCSv2.jsx) — FileMaker
+// stores M/D/YYYY, the input needs ISO.
+const toIso = v => {
+  if (!v) return '';
+  const p = String(v).split('/');
+  return p.length === 3 ? `${p[2]}-${p[0].padStart(2, '0')}-${p[1].padStart(2, '0')}` : '';
+};
+const fromIso = iso => { if (!iso) return ''; const [y, m, d] = iso.split('-'); return `${m}/${d}/${y}`; };
+function InlineDate({ value, onChange }) {
+  return <input type="date" className="trn-inline" value={toIso(value)} onChange={e => onChange(fromIso(e.target.value))} />;
+}
+
+const isOn = v => v === 1 || v === '1';
+
+export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNavigateApp } = {}) {
   const { records, total } = useAllRecords(LAYOUT, { cacheVersion: CACHE_VERSION });
   const [selected, setSelected] = useState(null);
   const [navWidth, setNavWidth] = useState(300);
@@ -200,6 +256,32 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
   const [woStage, setWoStage] = useState(null);
   const [woError, setWoError] = useState(null);
   const [attReload, setAttReload] = useState(0); // bump to make AttachmentsPanel re-list
+  const [orgPicker, setOrgPicker] = useState(false);
+  const [contactPicker, setContactPicker] = useState(false);
+  const trainingOrgs = useCcsOrgs(getCurrentEnv().db, 'trainings');
+  const valueLists = useValueLists(LAYOUT, { Trainers: TRAINER_OPTIONS });
+  const trainerOptions = valueLists.Trainers ?? TRAINER_OPTIONS;
+
+  // Same org-name join CCS uses: trainings_New has no writable org field
+  // either, only the zz__Display_Organization__ct calc, so a Vibe override
+  // (trainingOrgs) or — failing that — a name match against real Vibe
+  // organizations is what makes the header clickable at all.
+  const { records: contactRecords } = useAllRecords('Contacts_New', { cacheVersion: 2 });
+  const orgIdByName = useMemo(() => {
+    const m = new Map();
+    for (const c of contactRecords) {
+      const fd = c.fieldData;
+      if (String(fd?.Organization) !== '1') continue;
+      const name = String(fd?.Name_Organization || '').trim().toLowerCase();
+      if (!name) continue;
+      m.set(name, m.has(name) ? null : String(fd._kpt__Contact_ID));
+    }
+    return m;
+  }, [contactRecords]);
+  // Contact phone/e-mail from Vibe, and live QuickBooks figures — both keyed so
+  // a slow answer cannot land on a record the user has already moved off.
+  const [contactInfo, setContactInfo] = useState(null);
+  const [fin, setFin] = useState(null);
   const isResizing = useRef(false);
 
   const orgName = f => f.zz__Display_Organization__ct || '';
@@ -287,7 +369,10 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
     if (!dirtyCount) { return; }
     setSaving(true); setSaveStatus(null); setSaveErrorMsg(null);
     try {
-      await updateRecord(LAYOUT, selected.recordId, edits);
+      // trainings_New is Vibe-owned (api/_vibeStore.js), so edits go to the
+      // overlay rather than back to FileMaker — and no longer need a per-user
+      // FileMaker account to succeed.
+      await updateVibeRecord(LAYOUT, selected.recordId, edits);
       patchCachedRecord(LAYOUT, CACHE_VERSION, selected.recordId, edits);
       invalidateRecord(LAYOUT, selected.recordId);
       setSelected(prev => ({ ...prev, fieldData: { ...prev.fieldData, ...edits } }));
@@ -322,7 +407,68 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
   const f = selected?.fieldData;
   const dirtyCount = Object.keys(edits).length;
   const status = f ? (val(f, edits, 'Status') || '') : '';
-  const statusColor = STATUS_COLOR[status] || STATUS_COLOR.default;
+  const statusColor = trnStatusColor(status) || STATUS_COLOR[status] || STATUS_COLOR.default;
+  const stage = stageIndex(status);
+
+  const heroOrgName = f?.zz__Display_Organization__ct || '';
+  const vibeOrgId = selected ? trainingOrgs.orgIdFor(selected.recordId) : '';
+  // The Vibe override wins when set; otherwise fall back to a name match, same
+  // precedence CCS uses. Plain text (no link) rather than guessing when
+  // neither resolves — an org page opened for the wrong org is worse than none.
+  const orgLinkId = vibeOrgId || orgIdByName.get(heroOrgName.trim().toLowerCase()) || '';
+
+  const contactFk = String(f?._kft__Contact_ID || '').trim();
+  const hasContact = !!f?.zz__Display_Contact__ct && f.zz__Display_Contact__ct !== '<unassigned>';
+
+  // Reassign the training's contact.
+  //
+  // STILL WRITES TO FILEMAKER, deliberately, mirroring CCSv2.jsx's own
+  // handleContactChange and for the identical reason: _kft__Contact_ID drives
+  // a family of FileMaker calcs (zz__Display_Contact__ct, the billing address
+  // block, the related phone/email) that a Vibe fragment cannot re-derive.
+  // Writing just the id there would change the id and leave every one of those
+  // fields showing the previous contact.
+  async function handleContactChange(contactRecord) {
+    setContactPicker(false);
+    const newContactId = String(contactRecord?.fieldData?._kpt__Contact_ID || '').trim();
+    if (!selected || !newContactId) return;
+    try {
+      const res = await updateRecord(LAYOUT, selected.recordId, { _kft__Contact_ID: newContactId });
+      if (res.messages?.[0]?.code !== '0') return;
+      invalidateRecord(LAYOUT, selected.recordId);
+      const fresh = (await getRecord(LAYOUT, selected.recordId))?.response?.data?.[0];
+      if (fresh) {
+        setSelected(fresh);
+        patchCachedRecord(LAYOUT, CACHE_VERSION, selected.recordId, fresh.fieldData);
+      }
+    } catch { /* the picker already closed; a failed reassignment just leaves the old contact showing */ }
+  }
+
+  useEffect(() => {
+    if (!contactFk) return undefined;
+    let alive = true;
+    contactDetails(contactFk, { firstEmail: true })
+      .then(d => { if (alive) setContactInfo({ id: contactFk, ...d }); })
+      .catch(() => { if (alive) setContactInfo({ id: contactFk }); });
+    return () => { alive = false; };
+  }, [contactFk]);
+  const ci = contactInfo?.id === contactFk ? contactInfo : null;
+
+  // Live QuickBooks figures. `source=trainings` tells the endpoint to read the
+  // single-value reference fields rather than RCD's repeating ones.
+  const recId = selected?.recordId;
+  useEffect(() => {
+    if (!recId) return undefined;
+    let alive = true;
+    fetch(`/api/ccs-estimate?db=${encodeURIComponent(getCurrentEnv().db)}&recordId=${recId}&source=trainings`,
+      { credentials: 'include' })
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then(j => { if (alive) setFin({ id: recId, ...j }); })
+      .catch(() => { if (alive) setFin({ id: recId }); });
+    return () => { alive = false; };
+  }, [recId]);
+  const qb = fin?.id === recId ? fin : null;
+  const money = v => (v == null ? '—' : '$' + Number(v).toLocaleString('en-US', { maximumFractionDigits: 0 }));
 
 
   return (
@@ -377,16 +523,6 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
         {selected && f && (
           <>
             <div className="trn-topbar">
-              <div className="trn-topbar-left">
-                <div>
-                  <h1 className="trn-title">{f.zz__Display_Organization__ct || '—'}</h1>
-                  <div className="trn-meta-row">
-                    {status && <span className="trn-chip status" style={{ background: statusColor + '22', color: statusColor, borderColor: statusColor + '44' }}>{status}</span>}
-                    {f['Type of Program'] && <span className="trn-chip type">{f['Type of Program']}</span>}
-                    {f['Start Date'] && <span className="trn-chip muted">{f['Start Date']}{f['End Date'] && f['End Date'] !== f['Start Date'] ? ` – ${f['End Date']}` : ''}</span>}
-                  </div>
-                </div>
-              </div>
               <div className="trn-topbar-actions">
                 <DeleteRecordButton
                   layout={LAYOUT} cacheVersion={CACHE_VERSION}
@@ -397,6 +533,219 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
               </div>
             </div>
 
+            {/* HERO — same shape as CCS's: project type above the org name,
+                contact underneath, both clickable when an id resolves and
+                both offering Change/Assign. Status lives here as a select,
+                not restated lower on the page. */}
+            <div className="cv2-hero">
+              <div className="cv2-hero-top">
+                <div className="cv2-hero-id">
+                  <div className="cv2-hero-type">{f['Type of Program'] || 'Training'}</div>
+                  <h1 className="cv2-hero-org">
+                    {orgLinkId
+                      ? <button type="button" className="cv2-hero-link" title="Open this organization"
+                          onClick={() => onNavigateApp?.('contacts-v2', orgLinkId)}>{heroOrgName || '—'}</button>
+                      : (heroOrgName || '—')}
+                    <button className="cv2-pick-btn" onClick={() => setOrgPicker(true)} title="Assign this training to an organization">
+                      {orgLinkId || heroOrgName ? 'Change' : 'Assign'}
+                    </button>
+                  </h1>
+                  <div className="cv2-hero-contact">
+                    <span className="cv2-ic">◉</span>
+                    {hasContact
+                      ? (contactFk
+                          ? <button type="button" className="cv2-hero-link" title="Open this contact"
+                              onClick={() => onNavigateApp?.('contacts-v2', contactFk)}>{f.zz__Display_Contact__ct}</button>
+                          : f.zz__Display_Contact__ct)
+                      : <span className="cv2-hero-none">No contact</span>}
+                    <button className="cv2-pick-btn" onClick={() => setContactPicker(true)} title="Choose the contact for this training">
+                      {hasContact ? 'Change' : 'Assign'}
+                    </button>
+                  </div>
+                </div>
+                <select className="cv2-status" style={{ color: statusColor, borderColor: statusColor + '55', background: statusColor + '14' }}
+                  value={status} onChange={e => handleFieldChange('Status', e.target.value)}>
+                  <option value="">— status —</option>
+                  {ALL_STATUSES.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* ── The CCS record layout, applied to a training ──────────
+                Everything above the tab strip is always visible; the tabs
+                below keep the deeper content (costs, logistics, attachments)
+                exactly where it was. See src/components/RecordLayout.jsx. */}
+            <div className="trn-canvas">
+
+              {/* A pipeline is shown only for a record actually in flight.
+                  1,493 trainings are Final Invoiced and 753 are No Go — 91% of
+                  the table — and for those the status pill above says it all;
+                  a stage bar would just read "not a stage" forever. */}
+              {stage >= 0 && (
+                <Pipeline
+                  stages={PIPELINE_STAGES}
+                  shortLabels={PIPELINE_SHORT}
+                  index={stage}
+                  fallbackLabel={status}
+                  fallbackColor={statusColor}
+                  onSetStage={s => handleFieldChange('Status', s)}
+                />
+              )}
+
+              {/* Milestone toggles below the pipeline, same control as CCS's
+                  QUICK_ACTIONS. Only three of the four candidate fields are
+                  wired: in_house_recvd has never been set on a single one of
+                  the 2,478 trainings, so a pill for it would just be a button
+                  nobody has ever pressed, for a field nobody has ever used. */}
+              {stage >= 0 && (
+                <QuickActions actions={[
+                  { key: 'proposed_recvd', label: 'Proposal accepted', icon: '✓',
+                    on: isOn(val(f, edits, 'proposed_recvd')),
+                    onToggle: () => handleFieldChange('proposed_recvd', isOn(val(f, edits, 'proposed_recvd')) ? 0 : 1) },
+                  { key: 'confirmed_recvd', label: 'Confirmation received', icon: '✓',
+                    on: isOn(val(f, edits, 'confirmed_recvd')),
+                    onToggle: () => handleFieldChange('confirmed_recvd', isOn(val(f, edits, 'confirmed_recvd')) ? 0 : 1) },
+                  { key: 'po_received', label: 'PO received', icon: '$',
+                    on: isOn(val(f, edits, 'po_received')),
+                    onToggle: () => handleFieldChange('po_received', isOn(val(f, edits, 'po_received')) ? 0 : 1) },
+                ]} />
+              )}
+
+              <StatTiles tiles={[
+                { label: 'Estimated', value: money(qb?.totals?.estimated) },
+                { label: 'Invoiced', value: money(qb?.totals?.invoiced) },
+                { label: 'Received', value: money(qb?.totals?.received) },
+                { label: 'Balance due', value: money(qb?.totals?.balanceDue),
+                  tone: qb?.totals?.balanceDue > 0 ? statusColor : undefined },
+              ]} />
+
+              <ThirdsRow
+                left={<>
+                  <LayoutCard title="Contact">
+                    <ContactDetails
+                      addressBlock={f.Address_Block_Billing}
+                      info={ci}
+                      hasContact={!!contactFk}
+                    />
+                  </LayoutCard>
+
+                  <LayoutCard title="Trainers">
+                    <div className="cv2-team">
+                      {/* Every filled slot, editable in place, plus exactly one
+                          open slot at the end so adding a trainer is just
+                          picking a name — filling it reveals the next blank
+                          one on the next render. Up to 19 total (Lead + 18
+                          numbered) now that trainers10-18 exist. */}
+                      {(() => {
+                        const allKeys = [['Lead Trainer', 'Lead trainer'], ...TRAINER_SLOTS.map((k, i) => [k, `Trainer ${i + 1}`])];
+                        const filled = allKeys.filter(([k]) => String(val(f, edits, k) || '').trim());
+                        const nextEmpty = allKeys.find(([k]) => !String(val(f, edits, k) || '').trim());
+                        const rows = nextEmpty ? [...filled, nextEmpty] : filled;
+                        return rows.map(([k, label]) => (
+                          <div className="cv2-team-row" key={k}>
+                            <span className="trn-avatar">{String(val(f, edits, k) || '').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || '—'}</span>
+                            <div className="cv2-team-pick">
+                              <label>{label}</label>
+                              <InlineSelect value={val(f, edits, k)} options={trainerOptions} onChange={v => handleFieldChange(k, v)} />
+                            </div>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  </LayoutCard>
+                </>}
+                right={
+                  <LayoutCard title="Contract and financials">
+                    <FinancialRows
+                      InlineText={InlineValue}
+                      InlineDate={InlineValue}
+                      rows={[
+                        { label: 'Estimate / D#', value: val(f, edits, '_kat__QuickBooks_Estimate_ID') || '', onChange: v => handleFieldChange('_kat__QuickBooks_Estimate_ID', v) },
+                        { label: 'Proposed', value: val(f, edits, 'Proposed') || '', onChange: v => handleFieldChange('Proposed', v),
+                          received: isOn(val(f, edits, 'proposed_recvd')), onToggle: () => handleFieldChange('proposed_recvd', isOn(val(f, edits, 'proposed_recvd')) ? 0 : 1) },
+                        { label: 'Confirmed', value: val(f, edits, 'Confirmed') || '', onChange: v => handleFieldChange('Confirmed', v),
+                          received: isOn(val(f, edits, 'confirmed_recvd')), onToggle: () => handleFieldChange('confirmed_recvd', isOn(val(f, edits, 'confirmed_recvd')) ? 0 : 1) },
+                        { label: 'Sent in-house', value: val(f, edits, 'sent in-house') || '', onChange: v => handleFieldChange('sent in-house', v) },
+                        { label: 'Final sent', value: val(f, edits, 'Final Sent') || '', onChange: v => handleFieldChange('Final Sent', v) },
+                        { label: 'Deposit #', value: val(f, edits, 'deposit_number') || '', onChange: v => handleFieldChange('deposit_number', v) },
+                        { label: 'Invoice #', value: val(f, edits, '_kat__QuickBooks_Invoice_ID') || '', onChange: v => handleFieldChange('_kat__QuickBooks_Invoice_ID', v) },
+                      ]}
+                    />
+                    {qb?.estimates?.length > 0 && (
+                      <div className="cv2-qboest">
+                        <div className="cv2-qboest-head">QuickBooks estimate{qb.estimates.length > 1 ? 's' : ''} · live</div>
+                        {qb.estimates.map(e => (
+                          <div className="cv2-qboest-row" key={e.docNumber}>
+                            <span className="cv2-qboest-doc">{e.docNumber}</span>
+                            {e.missing
+                              ? <span className="cv2-qboest-missing">not found in QuickBooks</span>
+                              : <span className={`cv2-qboest-status ${String(e.status || '').toLowerCase()}`}>{e.status || '—'}</span>}
+                            {!e.missing && <span className="cv2-qboest-total">{money(e.total)}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </LayoutCard>
+                }
+              />
+
+              <LayoutCard title="Details">
+                <div className="trn-detail-grid">
+                  <label>Program type</label><SelectValue value={val(f, edits, 'Type of Program')} options={PROGRAM_TYPES} onChange={v => handleFieldChange('Type of Program', v)} />
+                  <label>Audience</label><SelectValue value={val(f, edits, 'Audience')} options={AUDIENCE_OPTIONS} onChange={v => handleFieldChange('Audience', v)} />
+                  <label>Start date</label><InlineDate value={val(f, edits, 'Start Date')} onChange={v => handleFieldChange('Start Date', v)} />
+                  <label>End date</label><InlineDate value={val(f, edits, 'End Date')} onChange={v => handleFieldChange('End Date', v)} />
+                  <label># Days</label><InlineValue value={val(f, edits, '# Days')} onChange={v => handleFieldChange('# Days', v)} />
+                  <label># Hours</label><InlineValue value={val(f, edits, '# Hours')} onChange={v => handleFieldChange('# Hours', v)} />
+                  <label>Group size</label><InlineValue value={val(f, edits, 'Group Size')} onChange={v => handleFieldChange('Group Size', v)} />
+                  <label>Workshop location</label><InlineValue value={val(f, edits, 'Workshop Location')} onChange={v => handleFieldChange('Workshop Location', v)} />
+                  {/* Calculated — never editable, here or on any other layout. */}
+                  <label>Distance to HQ</label><span className="trn-static">{val(f, edits, 'Distance To High5') || '—'}</span>
+                  <label>Drive time</label><span className="trn-static">{val(f, edits, 'Drive Time') || '—'}</span>
+                </div>
+              </LayoutCard>
+
+              {/* Work Order Notes + Notes, side by side — mirrors CCS exactly.
+                  'Work Order' is a Vibe-only field (no such field exists on
+                  trainings_New in FileMaker; see api/_vibeStore.js) and is
+                  what the PDF prints as its body — see trainingWorkOrder.js.
+                  'Notes' is the general free-text field and keeps its own
+                  Stamp button, same as CCS's does. */}
+              <NotesPair
+                left={{
+                  title: 'Work Order Notes',
+                  children: (
+                    <>
+                      <textarea
+                        className="trn-notes-area"
+                        value={val(f, edits, 'Work Order') || ''}
+                        placeholder="Add a work order…"
+                        onChange={e => handleFieldChange('Work Order', e.target.value)}
+                      />
+                      <div className="cv2-wo-actions">
+                        <button type="button" className="cv2-wo-btn" disabled={!!woBusy} onClick={() => handleGenerateWorkOrder(false)}>
+                          {woBusy === 'download' ? (woStage || 'Working…') : '⤓ Download work order'}
+                        </button>
+                      </div>
+                      {woError && <p className="cv2-wo-error">{woError}</p>}
+                    </>
+                  ),
+                }}
+                right={{
+                  title: 'Notes',
+                  action: <button type="button" className="trn-stamp-btn" onClick={() => stampNote('Notes')}>⏱ Stamp</button>,
+                  children: (
+                    <textarea
+                      className="trn-notes-area"
+                      value={val(f, edits, 'Notes') || ''}
+                      placeholder="Add notes…"
+                      onChange={e => handleFieldChange('Notes', e.target.value)}
+                    />
+                  ),
+                }}
+              />
+            </div>
+
             <div className="trn-tabs">
               {[['info', 'Training Info'], ['costs', 'Costs / Expenses'], ['logistics', 'Logistics'], ['attachments', 'Attachments'], ['extra', 'Extra']].map(([id, label]) => (
                 <button key={id} className={`trn-tab${tab === id ? ' on' : ''}`} onClick={() => setTab(id)}>{label}</button>
@@ -405,24 +754,15 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
 
             <div className="trn-content">
               {tab === 'info' && (<>
+              {/* Organization, Contact, Type of program, Status, and everything
+                  else the Details card / hero already show above are NOT
+                  repeated here — only what has no home elsewhere on the page. */}
               <Section title="Program" icon="◈">
                 <div className="trn-field-grid">
-                  <TextField label="Organization" fieldKey="zz__Display_Organization__ct" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} />
-                  <TextField label="Contact" fieldKey="zz__Display_Contact__ct" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} />
-                  <SelectField label="Type of program" fieldKey="Type of Program" f={f} edits={edits} onChange={handleFieldChange} options={PROGRAM_TYPES} />
-                  <SelectField label="Status" fieldKey="Status" f={f} edits={edits} onChange={handleFieldChange} options={STATUS_OPTIONS} />
-                  <TextField label="Start date" fieldKey="Start Date" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="End date" fieldKey="End Date" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="# Days" fieldKey="# Days" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="# Hours" fieldKey="# Hours" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <SelectField label="Audience" fieldKey="Audience" f={f} edits={edits} onChange={handleFieldChange} options={AUDIENCE_OPTIONS} />
-                  <TextField label="Group size" fieldKey="Group Size" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="Workshop location" fieldKey="Workshop Location" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
                   <CheckField label="Inspection required" fieldKey="Inspection Required" f={f} edits={edits} onChange={handleFieldChange} />
                   <TextField label="Report printed" fieldKey="Report Printed" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
                   <TextField label="Location address" fieldKey="Location Address" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable wide />
                   <TextAreaField label="Description of training" fieldKey="Description of Training" f={f} edits={edits} onChange={handleFieldChange} rows={3} />
-                  <TextAreaField label="Notes" fieldKey="Notes" f={f} edits={edits} onChange={handleFieldChange} onStamp={stampNote} rows={7} />
                   <div className="trn-field wide">
                     <div className="trn-wo-actions">
                       <button type="button" className="trn-wo-btn" disabled={!!woBusy} onClick={() => handleGenerateWorkOrder(true)}>
@@ -439,9 +779,9 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
 
               <Section title="Trainers" icon="◉">
                 <div className="trn-field-grid">
-                  <SelectField label="Lead trainer" fieldKey="Lead Trainer" f={f} edits={edits} onChange={handleFieldChange} options={TRAINER_OPTIONS} />
+                  <SelectField label="Lead trainer" fieldKey="Lead Trainer" f={f} edits={edits} onChange={handleFieldChange} options={trainerOptions} />
                   {TRAINER_SLOTS.map((fk, i) => (
-                    <SelectField key={fk} label={`Trainer ${i + 1}`} fieldKey={fk} f={f} edits={edits} onChange={handleFieldChange} options={TRAINER_OPTIONS} />
+                    <SelectField key={fk} label={`Trainer ${i + 1}`} fieldKey={fk} f={f} edits={edits} onChange={handleFieldChange} options={trainerOptions} />
                   ))}
                 </div>
               </Section>
@@ -465,8 +805,8 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
                     totals={{ est: 'TOTAL COSTS', act: 'Act ProgTotal' }} />
                   <Section title="Travel" icon="➤">
                     <div className="trn-field-grid">
-                      <TextField label="Distance to High 5" fieldKey="Distance To High5" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                      <TextField label="Drive time" fieldKey="Drive Time" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
+                      <TextField label="Distance to High 5" fieldKey="Distance To High5" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} />
+                      <TextField label="Drive time" fieldKey="Drive Time" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} />
                       <TextField label="Mileage" fieldKey="Mileage" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
                       <TextField label="Mileage quantity" fieldKey="mileage_quantity" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
                       <TextField label="Mileage price" fieldKey="mileage_price" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
@@ -529,6 +869,31 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
           </>
         )}
       </main>
+
+      {orgPicker && (
+        <ContactPicker
+          title="Assign this training to an organization"
+          filter={c => String(c.Organization) === '1'}
+          filterLabel="organizations"
+          onSelect={r => { trainingOrgs.assign(selected.recordId, r?.fieldData?._kpt__Contact_ID); setOrgPicker(false); }}
+          onClose={() => setOrgPicker(false)}
+        />
+      )}
+
+      {/* Scoped to the chosen organization's people, same two-step pick CCS
+          uses — contacts carry no organization id, only the calculated name,
+          so the roster is joined on that. */}
+      {contactPicker && (
+        <ContactPicker
+          title={heroOrgName ? `Contact at ${heroOrgName}` : 'Assign a contact to this training'}
+          filter={heroOrgName
+            ? (c => String(c.Organization) === '0' && c.zz__Display_Organization__ct === heroOrgName)
+            : undefined}
+          filterLabel={heroOrgName ? `at ${heroOrgName}` : undefined}
+          onSelect={handleContactChange}
+          onClose={() => setContactPicker(false)}
+        />
+      )}
     </div>
   );
 }

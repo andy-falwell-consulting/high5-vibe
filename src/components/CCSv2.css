@@ -1,4 +1,25 @@
 /* ── Theme tokens ──────────────────────────────────────────────── */
+/* The --cv2-* palette, shared by every block in RecordLayout.jsx.
+   VARIABLES ONLY. This used to be folded into the .cv2-root selector, which
+   also carries `flex: 1 1 0%; overflow: hidden` — inheriting that collapsed the
+   Trainings header to zero height while its children still measured 84px. A
+   palette and a layout root are different things and must stay different rules. */
+.cv2-root,
+.trn-canvas {
+  --cv2-bg: #0f1117;
+  --cv2-surface: #13151c;
+  --cv2-surface-2: #1a1d2e;
+  --cv2-border: #1e2130;
+  --cv2-border-2: #2a2f45;
+  --cv2-text: #e2e8f0;
+  --cv2-text-2: #94a3b8;
+  --cv2-text-3: #8b97aa;
+  --cv2-text-4: #79859a;
+  --cv2-ring-track: #262b3d;
+  --cv2-line: #2a2f45;
+  --cv2-accent: var(--h5-red);
+}
+
 .cv2-root {
   --cv2-bg: #0f1117;
   --cv2-surface: #13151c;
@@ -18,7 +39,11 @@
   font-family: 'Source Sans 3', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 17px;
 }
-[data-theme="light"] .cv2-root {
+/* Light values for the shared palette. Must name every consumer that the base
+   rule names — scoping this to .cv2-root alone left the Trainings header stuck
+   on the dark hexes in light mode. */
+[data-theme="light"] .cv2-root,
+[data-theme="light"] .trn-canvas {
   --cv2-bg: #f6f7f9; --cv2-surface: #ffffff; --cv2-surface-2: #f1f5f9;
   --cv2-border: #e6e8ec; --cv2-border-2: #d8dce2;
   --cv2-text: #0f172a; --cv2-text-2: #475569; --cv2-text-3: #4f5a69; --cv2-text-4: #5e6b7c;
@@ -246,6 +271,10 @@
 [data-theme="light"] .cv2-inline-date { color-scheme: light; }
 
 .cv2-detail-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; }
+/* A calculated field shown in the same grid as editable ones — same padding
+   as .cv2-inline so it lines up, but no border/hover/focus since it isn't
+   interactive. */
+.cv2-static { display: block; width: 100%; box-sizing: border-box; padding: 5px 8px; font-size: 17px; color: var(--cv2-text-3); }
 .cv2-detail-grid > label { font-size: 14px; color: var(--cv2-text-3); text-transform: uppercase; letter-spacing: 0.04em; }
 .cv2-field-block { margin-top: 12px; }
 .cv2-field-block > label { display: block; font-size: 14px; color: var(--cv2-text-3); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 3px; }
