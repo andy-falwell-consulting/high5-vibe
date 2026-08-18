@@ -164,7 +164,7 @@ function WorkTable({ src, rows, onOpen }) {
 // the legacy Contacts module (Contacts.jsx). `state` is the effect-tracked
 // { id, rows } | null from the oeTraining fetch above.
 function OeTrainingTable({ state, openId }) {
-  if (state?.id !== openId) return <p className="c2-none">Loading…</p>;
+  if (!state || state.id !== openId) return <p className="c2-none">Loading…</p>;
   if (!state.rows.length) return <p className="c2-none">Nothing recorded.</p>;
   return (
     <div className="c2-table-scroll">
@@ -832,7 +832,7 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
     // Not module-cache-backed like workTabs — see the oeTraining effect
     // above — so its count only appears once the tab has actually been
     // opened at least once for this contact.
-    { id: 'oe_training', label: 'OE Trainings', count: oeTraining?.id === openId ? oeTraining.rows.length : 0 },
+    { id: 'oe_training', label: 'OE Trainings', count: oeTraining && oeTraining.id === openId ? oeTraining.rows.length : 0 },
   ];
 
   // A tab can vanish between records (a person with no estimates). Falling back
