@@ -16,6 +16,7 @@ import AttachmentsPanel from './AttachmentsPanel';
 import ContactPicker from './ContactPicker';
 import { listCcsAttachments, uploadCcsAttachment, deleteCcsAttachment, ccsAttachmentUrl } from '../api/ccsAttachments';
 import { downloadWorkOrder } from '../api/ccsWorkOrder';
+import { contactDetails } from '../api/contactLookup';
 import './CCSv2.css';
 import DeleteRecordButton from './DeleteRecordButton';
 
@@ -318,6 +319,9 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
   const [woError, setWoError]   = useState(null);
   const [contactPicker, setContactPicker] = useState(false);
   const [orgPicker, setOrgPicker] = useState(false);
+  // Phone and e-mail for the project's contact. Keyed by contact id so switching
+  // records cannot land a slow answer on the wrong project.
+  const [contactInfo, setContactInfo] = useState(null);
   const isResizing = useRef(false);
   const selectedRef = useRef(null); // guards async estimate fetch against stale selections
 
@@ -580,6 +584,20 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
   const sc = statusColor(merged);
   // Vibe's assignment wins when present; otherwise FileMaker's calculated
   // value still shows, so records that already have one are unaffected.
+  // Contact details come from Vibe, not FileMaker's related fields: those are on
+  // the layout but empty on all 6,436 CCS projects, which is why this card only
+  // ever showed an address. See src/api/contactLookup.js.
+  const contactFk = String(f?._kft__Contact_ID || '').trim();
+  useEffect(() => {
+    if (!contactFk) return undefined;
+    let alive = true;
+    contactDetails(contactFk)
+      .then(d => { if (alive) setContactInfo({ id: contactFk, ...d }); })
+      .catch(() => { if (alive) setContactInfo({ id: contactFk }); });
+    return () => { alive = false; };
+  }, [contactFk]);
+  const ci = contactInfo?.id === contactFk ? contactInfo : null;
+
   const vibeOrgId = selected ? ccsOrgs.orgIdFor(selected.recordId) : '';
   const vibeOrgName = vibeOrgId ? (contactsById.get(String(vibeOrgId))?.Name_Organization || '') : '';
   const org = vibeOrgName || f.zz__Display_Organization__ct || '—';
@@ -768,7 +786,82 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
 
                 {/* BODY: contract & financials → details → phases → contact/team */}
                 <div className="cv2-body">
-                {/* contract & financials — full width */}
+                {/* Contact beside Contract & Financials — the contact is who you
+                    call about the money, so the two belong on one line. */}
+                <div className="cv2-cols cv2-cols-third">
+                <div className="cv2-stack">
+                {/* contact */}
+                  <div className="cv2-card">
+                    <div className="cv2-card-head">
+                      <span>Contact</span>
+                      <button className="cv2-contact-change" onClick={() => setContactPicker(true)} disabled={saving}>
+                        {f.zz__Display_Contact__ct && f.zz__Display_Contact__ct !== '<unassigned>' ? 'Change' : 'Assign'}
+                      </button>
+                    </div>
+                    {/* Details come from Vibe (contactLookup). FileMaker's own
+                        related fields are kept only as a fallback — they are
+                        empty on all 6,436 CCS projects, which is why this card
+                        used to show nothing but an address. */}
+                    <div className="cv2-contact">
+                      {f.Address_Block_Billing && (
+                        <div className="cv2-contact-row"><span className="cv2-ic">⌖</span>
+                          <span style={{ whiteSpace: 'pre-wrap' }}>{f.Address_Block_Billing.replace(/\r/g, '\n')}</span>
+                        </div>
+                      )}
+                      {(() => {
+                        const email = ci?.email || f['rcd_cntct_INADR__email::zz__Address__ct'] || '';
+                        const work = ci?.workPhone || f['rcd_cntct_PHONE__work::Number'] || '';
+                        const cell = ci?.cellPhone || f['rcd_cntct_PHONE__mobile::Number'] || '';
+                        const workHref = ci?.workHref || (work ? `tel:${work.replace(/[^\d+]/g, '')}` : '');
+                        const cellHref = ci?.cellHref || (cell ? `tel:${cell.replace(/[^\d+]/g, '')}` : '');
+                        if (!email && !work && !cell) {
+                          return contactFk
+                            ? <div className="cv2-contact-row cv2-contact-none">{ci ? 'No phone or e-mail on this contact.' : 'Loading…'}</div>
+                            : <div className="cv2-contact-row cv2-contact-none">No contact assigned.</div>;
+                        }
+                        return (
+                          <>
+                            {email && <div className="cv2-contact-row"><span className="cv2-ic">✉</span><a href={`mailto:${email}`}>{email}</a></div>}
+                            {work && <div className="cv2-contact-row"><span className="cv2-ic">✆</span><a href={workHref}>{work}</a><span className="cv2-contact-tag">work</span></div>}
+                            {cell && <div className="cv2-contact-row"><span className="cv2-ic">▢</span><a href={cellHref}>{cell}</a><span className="cv2-contact-tag">mobile</span></div>}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* team */}
+                  <div className="cv2-card">
+                    <div className="cv2-card-head"><span>Team</span></div>
+                      <div className="cv2-team">
+                        {/* Operations Lead is a Vibe-only field held in Redis, not
+                            FileMaker — so it saves immediately on change rather
+                            than going through stage()/the record's Save button. */}
+                        <div className="cv2-team-row">
+                          <Avatar name={opsLead.leadFor(selected.recordId)} lead />
+                          <div className="cv2-team-pick">
+                            <label>Operations lead</label>
+                            <InlineSelect
+                              value={opsLead.leadFor(selected.recordId)}
+                              options={['', ...opsLead.roster]}
+                              onChange={v => opsLead.assign(selected.recordId, v)}
+                            />
+                          </div>
+                        </div>
+                        <div className="cv2-team-row">
+                          <Avatar name={val('Lead Builder')} lead />
+                          <div className="cv2-team-pick"><label>Lead builder</label><InlineSelect value={val('Lead Builder')} options={builderOptions} onChange={v => stage('Lead Builder', v)} /></div>
+                        </div>
+                        {['Builder1', 'Builder2', 'Builder3'].map((bk, i) => (
+                          <div className="cv2-team-row" key={bk}>
+                            <Avatar name={val(bk)} />
+                            <div className="cv2-team-pick"><label>Builder {i + 1}</label><InlineSelect value={val(bk)} options={builderOptions} onChange={v => stage(bk, v)} /></div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                </div>
+
                 <div className="cv2-card">
                   <div className="cv2-card-head"><span>Contract &amp; Financials</span></div>
                   <div className="cv2-fin-grid">
@@ -860,6 +953,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
                     )}
                   </div>
                 </div>
+                </div>
 
                 {/* details */}
                 <div className="cv2-card">
@@ -882,19 +976,33 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
                     <label>Distance to HQ</label><InlineText value={val('Distance to High5')} onChange={v => stage('Distance to High5', v)} placeholder="—" />
                     <label>Drive time</label><InlineText value={val('Drive Time')} onChange={v => stage('Drive Time', v)} placeholder="—" />
                   </div>
-                  <div className="cv2-field-block">
-                    <label>Work order</label>
-                    <InlineText value={val('Work Order')} onChange={v => stage('Work Order', v)} placeholder="Add a work order…" area big fixed />
-                    <div className="cv2-wo-actions">
-                      <button type="button" className="cv2-wo-btn" disabled={!!woBusy} onClick={handleGenerateWorkOrder}>
-                        {woBusy ? (woStage || 'Working…') : '⤓ Download work order'}
-                      </button>
+                </div>
+
+                {/* Work Order Notes and Notes side by side. Both are long free
+                    text read while doing the same thing, so stacking them meant
+                    scrolling past one to reach the other. */}
+                <div className="cv2-cols cv2-cols-even cv2-notes-row">
+                  <div className="cv2-card">
+                    <div className="cv2-card-head"><span>Work Order Notes</span></div>
+                    <div className="cv2-field-block cv2-field-block--card">
+                      <InlineText value={val('Work Order')} onChange={v => stage('Work Order', v)} placeholder="Add a work order…" area big fixed />
+                      <div className="cv2-wo-actions">
+                        <button type="button" className="cv2-wo-btn" disabled={!!woBusy} onClick={handleGenerateWorkOrder}>
+                          {woBusy ? (woStage || 'Working…') : '⤓ Download work order'}
+                        </button>
+                      </div>
+                      {woError && <p className="cv2-wo-error">{woError}</p>}
                     </div>
-                    {woError && <p className="cv2-wo-error">{woError}</p>}
                   </div>
-                  <div className="cv2-field-block">
-                    <label>Notes <button type="button" className="cv2-stamp-btn" onClick={() => stampNote('Notes')}>⏱ Stamp</button></label>
-                    <InlineText value={val('Notes')} onChange={v => stage('Notes', v)} placeholder="Add notes…" area fixed />
+
+                  <div className="cv2-card">
+                    <div className="cv2-card-head">
+                      <span>Notes</span>
+                      <button type="button" className="cv2-stamp-btn" onClick={() => stampNote('Notes')}>⏱ Stamp</button>
+                    </div>
+                    <div className="cv2-field-block cv2-field-block--card">
+                      <InlineText value={val('Notes')} onChange={v => stage('Notes', v)} placeholder="Add notes…" area big fixed />
+                    </div>
                   </div>
                 </div>
 
@@ -971,54 +1079,6 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
                   </div>
                 </div>
 
-                <div className="cv2-cols cv2-cols-even">
-                  {/* contact */}
-                  <div className="cv2-card">
-                    <div className="cv2-card-head">
-                      <span>Contact</span>
-                      <button className="cv2-contact-change" onClick={() => setContactPicker(true)} disabled={saving}>
-                        {f.zz__Display_Contact__ct && f.zz__Display_Contact__ct !== '<unassigned>' ? 'Change' : 'Assign'}
-                      </button>
-                    </div>
-                    <div className="cv2-contact">
-                      {f.Address_Block_Billing && <div className="cv2-contact-row"><span className="cv2-ic">⌖</span><span style={{ whiteSpace: 'pre-wrap' }}>{f.Address_Block_Billing.replace(/\r/g, '\n')}</span></div>}
-                      {f['rcd_cntct_INADR__email::zz__Address__ct'] && <div className="cv2-contact-row"><span className="cv2-ic">✉</span><a href={`mailto:${f['rcd_cntct_INADR__email::zz__Address__ct']}`}>{f['rcd_cntct_INADR__email::zz__Address__ct']}</a></div>}
-                      {f['rcd_cntct_PHONE__work::Number'] && <div className="cv2-contact-row"><span className="cv2-ic">✆</span><span>{f['rcd_cntct_PHONE__work::Number']}</span></div>}
-                      {f['rcd_cntct_PHONE__mobile::Number'] && <div className="cv2-contact-row"><span className="cv2-ic">▢</span><span>{f['rcd_cntct_PHONE__mobile::Number']}</span></div>}
-                    </div>
-                  </div>
-
-                  {/* team */}
-                  <div className="cv2-card">
-                    <div className="cv2-card-head"><span>Team</span></div>
-                    <div className="cv2-team">
-                      {/* Operations Lead is a Vibe-only field held in Redis, not
-                          FileMaker — so it saves immediately on change rather
-                          than going through stage()/the record's Save button. */}
-                      <div className="cv2-team-row">
-                        <Avatar name={opsLead.leadFor(selected.recordId)} lead />
-                        <div className="cv2-team-pick">
-                          <label>Operations lead</label>
-                          <InlineSelect
-                            value={opsLead.leadFor(selected.recordId)}
-                            options={['', ...opsLead.roster]}
-                            onChange={v => opsLead.assign(selected.recordId, v)}
-                          />
-                        </div>
-                      </div>
-                      <div className="cv2-team-row">
-                        <Avatar name={val('Lead Builder')} lead />
-                        <div className="cv2-team-pick"><label>Lead builder</label><InlineSelect value={val('Lead Builder')} options={builderOptions} onChange={v => stage('Lead Builder', v)} /></div>
-                      </div>
-                      {['Builder1', 'Builder2', 'Builder3'].map((bk, i) => (
-                        <div className="cv2-team-row" key={bk}>
-                          <Avatar name={val(bk)} />
-                          <div className="cv2-team-pick"><label>Builder {i + 1}</label><InlineSelect value={val(bk)} options={builderOptions} onChange={v => stage(bk, v)} /></div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
                 </div>
 
               {allPhasesDone && !(status || '').toLowerCase().includes('complet') && (

@@ -2,60 +2,7 @@
 // matching the FileMaker "Work Order" report. Client-side pdfmake, same
 // pattern as inspectionReport.js.
 import { uploadCcsAttachment } from './ccsAttachments';
-import { getContact } from './vibeContacts';
-import { formatPhone } from '../../api/_phone';
-
-// Phone and e-mail for the work order come from VIBE'S contact store, not from
-// FileMaker's related fields on RCD_New.
-//
-// Those fields (rcd_cntct_PHONE__work::Number, rcd_cntct_PHONE__mobile::Number,
-// rcd_cntct_INADR__email::zz__Address__ct) are on the layout and readable, but
-// measured across all 6,436 CCS projects they are populated on ZERO of them —
-// the relationships resolve empty over the Data API, the same way the CCS
-// financial portals do. So every work order ever generated printed "—" for
-// Phone, Cell and E-mail.
-//
-// Vibe holds the same contacts keyed by _kft__Contact_ID (populated on 958 of
-// 1,000 projects) and fills at least one of the three for 115 of a 120-contact
-// sample. Numbers are stored E.164 and formatted here for print.
-//
-// Type vocabularies match METHOD_SPEC in ContactsV2 — the values actually in
-// the data, in preference order. A fax is never offered as a phone number.
-const WORK_TYPES = ['Work', 'Main Office', 'Work Parent'];
-const CELL_TYPES = ['Mobile', 'Personal Mobile', 'Mobile Parent'];
-const MAIL_TYPES = ['Email', 'Home Email', 'Billing'];
-
-const pickByType = (rows, types) => {
-  for (const t of types) {
-    const hit = (rows || []).find(r => String(r.type || '').toLowerCase() === t.toLowerCase());
-    if (hit) return hit;
-  }
-  return null;
-};
-
-// The contact a work order is associated with, reduced to what the sheet prints.
-// Returns empty strings rather than throwing: a missing or unreachable contact
-// should still produce a work order, just without the contact block filled.
-export async function workOrderContact(record) {
-  const id = String(record?.fieldData?._kft__Contact_ID || '').trim();
-  if (!id) return { workPhone: '', cellPhone: '', email: '' };
-  try {
-    const d = await getContact(id);
-    const e = d?.person || d?.organization;
-    if (!e) return { workPhone: '', cellPhone: '', email: '' };
-    const w = pickByType(e.phones, WORK_TYPES);
-    const c = pickByType(e.phones, CELL_TYPES);
-    const m = pickByType(e.emails, MAIL_TYPES)
-      || (e.emails || []).find(x => String(x.type || '') !== 'Web');
-    return {
-      workPhone: w ? formatPhone(w.number, w.ext) : '',
-      cellPhone: c ? formatPhone(c.number, c.ext) : '',
-      email: m?.address || '',
-    };
-  } catch {
-    return { workPhone: '', cellPhone: '', email: '' };
-  }
-}
+import { contactDetailsFor } from './contactLookup';
 
 const fmtDateNoZero = v => {
   if (!v) return '';
@@ -183,7 +130,7 @@ async function generateWorkOrderPdf(record, onStage) {
   const [pdfmakeMod, assets, contactInfo] = await Promise.all([
     import('pdfmake/build/pdfmake'),
     import('../assets/reportAssets.js'),
-    workOrderContact(record),
+    contactDetailsFor(record),
   ]);
   const pdfMake = pdfmakeMod.default || pdfmakeMod;
   pdfMake.vfs = assets.reportFonts;
