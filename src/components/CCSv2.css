@@ -457,5 +457,8 @@
 .cv2-notes-row > .cv2-card { display: flex; flex-direction: column; }
 .cv2-notes-row .cv2-field-block--card { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 .cv2-notes-row .cv2-inline-area-fixed {
-  flex: 1; height: auto; min-height: 200px;
+  /* The floor is the height these boxes had before they were paired, so
+     equalising costs no usable space: the taller card keeps 260px and the
+     shorter one's area stretches past it to match. */
+  flex: 1; height: auto; min-height: 260px;
 }
