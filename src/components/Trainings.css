@@ -272,6 +272,10 @@
   padding: 3px 0; border-radius: 0;
 }
 .trn-inline:focus { outline: none; border-bottom-color: var(--cv2-accent); }
+/* A calculated field shown in the same grid as editable ones — same padding
+   as .trn-inline so it lines up, but no border/focus since it isn't
+   interactive. */
+.trn-static { display: block; padding: 3px 0; font-size: 15px; color: var(--cv2-text-3); }
 .trn-detail-grid {
   display: grid; grid-template-columns: 130px minmax(0, 1fr) 130px minmax(0, 1fr);
   gap: 8px 14px; align-items: center;

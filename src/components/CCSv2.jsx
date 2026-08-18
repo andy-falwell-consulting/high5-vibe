@@ -973,8 +973,9 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
                     </div>
                     <label>Start date</label><InlineDate value={val('rcd start date')} onChange={v => stage('rcd start date', v)} />
                     <label>End date</label><InlineDate value={val('rcd end date')} onChange={v => stage('rcd end date', v)} />
-                    <label>Distance to HQ</label><InlineText value={val('Distance to High5')} onChange={v => stage('Distance to High5', v)} placeholder="—" />
-                    <label>Drive time</label><InlineText value={val('Drive Time')} onChange={v => stage('Drive Time', v)} placeholder="—" />
+                    {/* Calculated — never editable, here or on any other layout. */}
+                    <label>Distance to HQ</label><span className="cv2-static">{val('Distance to High5') || '—'}</span>
+                    <label>Drive time</label><span className="cv2-static">{val('Drive Time') || '—'}</span>
                   </div>
                 </div>
 

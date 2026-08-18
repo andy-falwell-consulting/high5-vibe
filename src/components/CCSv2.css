@@ -271,6 +271,10 @@
 [data-theme="light"] .cv2-inline-date { color-scheme: light; }
 
 .cv2-detail-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; }
+/* A calculated field shown in the same grid as editable ones — same padding
+   as .cv2-inline so it lines up, but no border/hover/focus since it isn't
+   interactive. */
+.cv2-static { display: block; width: 100%; box-sizing: border-box; padding: 5px 8px; font-size: 17px; color: var(--cv2-text-3); }
 .cv2-detail-grid > label { font-size: 14px; color: var(--cv2-text-3); text-transform: uppercase; letter-spacing: 0.04em; }
 .cv2-field-block { margin-top: 12px; }
 .cv2-field-block > label { display: block; font-size: 14px; color: var(--cv2-text-3); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 3px; }

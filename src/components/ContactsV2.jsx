@@ -12,8 +12,9 @@ import {
   createPerson, createOrganization, updateContact,
   affiliate, setPrimary, unaffiliate, setParent,
   addMethod, updateMethod, removeMethod, deleteContact,
-  reorderOrgPeople, contactDistance,
+  reorderOrgPeople, reorderMethods, contactDistance,
 } from '../api/vibeContacts';
+import { findInLayout, getRecordWithPortals } from '../api/filemaker';
 import './ContactsV2.css';
 
 // Contacts, on Vibe's own model — organizations, people and affiliations as
@@ -151,6 +152,32 @@ function WorkTable({ src, rows, onOpen }) {
                   </td>
                 );
               })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// OE Training (WKSRG) rows — read-only, no Belay module to open, same as on
+// the legacy Contacts module (Contacts.jsx). `state` is the effect-tracked
+// { id, rows } | null from the oeTraining fetch above.
+function OeTrainingTable({ state, openId }) {
+  if (state?.id !== openId) return <p className="c2-none">Loading…</p>;
+  if (!state.rows.length) return <p className="c2-none">Nothing recorded.</p>;
+  return (
+    <div className="c2-table-scroll">
+      <table className="c2-table">
+        <thead><tr><th>Course #</th><th>Course Name</th><th>Organization</th><th>Start</th><th>End</th></tr></thead>
+        <tbody>
+          {state.rows.map((r, i) => (
+            <tr key={i}>
+              <td className="mono">{r['cntct_WKSRG::Course Number']}</td>
+              <td>{r['cntct_WKSRG::Course Name']}</td>
+              <td>{r['cntct_WKSRG::zz__Display_Organization__ct']}</td>
+              <td>{r['cntct_WKSRG::Start Date']}</td>
+              <td>{r['cntct_WKSRG::End Date']}</td>
             </tr>
           ))}
         </tbody>
@@ -335,6 +362,28 @@ function Tabs({ tabs, active, onPick }) {
   );
 }
 
+// One draggable method row — email only, for now (see ContactMethods). Same
+// drag pattern as SortablePerson: a handle starts the drag, not the row, so
+// the edit/remove buttons stay clickable.
+function SortableMethodRow({ method, spec, busy, onEdit, onRemove }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: method.id,
+  });
+  return (
+    <li ref={setNodeRef}
+      className={`c2-methodrow${isDragging ? ' dragging' : ''}`}
+      style={{ transform: CSS.Transform.toString(transform), transition }}>
+      <span className="c2-drag" title="Drag to reorder" {...attributes} {...listeners}>⠿</span>
+      <span className="c2-methodtype">{method.type || '—'}</span>
+      {spec.href
+        ? <a className="c2-methodvalue" href={spec.href(method)}>{spec.show(method)}</a>
+        : <span className="c2-methodvalue">{spec.show(method)}</span>}
+      <button className="c2-mini" disabled={busy} onClick={() => onEdit(method.id)}>edit</button>
+      <button className="c2-mini c2-mini--danger" disabled={busy} onClick={() => onRemove(method.id)}>remove</button>
+    </li>
+  );
+}
+
 function MethodForm({ kind, initial, busy, onSave, onCancel }) {
   const spec = METHOD_SPEC[kind];
   const [v, setV] = useState(() => ({
@@ -373,45 +422,72 @@ function MethodForm({ kind, initial, busy, onSave, onCancel }) {
   );
 }
 
-function ContactMethods({ contact, busy, onAdd, onUpdate, onRemove }) {
+function ContactMethods({ contact, busy, onAdd, onUpdate, onRemove, onReorder }) {
   // { kind, id } — id null means "adding". One form open at a time, so a
   // half-typed address can't be lost behind another one.
   const [form, setForm] = useState(null);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   return (
     <div className="c2-methods">
       {Object.entries(METHOD_SPEC).map(([kind, spec]) => {
         const rows = contact[spec.field] || [];
+        // Drag-to-sort is email-only for now — that's the one Andy asked for,
+        // and it's what Trainings reads "the first email" from (see
+        // contactLookup.js's firstEmail option). Off while a row in this
+        // group is mid-edit, so dragging never has to reconcile with the
+        // inline form swapping a row's shape out from under it.
+        const sortable = kind === 'email' && rows.length > 1 && form?.kind !== kind;
         return (
           <div className="c2-methodgroup" key={kind}>
             <h3>{spec.plural}</h3>
             {rows.length === 0 && !(form?.kind === kind && !form.id) && (
               <p className="c2-none">None recorded.</p>
             )}
-            <ul className="c2-methodlist">
-              {rows.map(m => (form?.kind === kind && form.id === m.id ? (
-                <li key={m.id} className="c2-methodrow c2-methodrow--editing">
-                  <MethodForm kind={kind} initial={m} busy={busy}
-                    onCancel={() => setForm(null)}
-                    onSave={vals => { setForm(null); onUpdate(kind, m.id, vals); }} />
-                </li>
-              ) : (
-                <li key={m.id} className="c2-methodrow">
-                  <span className="c2-methodtype">{m.type || '—'}</span>
-                  {spec.href
-                    ? <a className="c2-methodvalue" href={spec.href(m)}>{spec.show(m)}</a>
-                    : <span className="c2-methodvalue">{spec.show(m)}</span>}
-                  {spec.map?.(m) && (
-                    <a className="c2-mini c2-mini--map" href={spec.map(m)}
-                      target="_blank" rel="noreferrer" title="Open in Google Maps">Map</a>
-                  )}
-                  <button className="c2-mini" disabled={busy}
-                    onClick={() => setForm({ kind, id: m.id })}>edit</button>
-                  <button className="c2-mini c2-mini--danger" disabled={busy}
-                    onClick={() => onRemove(kind, m.id)}>remove</button>
-                </li>
-              )))}
-            </ul>
+            {sortable ? (
+              <DndContext sensors={sensors} collisionDetection={closestCenter}
+                onDragEnd={({ active, over }) => {
+                  if (!over || active.id === over.id) return;
+                  const from = rows.findIndex(m => m.id === active.id);
+                  const to = rows.findIndex(m => m.id === over.id);
+                  if (from < 0 || to < 0) return;
+                  onReorder(kind, arrayMove(rows, from, to).map(m => m.id));
+                }}>
+                <SortableContext items={rows.map(m => m.id)} strategy={verticalListSortingStrategy}>
+                  <ul className="c2-methodlist">
+                    {rows.map(m => (
+                      <SortableMethodRow key={m.id} method={m} spec={spec} busy={busy}
+                        onEdit={id => setForm({ kind, id })} onRemove={id => onRemove(kind, id)} />
+                    ))}
+                  </ul>
+                </SortableContext>
+              </DndContext>
+            ) : (
+              <ul className="c2-methodlist">
+                {rows.map(m => (form?.kind === kind && form.id === m.id ? (
+                  <li key={m.id} className="c2-methodrow c2-methodrow--editing">
+                    <MethodForm kind={kind} initial={m} busy={busy}
+                      onCancel={() => setForm(null)}
+                      onSave={vals => { setForm(null); onUpdate(kind, m.id, vals); }} />
+                  </li>
+                ) : (
+                  <li key={m.id} className="c2-methodrow">
+                    <span className="c2-methodtype">{m.type || '—'}</span>
+                    {spec.href
+                      ? <a className="c2-methodvalue" href={spec.href(m)}>{spec.show(m)}</a>
+                      : <span className="c2-methodvalue">{spec.show(m)}</span>}
+                    {spec.map?.(m) && (
+                      <a className="c2-mini c2-mini--map" href={spec.map(m)}
+                        target="_blank" rel="noreferrer" title="Open in Google Maps">Map</a>
+                    )}
+                    <button className="c2-mini" disabled={busy}
+                      onClick={() => setForm({ kind, id: m.id })}>edit</button>
+                    <button className="c2-mini c2-mini--danger" disabled={busy}
+                      onClick={() => onRemove(kind, m.id)}>remove</button>
+                  </li>
+                )))}
+              </ul>
+            )}
             {form?.kind === kind && !form.id ? (
               <MethodForm kind={kind} busy={busy}
                 onCancel={() => setForm(null)}
@@ -625,6 +701,12 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
   const [riskError, setRiskError] = useState(null);
   // Distance / drive time to HQ, fetched per contact (api/contact-distance.js).
   const [distance, setDistance] = useState(null);
+  // OE Training (WKSRG), the one work source with no Vibe-owned module behind
+  // it — still a raw FileMaker portal on Contacts_New (Portal__Orders), so it
+  // is fetched on demand rather than joining useRelatedRecords' module caches.
+  // { id, rows } keyed by the open contact, fetched lazily on first visit to
+  // the tab rather than on every record open.
+  const [oeTraining, setOeTraining] = useState(null);
   // Sidebar width, dragged by the handle between the list and the record.
   // Persisted, unlike the other modules': the width someone picks is a
   // preference, and losing it on every reload is the reason nobody adjusts it.
@@ -698,6 +780,29 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
   }, [openId]);
   const dist = distance?.id === openId ? distance : null;
 
+  // OE Training rows, fetched only once the tab is actually opened — unlike
+  // every other work source these come straight from FileMaker's own
+  // Portal__Orders on Contacts_New, so opening it costs a live round trip: a
+  // find by _kpt__Contact_ID (Vibe's contact id IS this field, verbatim) to
+  // get the FileMaker recordId, then that record's portal data.
+  useEffect(() => {
+    if (tab !== 'oe_training' || !openId) return undefined;
+    if (oeTraining?.id === openId) return undefined;
+    let alive = true;
+    (async () => {
+      try {
+        const found = await findInLayout('Contacts_New', [{ _kpt__Contact_ID: `==${openId}` }], { limit: 1 });
+        const rec = found?.response?.data?.[0];
+        const full = rec ? await getRecordWithPortals('Contacts_New', rec.recordId, { 'Portal__Orders': 200 }) : null;
+        const rows = full?.response?.data?.[0]?.portalData?.['Portal__Orders'] || [];
+        if (alive) setOeTraining({ id: openId, rows });
+      } catch {
+        if (alive) setOeTraining({ id: openId, rows: [] });
+      }
+    })();
+    return () => { alive = false; };
+  }, [tab, openId, oeTraining]);
+
   const records = kind === 'people' ? people : orgs;
 
   // Lifted out of the work tables so the tab strip can carry counts. One fetch
@@ -724,6 +829,10 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
       ? [{ id: 'people', label: 'People', count: orgPeople?.length || 0 }]
       : []),
     ...workTabs,
+    // Not module-cache-backed like workTabs — see the oeTraining effect
+    // above — so its count only appears once the tab has actually been
+    // opened at least once for this contact.
+    { id: 'oe_training', label: 'OE Trainings', count: oeTraining?.id === openId ? oeTraining.rows.length : 0 },
   ];
 
   // A tab can vanish between records (a person with no estimates). Falling back
@@ -1022,7 +1131,8 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
                   <ContactMethods contact={person} busy={busy}
                     onAdd={(k, v) => act(() => addMethod(person.id, k, v))}
                     onUpdate={(k, id, v) => act(() => updateMethod(person.id, k, id, v))}
-                    onRemove={(k, id) => act(() => removeMethod(person.id, k, id))} />
+                    onRemove={(k, id) => act(() => removeMethod(person.id, k, id))}
+                    onReorder={(k, order) => act(() => reorderMethods(person.id, k, order))} />
                 </Section>
 
                 <Section icon="◎" title="Affiliations">
@@ -1070,6 +1180,12 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
                     <WorkTable src={activeGroup.src} rows={activeGroup.rows} onOpen={onNavigateTo} />
                   </Section>
                 )}
+
+                {activeTab === 'oe_training' && (
+                  <Section icon="≡" title="OE Trainings">
+                    <OeTrainingTable state={oeTraining} openId={openId} />
+                  </Section>
+                )}
               </>
             )}
           </div>
@@ -1111,7 +1227,8 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
                   <ContactMethods contact={org} busy={busy}
                     onAdd={(k, v) => act(() => addMethod(org.id, k, v))}
                     onUpdate={(k, id, v) => act(() => updateMethod(org.id, k, id, v))}
-                    onRemove={(k, id) => act(() => removeMethod(org.id, k, id))} />
+                    onRemove={(k, id) => act(() => removeMethod(org.id, k, id))}
+                    onReorder={(k, order) => act(() => reorderMethods(org.id, k, order))} />
                 </Section>
 
                 <Section icon="⛗" title="Distance to HQ">
@@ -1192,6 +1309,12 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
                     {related.loading
                       ? <p className="c2-none">Loading…</p>
                       : <WorkTable src={activeGroup.src} rows={activeGroup.rows} onOpen={onNavigateTo} />}
+                  </Section>
+                )}
+
+                {activeTab === 'oe_training' && (
+                  <Section icon="≡" title="OE Trainings">
+                    <OeTrainingTable state={oeTraining} openId={openId} />
                   </Section>
                 )}
               </>

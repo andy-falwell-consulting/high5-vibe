@@ -182,18 +182,13 @@ function SectionContent({ section, f, editMode, onFieldReorder, edits, onChange,
           </div>
         ))}
         <div className="sl-field-grid" style={{ marginTop: 8 }}>
+          {/* Calculated fields — never editable, regardless of edit mode. */}
           {[['Distance to High5','Distance'],['Drive Time','Drive Time']].map(([fk, label]) => {
-            const saved = f?.[fk];
-            const value = fk in edits ? edits[fk] : saved;
-            const dirty = fk in edits && edits[fk] !== saved;
+            const value = f?.[fk];
             return (
-              <div key={fk} className={`sl-field${dirty ? ' dirty' : ''}`}>
-                {dirty && <span className="sl-dirty-dot" />}
+              <div key={fk} className="sl-field">
                 <label>{label}</label>
-                {!dataEditing
-                  ? <span className="sl-value">{value || '—'}</span>
-                  : <input className="sl-input" value={value||''} onChange={e => onChange(fk, e.target.value)} />
-                }
+                <span className="sl-value">{value || '—'}</span>
               </div>
             );
           })}
