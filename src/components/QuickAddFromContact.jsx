@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { createRecord, getRecord, addCachedRecord, findInLayout } from '../api/filemaker';
+import { getRecord, addCachedRecord, findInLayout } from '../api/filemaker';
+import { createVibeRecord } from '../api/vibeRecords';
 import { RCD_LAYOUT, RCD_CACHE_VERSION } from '../config/ccsCache';
 import { copyProfileFields } from '../config/inspectionCopy';
 import { copyLines } from '../api/inspectionLinesVibe';
@@ -122,9 +123,14 @@ export default function QuickAddFromContact({ contact, onNavigateTo }) {
         v = { ...vals, sourceFull: src };
       }
       const fieldData = { _kft__Contact_ID: String(contactId), ...cfg.build(v) };
-      const res = await createRecord(cfg.layout, fieldData);
-      if (res.messages?.[0]?.code !== '0') throw new Error(res.messages?.[0]?.message || 'Create failed');
-      const recordId = res.response?.recordId;
+      // All three layouts here are Vibe-owned (api/_vibeStore.js), so the record
+      // is born in Vibe rather than FileMaker — same pattern as Inspections.jsx
+      // and RMI.jsx. The minted `V-` id IS the record id AND the value of the
+      // table's own primary key, so nothing has to be read back to discover the
+      // key, and no per-user FileMaker session is required.
+      const made = await createVibeRecord(cfg.layout, fieldData);
+      const recordId = made?.recordId;
+      if (!recordId) throw new Error('Create failed');
       // Stamp the Operations Lead from the creator's own session. Vibe-only
       // field (Redis, see api/ops-lead.js), so it can't ride along in
       // fieldData — it's a second call, and a best-effort one: the project
@@ -134,12 +140,12 @@ export default function QuickAddFromContact({ contact, onNavigateTo }) {
         await autoAssignOpsLead(getCurrentEnv().db, recordId).catch(() => {});
       }
       // Copy the source's line items. Lines live in Vibe's store and are keyed
-      // by _kpt__Inspection_ID, so the new record has to be read back for its
-      // id first — createRecord only hands back FileMaker's recordId.
+      // by _kpt__Inspection_ID, which createVibeRecord already minted and
+      // returned — the read-back this used to need is gone with the FileMaker
+      // create that made it necessary.
       if (type === 'inspection' && v.mode === 'copy' && v.source?.recordId) {
         const sourceInspectionId = v.sourceFull?._kpt__Inspection_ID;
-        const madeRec = (await getRecord('Inspections_New', recordId))?.response?.data?.[0];
-        const newInspectionId = madeRec?.fieldData?._kpt__Inspection_ID;
+        const newInspectionId = made.fieldData?._kpt__Inspection_ID;
         if (sourceInspectionId && newInspectionId) {
           const copied = await copyLines(sourceInspectionId, newInspectionId);
           // Flag them as carried over so last year's findings can't quietly ship
@@ -149,12 +155,10 @@ export default function QuickAddFromContact({ contact, onNavigateTo }) {
           }
         }
       }
-      // Put the fresh record in the cached list immediately (don't wait for sync).
-      try {
-        const full = await getRecord(cfg.layout, recordId);
-        const rec = full?.response?.data?.[0];
-        if (rec) addCachedRecord(cfg.layout, cfg.cacheVersion, rec);
-      } catch { /* list will pick it up on next sync */ }
+      // Put the fresh record in the cached list immediately (don't wait for
+      // sync). createVibeRecord hands back the stored fieldData, so this no
+      // longer costs a round trip either.
+      addCachedRecord(cfg.layout, cfg.cacheVersion, { recordId, fieldData: made.fieldData, portalData: {} });
       setType(null);
       onNavigateTo?.(cfg.module, recordId);
     } catch (e) { setError(e.message); }
