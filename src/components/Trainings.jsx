@@ -767,6 +767,9 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
                         onChange={e => handleFieldChange('Work Order', e.target.value)}
                       />
                       <div className="cv2-wo-actions">
+                        <button type="button" className="cv2-wo-btn" disabled={!!woBusy} onClick={() => handleGenerateWorkOrder(true)}>
+                          {woBusy === 'attach' ? (woStage || 'Working…') : '＋ Generate work order & attach'}
+                        </button>
                         <button type="button" className="cv2-wo-btn" disabled={!!woBusy} onClick={() => handleGenerateWorkOrder(false)}>
                           {woBusy === 'download' ? (woStage || 'Working…') : '⤓ Download work order'}
                         </button>
@@ -805,17 +808,6 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
                 <div className="trn-field-grid">
                   <CheckField label="Inspection required" fieldKey="Inspection Required" f={f} edits={edits} onChange={handleFieldChange} />
                   <TextField label="Report printed" fieldKey="Report Printed" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <div className="trn-field wide">
-                    <div className="trn-wo-actions">
-                      <button type="button" className="trn-wo-btn" disabled={!!woBusy} onClick={() => handleGenerateWorkOrder(true)}>
-                        {woBusy === 'attach' ? (woStage || 'Working…') : '＋ Generate work order & attach'}
-                      </button>
-                      <button type="button" className="trn-wo-btn" disabled={!!woBusy} onClick={() => handleGenerateWorkOrder(false)}>
-                        {woBusy === 'download' ? (woStage || 'Working…') : '⤓ Download work order'}
-                      </button>
-                    </div>
-                    {woError && <p className="trn-wo-error">{woError}</p>}
-                  </div>
                 </div>
               </Section>
               {/* Trainers and Contact sections removed — both are now shown
