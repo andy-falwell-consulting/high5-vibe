@@ -13,6 +13,8 @@
 
 /* ── Sidebar ───────────────────────────────────────────────────── */
 .c2-sidebar {
+  /* Width is set inline and dragged by .c2-resize-handle; this is only the
+     first-paint value before that state is read from localStorage. */
   width: 320px; flex-shrink: 0;
   display: flex; flex-direction: column;
   background: #13151c; border-right: 1px solid #1e2130;
@@ -89,6 +91,13 @@
 .c2-empty span { color: #79859a; font-size: 14px; }
 
 .c2-newbar { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid #1e2130; flex-shrink: 0; }
+
+/* Drag handle between the list and the record, matching every other module. */
+.c2-resize-handle {
+  width: 4px; background: #1e2130; cursor: col-resize;
+  flex-shrink: 0; transition: background .15s;
+}
+.c2-resize-handle:hover { background: var(--h5-red); }
 
 /* ── Main ──────────────────────────────────────────────────────── */
 .c2-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
@@ -471,3 +480,6 @@ a.c2-methodvalue:hover { color: var(--h5-red); text-decoration: underline; }
 .c2-section .c2-notes { max-height: 260px; overflow-y: auto; }
 .c2-section .c2-notes::-webkit-scrollbar { width: 5px; }
 .c2-section .c2-notes::-webkit-scrollbar-thumb { background: #2a2f45; border-radius: 3px; }
+
+[data-theme="light"] .c2-resize-handle { background: #e2e8f0; }
+[data-theme="light"] .c2-resize-handle:hover { background: var(--h5-red); }
