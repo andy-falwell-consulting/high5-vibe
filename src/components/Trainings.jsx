@@ -1,6 +1,6 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { BRAND, UI } from '../config/brandColors'
-import { getRecord, prefetchRecord, invalidateRecord, patchCachedRecord } from '../api/filemaker';
+import { getRecord, prefetchRecord, updateRecord, invalidateRecord, patchCachedRecord } from '../api/filemaker';
 import { useAllRecords } from '../hooks/useAllRecords';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
 import RecordSaveBar from './RecordSaveBar';
@@ -11,6 +11,8 @@ import { LayoutCard, StatTiles, Pipeline, QuickActions, FinancialRows, ThirdsRow
 import { PIPELINE_STAGES, PIPELINE_SHORT, ALL_STATUSES, stageIndex, statusColor as trnStatusColor } from '../config/trainingStatus';
 import { contactDetails } from '../api/contactLookup';
 import { updateVibeRecord } from '../api/vibeRecords';
+import { useCcsOrgs } from '../hooks/useCcsOrgs';
+import ContactPicker from './ContactPicker';
 import { getCurrentEnv } from '../config/fmpEnvironments';
 import './Trainings.css';
 import DeleteRecordButton from './DeleteRecordButton'
@@ -210,7 +212,7 @@ function SelectValue({ value, options, onChange }) {
 
 const isOn = v => v === 1 || v === '1';
 
-export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}) {
+export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNavigateApp } = {}) {
   const { records, total } = useAllRecords(LAYOUT, { cacheVersion: CACHE_VERSION });
   const [selected, setSelected] = useState(null);
   const [navWidth, setNavWidth] = useState(300);
@@ -223,6 +225,26 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
   const [woStage, setWoStage] = useState(null);
   const [woError, setWoError] = useState(null);
   const [attReload, setAttReload] = useState(0); // bump to make AttachmentsPanel re-list
+  const [orgPicker, setOrgPicker] = useState(false);
+  const [contactPicker, setContactPicker] = useState(false);
+  const trainingOrgs = useCcsOrgs(getCurrentEnv().db, 'trainings');
+
+  // Same org-name join CCS uses: trainings_New has no writable org field
+  // either, only the zz__Display_Organization__ct calc, so a Vibe override
+  // (trainingOrgs) or — failing that — a name match against real Vibe
+  // organizations is what makes the header clickable at all.
+  const { records: contactRecords } = useAllRecords('Contacts_New', { cacheVersion: 2 });
+  const orgIdByName = useMemo(() => {
+    const m = new Map();
+    for (const c of contactRecords) {
+      const fd = c.fieldData;
+      if (String(fd?.Organization) !== '1') continue;
+      const name = String(fd?.Name_Organization || '').trim().toLowerCase();
+      if (!name) continue;
+      m.set(name, m.has(name) ? null : String(fd._kpt__Contact_ID));
+    }
+    return m;
+  }, [contactRecords]);
   // Contact phone/e-mail from Vibe, and live QuickBooks figures — both keyed so
   // a slow answer cannot land on a record the user has already moved off.
   const [contactInfo, setContactInfo] = useState(null);
@@ -355,7 +377,40 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
   const statusColor = trnStatusColor(status) || STATUS_COLOR[status] || STATUS_COLOR.default;
   const stage = stageIndex(status);
 
+  const heroOrgName = f?.zz__Display_Organization__ct || '';
+  const vibeOrgId = selected ? trainingOrgs.orgIdFor(selected.recordId) : '';
+  // The Vibe override wins when set; otherwise fall back to a name match, same
+  // precedence CCS uses. Plain text (no link) rather than guessing when
+  // neither resolves — an org page opened for the wrong org is worse than none.
+  const orgLinkId = vibeOrgId || orgIdByName.get(heroOrgName.trim().toLowerCase()) || '';
+
   const contactFk = String(f?._kft__Contact_ID || '').trim();
+  const hasContact = !!f?.zz__Display_Contact__ct && f.zz__Display_Contact__ct !== '<unassigned>';
+
+  // Reassign the training's contact.
+  //
+  // STILL WRITES TO FILEMAKER, deliberately, mirroring CCSv2.jsx's own
+  // handleContactChange and for the identical reason: _kft__Contact_ID drives
+  // a family of FileMaker calcs (zz__Display_Contact__ct, the billing address
+  // block, the related phone/email) that a Vibe fragment cannot re-derive.
+  // Writing just the id there would change the id and leave every one of those
+  // fields showing the previous contact.
+  async function handleContactChange(contactRecord) {
+    setContactPicker(false);
+    const newContactId = String(contactRecord?.fieldData?._kpt__Contact_ID || '').trim();
+    if (!selected || !newContactId) return;
+    try {
+      const res = await updateRecord(LAYOUT, selected.recordId, { _kft__Contact_ID: newContactId });
+      if (res.messages?.[0]?.code !== '0') return;
+      invalidateRecord(LAYOUT, selected.recordId);
+      const fresh = (await getRecord(LAYOUT, selected.recordId))?.response?.data?.[0];
+      if (fresh) {
+        setSelected(fresh);
+        patchCachedRecord(LAYOUT, CACHE_VERSION, selected.recordId, fresh.fieldData);
+      }
+    } catch { /* the picker already closed; a failed reassignment just leaves the old contact showing */ }
+  }
+
   useEffect(() => {
     if (!contactFk) return undefined;
     let alive = true;
@@ -435,16 +490,6 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
         {selected && f && (
           <>
             <div className="trn-topbar">
-              <div className="trn-topbar-left">
-                <div>
-                  <h1 className="trn-title">{f.zz__Display_Organization__ct || '—'}</h1>
-                  <div className="trn-meta-row">
-                    {status && <span className="trn-chip status" style={{ background: statusColor + '22', color: statusColor, borderColor: statusColor + '44' }}>{status}</span>}
-                    {f['Type of Program'] && <span className="trn-chip type">{f['Type of Program']}</span>}
-                    {f['Start Date'] && <span className="trn-chip muted">{f['Start Date']}{f['End Date'] && f['End Date'] !== f['Start Date'] ? ` – ${f['End Date']}` : ''}</span>}
-                  </div>
-                </div>
-              </div>
               <div className="trn-topbar-actions">
                 <DeleteRecordButton
                   layout={LAYOUT} cacheVersion={CACHE_VERSION}
@@ -452,6 +497,44 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
                   name={f.zz__Display_Organization__ct}
                   onDeleted={() => setSelected(null)}
                 />
+              </div>
+            </div>
+
+            {/* HERO — same shape as CCS's: project type above the org name,
+                contact underneath, both clickable when an id resolves and
+                both offering Change/Assign. Status lives here as a select,
+                not restated lower on the page. */}
+            <div className="cv2-hero">
+              <div className="cv2-hero-top">
+                <div className="cv2-hero-id">
+                  <div className="cv2-hero-type">{f['Type of Program'] || 'Training'}</div>
+                  <h1 className="cv2-hero-org">
+                    {orgLinkId
+                      ? <button type="button" className="cv2-hero-link" title="Open this organization"
+                          onClick={() => onNavigateApp?.('contacts-v2', orgLinkId)}>{heroOrgName || '—'}</button>
+                      : (heroOrgName || '—')}
+                    <button className="cv2-pick-btn" onClick={() => setOrgPicker(true)} title="Assign this training to an organization">
+                      {orgLinkId || heroOrgName ? 'Change' : 'Assign'}
+                    </button>
+                  </h1>
+                  <div className="cv2-hero-contact">
+                    <span className="cv2-ic">◉</span>
+                    {hasContact
+                      ? (contactFk
+                          ? <button type="button" className="cv2-hero-link" title="Open this contact"
+                              onClick={() => onNavigateApp?.('contacts-v2', contactFk)}>{f.zz__Display_Contact__ct}</button>
+                          : f.zz__Display_Contact__ct)
+                      : <span className="cv2-hero-none">No contact</span>}
+                    <button className="cv2-pick-btn" onClick={() => setContactPicker(true)} title="Choose the contact for this training">
+                      {hasContact ? 'Change' : 'Assign'}
+                    </button>
+                  </div>
+                </div>
+                <select className="cv2-status" style={{ color: statusColor, borderColor: statusColor + '55', background: statusColor + '14' }}
+                  value={status} onChange={e => handleFieldChange('Status', e.target.value)}>
+                  <option value="">— status —</option>
+                  {ALL_STATUSES.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
               </div>
             </div>
 
@@ -615,19 +698,11 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
 
             <div className="trn-content">
               {tab === 'info' && (<>
+              {/* Organization, Contact, Type of program, Status, and everything
+                  else the Details card / hero already show above are NOT
+                  repeated here — only what has no home elsewhere on the page. */}
               <Section title="Program" icon="◈">
                 <div className="trn-field-grid">
-                  <TextField label="Organization" fieldKey="zz__Display_Organization__ct" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} />
-                  <TextField label="Contact" fieldKey="zz__Display_Contact__ct" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} />
-                  <SelectField label="Type of program" fieldKey="Type of Program" f={f} edits={edits} onChange={handleFieldChange} options={PROGRAM_TYPES} />
-                  <SelectField label="Status" fieldKey="Status" f={f} edits={edits} onChange={handleFieldChange} options={ALL_STATUSES} />
-                  <TextField label="Start date" fieldKey="Start Date" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="End date" fieldKey="End Date" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="# Days" fieldKey="# Days" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="# Hours" fieldKey="# Hours" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <SelectField label="Audience" fieldKey="Audience" f={f} edits={edits} onChange={handleFieldChange} options={AUDIENCE_OPTIONS} />
-                  <TextField label="Group size" fieldKey="Group Size" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="Workshop location" fieldKey="Workshop Location" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
                   <CheckField label="Inspection required" fieldKey="Inspection Required" f={f} edits={edits} onChange={handleFieldChange} />
                   <TextField label="Report printed" fieldKey="Report Printed" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
                   <TextField label="Location address" fieldKey="Location Address" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable wide />
@@ -738,6 +813,31 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect } = {}
           </>
         )}
       </main>
+
+      {orgPicker && (
+        <ContactPicker
+          title="Assign this training to an organization"
+          filter={c => String(c.Organization) === '1'}
+          filterLabel="organizations"
+          onSelect={r => { trainingOrgs.assign(selected.recordId, r?.fieldData?._kpt__Contact_ID); setOrgPicker(false); }}
+          onClose={() => setOrgPicker(false)}
+        />
+      )}
+
+      {/* Scoped to the chosen organization's people, same two-step pick CCS
+          uses — contacts carry no organization id, only the calculated name,
+          so the roster is joined on that. */}
+      {contactPicker && (
+        <ContactPicker
+          title={heroOrgName ? `Contact at ${heroOrgName}` : 'Assign a contact to this training'}
+          filter={heroOrgName
+            ? (c => String(c.Organization) === '0' && c.zz__Display_Organization__ct === heroOrgName)
+            : undefined}
+          filterLabel={heroOrgName ? `at ${heroOrgName}` : undefined}
+          onSelect={handleContactChange}
+          onClose={() => setContactPicker(false)}
+        />
+      )}
     </div>
   );
 }

@@ -1,4 +1,10 @@
-// Organization assignment for a CCS project — a VIBE-ONLY field.
+// Organization assignment for a project/training record — a VIBE-ONLY field.
+//
+// Generalised beyond CCS 2026-08-18 to cover Trainings, which has the exact
+// same shape: trainings_New also has no writable org field, only the
+// zz__Display_Organization__ct calc. The stored key is `layout:org:{db}` — the
+// existing CCS data lives under `ccs:org:{db}` (unchanged, since `layout`
+// defaults to 'ccs') so nothing already assigned needed migrating.
 //
 // WHY THIS EXISTS
 // A CCS record's organization is not writable over the FileMaker Data API.
@@ -24,8 +30,9 @@
 // board render hundreds of rows at once and need every value in a single
 // HGETALL, which keeps this clear of the Upstash command budget.
 //
-//   GET  /api/ccs-org?db=High5_Core4                          → { orgs: {recordId: contactId} }
-//   POST /api/ccs-org?db=High5_Core4 { recordId, contactId }  → set, or clear when contactId is ''
+//   GET  /api/ccs-org?db=High5_Core4&layout=trainings           → { orgs: {recordId: contactId} }
+//   POST /api/ccs-org?db=High5_Core4&layout=trainings { recordId, contactId }  → set, or clear when contactId is ''
+// `layout` defaults to 'ccs' — every existing caller is unaffected.
 //
 // Auth: a Google session, or x-sync-key for scripts (matches ops-lead.js).
 import { Redis } from '@upstash/redis';
@@ -34,7 +41,8 @@ import { ALLOWED_DBS } from './_fmp.js';
 
 const redis = Redis.fromEnv();
 const SYNC_KEY = process.env.QBO_SYNC_KEY;
-const keyFor = db => `ccs:org:${db}`;
+const LAYOUTS = new Set(['ccs', 'trainings']);
+const keyFor = (db, layout) => `${layout}:org:${db}`;
 
 async function authorized(req) {
   if (SYNC_KEY && (req.headers['x-sync-key'] === SYNC_KEY || req.query?.key === SYNC_KEY)) return true;
@@ -45,7 +53,9 @@ export default async function handler(req, res) {
   if (!(await authorized(req))) return res.status(401).json({ error: 'unauthorized' });
   const db = String(req.query?.db || '');
   if (!ALLOWED_DBS.has(db)) return res.status(400).json({ error: 'db not allowed' });
-  const key = keyFor(db);
+  const layout = String(req.query?.layout || 'ccs');
+  if (!LAYOUTS.has(layout)) return res.status(400).json({ error: 'layout not supported' });
+  const key = keyFor(db, layout);
 
   try {
     if (req.method === 'POST') {
