@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { readCacheAsync } from '../api/filemaker'
-import { RECORD_SOURCES as SOURCES, usableSources } from '../config/recordSources'
+import { RECORD_SOURCES as SOURCES, buildRecordFilter } from '../config/recordSources'
 
 const PER_SOURCE = 6
 const clean = v => (v || '').replace(/[\r\n]+/g, ' ').trim()
@@ -43,10 +43,12 @@ export default function CommandPalette({ open, onClose, onPick, onAsk, modules, 
 
     if (q && datasets) {
       const records = []
-      for (const s of usableSources(s => datasets.get(s))) {
+      const keep = buildRecordFilter(src => datasets.get(src))
+    for (const s of SOURCES) {
         const data = datasets.get(s) || []
         let n = 0
         for (const r of data) {
+          if (!keep(s, r)) continue
           const t = clean(s.title(r.fieldData))
           const sub = clean(s.sub(r.fieldData))
           if (t.toLowerCase().includes(q) || sub.toLowerCase().includes(q)) {

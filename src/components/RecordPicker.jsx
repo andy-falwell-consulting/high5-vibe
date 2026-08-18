@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { readCacheAsync } from '../api/filemaker'
-import { RECORD_SOURCES, usableSources } from '../config/recordSources'
+import { RECORD_SOURCES, buildRecordFilter } from '../config/recordSources'
 import './RecordPicker.css'
 
 const PER_SOURCE = 20
@@ -38,10 +38,12 @@ export default function RecordPicker({ onSelect, onClose, title = 'Attach a reco
     if (!datasets) return []
     const term = q.trim().toLowerCase()
     const out = []
-    for (const s of usableSources(s => datasets.get(s))) {
+    const keep = buildRecordFilter(src => datasets.get(src))
+    for (const s of RECORD_SOURCES) {
       const data = datasets.get(s) || []
       let n = 0
       for (const r of data) {
+        if (!keep(s, r)) continue
         const t = clean(s.title(r.fieldData))
         const sub = clean(s.sub(r.fieldData))
         if (!term || t.toLowerCase().includes(term) || sub.toLowerCase().includes(term)) {

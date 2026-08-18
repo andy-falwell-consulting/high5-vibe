@@ -43,11 +43,12 @@ export const RECORD_SOURCES = [
 
   // The legacy FileMaker contacts, kept as a FALLBACK rather than deleted.
   //
-  // Both stores are populated in production and cover the same people, so
-  // showing both would list most contacts twice. This one is therefore SKIPPED
-  // whenever the Vibe sources returned anything (see `usableSources`). It still
-  // matters where Vibe's contact model has no data — Dev, which by decision is
-  // never being populated — and it goes away with the legacy module in B4.
+  // Both stores are populated in production and cover the same people, so a
+  // contact held in BOTH is dropped from this one per record — see
+  // buildRecordFilter, which dedupes on the shared `_kpt__Contact_ID` rather
+  // than suppressing the whole source. That keeps contacts searchable wherever
+  // Vibe's model is only partly populated, which is Dev by decision. It goes
+  // away with the legacy module in B4.
   { module: 'contacts', layout: 'Contacts_New', cv: 2, type: 'Contact', icon: '◉', color: '#8b5cf6',
     legacyContactsFallback: true,
     title: f => f.zz__Display__ct, sub: f => f['cntct_ADDR::zz__Display_Single_Line_No_Zip__ct'] || f.Type || '' },
@@ -79,18 +80,32 @@ export const RECORD_SOURCES = [
 const BY_MODULE = {}
 for (const s of RECORD_SOURCES) if (!(s.module in BY_MODULE)) BY_MODULE[s.module] = s
 
-// The sources actually worth reading, given what came back.
+// Drop a legacy FileMaker contact when Vibe already holds the same one.
 //
-// The legacy FileMaker contacts source is dropped whenever Vibe's own contact
-// model returned anything, because both stores hold the same people and showing
-// both lists most contacts twice. Where Vibe has no data — Dev, which by
-// decision is never being populated — it stays, so contact search still works
-// there. See the note on the sources themselves.
-export function usableSources(datasetFor) {
-  const vibeHasContacts = RECORD_SOURCES
-    .filter(s => s.module === 'contacts-v2')
-    .some(s => (datasetFor(s) || []).length > 0)
-  return RECORD_SOURCES.filter(s => !(s.legacyContactsFallback && vibeHasContacts))
+// Both stores are populated in production and cover the same people, so showing
+// both would list most contacts twice. The first attempt at this dropped the
+// legacy source entirely whenever Vibe returned ANYTHING — which is wrong, and
+// testing caught it: four seeded contacts in Dev suppressed all 15,450 real
+// ones. "Vibe has some contacts" is not "Vibe has all contacts".
+//
+// So it dedupes per RECORD instead, which is exact because the two stores share
+// an id: a Vibe organization or person is keyed by the same
+// `_kpt__Contact_ID` FileMaker uses. That behaves correctly everywhere —
+// production suppresses the legacy copy of everyone, a partly-populated Dev
+// suppresses only the few it has, and a contact born in Vibe (a `V-` id) has no
+// legacy counterpart to collide with.
+//
+// The whole thing goes away with the legacy module in B4.
+export function buildRecordFilter(datasetFor) {
+  const vibeIds = new Set()
+  for (const s of RECORD_SOURCES) {
+    if (s.module !== 'contacts-v2') continue
+    for (const r of (datasetFor(s) || [])) vibeIds.add(String(r.recordId))
+  }
+  return (source, record) => !(
+    source.legacyContactsFallback &&
+    vibeIds.has(String(record?.fieldData?._kpt__Contact_ID ?? ''))
+  )
 }
 
 // Best-effort type/color lookup for a stored recordType — used to render a
