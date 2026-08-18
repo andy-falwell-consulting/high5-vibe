@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { getRecord, updateRecord, invalidateRecord, patchCachedRecord, createRecord, addCachedRecord } from '../api/filemaker'
+import { getRecord, invalidateRecord, patchCachedRecord, createRecord, addCachedRecord } from '../api/filemaker'
+import { updateVibeRecord } from '../api/vibeRecords'
 import { useAllRecords } from '../hooks/useAllRecords'
 import ListToolbar, { useListControls, ListBody } from './ListControls'
 import RecordSaveBar from './RecordSaveBar'
@@ -250,7 +251,13 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
         resetLines()
       }
       if (Object.keys(edits).length) {
-        await updateRecord(LAYOUT, selected.recordId, edits)
+        // Estimates_New is Vibe-owned (api/_vibeStore.js) for field edits —
+        // same pattern as the other Vibe-owned layouts. Line items
+        // (updateLine/addLines/deleteLine above) and the totals recalc still
+        // go to FileMaker: the stored totals are script-maintained
+        // (RECALC_SCRIPT in api/estimateLines.js) and can't be reproduced in
+        // Vibe without Vibe computing them itself, which hasn't been built.
+        await updateVibeRecord(LAYOUT, selected.recordId, edits)
         patchCachedRecord(LAYOUT, CACHE_VERSION, selected.recordId, edits)
         setSelected(prev => ({ ...prev, fieldData: { ...prev.fieldData, ...edits } }))
       }
@@ -394,7 +401,7 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
                       })),
                   }}
                   onCreated={(qboId) => {
-                    updateRecord(LAYOUT, selected.recordId, { qbo_estimate_id: String(qboId) })
+                    updateVibeRecord(LAYOUT, selected.recordId, { qbo_estimate_id: String(qboId) })
                       .then(() => { patchCachedRecord(LAYOUT, CACHE_VERSION, selected.recordId, { qbo_estimate_id: String(qboId) }); })
                       .catch(() => {})
                     setSelected(s => ({ ...s, fieldData: { ...s.fieldData, qbo_estimate_id: String(qboId) } }))
