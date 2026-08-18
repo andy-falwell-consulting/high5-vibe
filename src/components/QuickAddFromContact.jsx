@@ -128,7 +128,8 @@ export default function QuickAddFromContact({ contact, onNavigateTo }) {
       // so there is no record organization to prefer yet — the resolver uses
       // the contact's primary or only affiliation, and reports `ambiguous`
       // rather than guessing when it cannot tell.
-      const { fields: display } = await displayFieldsForContact(cfg.layout, contactId);
+      const { fields: display } = await displayFieldsForContact(cfg.layout, contactId,
+        { fallbackRecord: contact?.fieldData });
 
       // Display fields first, cfg.build LAST so it always wins. That ordering
       // is what keeps a copied inspection correct: copyProfileFields carries the

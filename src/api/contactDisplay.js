@@ -70,13 +70,39 @@ export function contactDisplayFields(layout, resolved, { clearAddress = false } 
   return out;
 }
 
+// Names read straight off a legacy Contacts_New record — what v1.0.379 did
+// before the resolver existed.
+//
+// Kept as a FALLBACK, because the resolver only knows contacts that exist in
+// Vibe's own model. In production that is effectively all of them (the only
+// misses in a 300-record sample were contacts FileMaker itself shows as
+// <deleted>), but it is NOT true in an environment where the contacts migration
+// has not run — Dev today — and it would not be true of a contact added to
+// FileMaker after the last migration. Without this, those cases would save a
+// blank name, which is the exact defect v1.0.379 was written to fix.
+//
+// No address here: Address_Block_Billing cannot be derived from a Contacts_New
+// record, whose address fields read back empty (docs/derived-fields-audit.md).
+function namesFromContactRecord(fieldData = {}) {
+  const org = fieldData['zz__Display_Organization__ct'] || '';
+  const person = fieldData['zz__Display__ct'] || '';
+  if (!org && !person) return null;
+  return { organizationName: org, contactName: person, addressBlock: '' };
+}
+
 // One call for the common case: resolve, then map. Returns {} rather than
-// throwing if the contact can't be resolved — a record that saves with a blank
-// name is recoverable, one that fails to save is not.
+// throwing if the contact can't be resolved at all — a record that saves with a
+// blank name is recoverable, one that fails to save is not.
+//
+// `fallbackRecord` is the Contacts_New fieldData a caller already has in hand.
 export async function displayFieldsForContact(layout, contactId, opts = {}) {
   try {
     const resolved = await resolveContactDisplay(contactId, opts);
-    return { fields: contactDisplayFields(layout, resolved, opts), resolved };
+    if (resolved) return { fields: contactDisplayFields(layout, resolved, opts), resolved };
+    const fallback = namesFromContactRecord(opts.fallbackRecord);
+    // clearAddress still applies on the fallback path: a reassignment whose new
+    // contact is unknown to Vibe must not keep the previous contact's address.
+    return { fields: contactDisplayFields(layout, fallback, opts), resolved: null, usedFallback: !!fallback };
   } catch {
     return { fields: {}, resolved: null };
   }

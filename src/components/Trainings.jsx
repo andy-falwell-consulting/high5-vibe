@@ -433,7 +433,7 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
       // currently stored is the previous contact's: blank is recoverable, an
       // address for the wrong organization on a work order is not.
       const { fields: display } = await displayFieldsForContact(
-        LAYOUT, newContactId, { clearAddress: true });
+        LAYOUT, newContactId, { clearAddress: true, fallbackRecord: contactRecord?.fieldData });
       const edits = { _kft__Contact_ID: newContactId, ...display };
       await updateVibeRecord(LAYOUT, selected.recordId, edits);
       patchCachedRecord(LAYOUT, CACHE_VERSION, selected.recordId, edits);

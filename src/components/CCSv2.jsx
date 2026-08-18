@@ -511,7 +511,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
       // the whole point is that the contact is CHANGING, so the organization
       // already on the record describes the OLD one and would drag it forward.
       const { fields: display, resolved } = await displayFieldsForContact(
-        LAYOUT, contactId, { clearAddress: true });
+        LAYOUT, contactId, { clearAddress: true, fallbackRecord: contactRecord?.fieldData });
 
       // clearAddress above is deliberate. The block currently on the record is
       // the previous contact's, so leaving it when the new one cannot be
