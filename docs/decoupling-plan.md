@@ -35,6 +35,30 @@ migration like this, simply absent.
 
 ---
 
+## Status at a glance
+
+Reviewed against the code and against production on **2026-08-18**. Entries
+below carry their own dates; where an older paragraph was proved wrong it has
+been corrected rather than deleted, because the wrong version is usually the
+more instructive one.
+
+| | State |
+|---|---|
+| **A1** record creation | **done** — 4 layouts moved via one shared component |
+| **A2** deletion | **done** — tombstones, all 8 layouts, one change |
+| **A3** edit ownership | **done as far as it goes** — 6 of 8; the other two are decided against or need a feature built |
+| **A4** delete the write token | **blocked** — see the table in A4 |
+| **B1** estimate line items | **in progress** — store, endpoint, client and migration built; swap + migration remain |
+| **B2** bill of materials | untouched |
+| **B3** OE training / certifications | untouched |
+| **B4** retire legacy Contacts | untouched, but now decided |
+| **B5** search + agent | **search done**, agent still open |
+| **C1** derived fields | **audited; resolver and both write paths shipped**; existing records not backfilled |
+| **C2/C3/C4** | untouched — C4 is the largest unknown |
+| **D** cutover | untouched |
+
+---
+
 ## Where we are
 
 Eight layouts are replicated (`api/_replica.js`).
@@ -57,14 +81,17 @@ Child collections:
 | Contact phones / emails / addresses | 36,663 | **Vibe** |
 | Inspection line items | 208,068 | **Vibe** |
 | Attachments (all modules) | — | **Vibe** (Drive + Redis) |
-| Estimate line items (`estmt_ESTLI`) | ~25,000 | FileMaker |
+| Estimate line items (`estmt_ESTLI`) | 10,858 | FileMaker — B1 in progress |
 | Bill of materials (`item_ITMLI`) | — | FileMaker |
 | Contact relationships (`cntct_RLTN`) | 23,302 | FileMaker (superseded by Vibe affiliations) |
 | OE training (`cntct_WKSRG`) | — | FileMaker, no module |
 | Certifications (`cntct_CTFC`) | — | FileMaker, no module |
 
-Roughly: **6 of 8 layouts own their edits, 5 of 8 own creation; 3 of 8 child
-collections have moved.**
+Roughly: **6 of 8 layouts own their edits, 5 of 8 own creation, 8 of 8 own
+deletion; 3 of 8 child collections have moved.**
+
+Deletion is the only column that is finished, and it finished in one change
+because every module deletes through one shared control.
 
 Two of the three layouts that don't own creation *can't* be given it by
 rewiring, because they have no create path to rewire: nothing anywhere in the
@@ -84,13 +111,12 @@ first three, on purpose:
   incidentally.
 - **Estimates**: top-level record field edits (Title, Status, Class, the
   QBO-push id write-back) went to Vibe. Line items and the stored totals did
-  not, and can't yet: `zz__Subtotal__xn`/`zz__Tax__xn`/`zz__Total__xn` reject
-  direct writes outright (`201 Field cannot be modified`), and the only way
-  the app corrects them today is by triggering a FileMaker script
-  (`RECALC_SCRIPT` in `api/estimateLines.js`) after every line change. That's
-  a real instance of the Phase C4 problem — logic living inside FileMaker's
-  own scripts — arriving early, on a layout that isn't even in Phase C yet.
-  Moving line items to Vibe means Vibe computing the totals itself first.
+  not — the totals reject direct writes (`201 Field cannot be modified`) and
+  only a FileMaker script corrects them, which the app had to call after every
+  line change. **That is no longer the blocker it reads as here:** measured
+  2026-08-18, tax is 0 on all 2,818 estimates and no line is taxable, so the
+  totals are a sum. B1 is underway — see
+  [b1-estimate-lines-scope.md](b1-estimate-lines-scope.md).
 
 ---
 
@@ -157,14 +183,9 @@ leaves only `OELookup_New`, which has no edit or create path in the UI at all;
 "extending" it means building a feature, not moving a write. Neither is a
 blocker for A4.
 
-6 of 8 done (RCD_New, Inspections_New, trainings_New, RMI_New, Products &
-Services_New, Estimates_New — the last two edits-only, see the notes above
-the table). Remaining: `OELookup_New` (currently read-only — no edit or create path exists
-in the UI at all, so "extending" it is really "building one," a bigger job
-than the others), `Contacts_New` (edits only — its creation and deletion are
-already Vibe's, per the table above; also see B5 on why Contacts_New's
-*edit* path may not even be the right thing to extend — B4 wants the whole
-legacy module retired instead once B3 lands).
+6 of 8 done: RCD_New, Inspections_New, trainings_New, RMI_New, Products &
+Services_New, Estimates_New — the last two edits-only, see the notes above the
+table.
 
 **A4. Delete the FileMaker write token.** `getToken({ write: true })` in
 `src/api/filemaker.js` is the single chokepoint every mutating call routes
@@ -176,12 +197,11 @@ FileMaker any more, but these still do, and each needs its own decision first:
 
 | Still writes to FileMaker | Why it hasn't moved |
 |---|---|
-| Estimate line items + totals (`api/estimateLines.js`) | totals are script-maintained and reject direct writes — B1 |
+| Estimate line items + totals (`api/estimateLines.js`) | B1, in progress — the Vibe store, endpoint and client exist; the swap and migration remain |
 | Bill of materials (`ProductsAndServicesV2.jsx`) | B2 |
 | Products & Services creation | entangled with SKU assignment and live Shopify/QBO pushes |
 | Estimates creation | not yet moved; no blocker known, just untouched |
 | Legacy Contacts module — edits, creation, portals, `Contact_rltn` | B4 wants the module retired instead |
-| Contact reassignment on CCS and Trainings | re-derives FileMaker calcs Vibe can't yet reproduce — C1 |
 
 `TandD.jsx` and `EOL.jsx` also still call `updateRecord`, but both set
 `RECORDS_LOCKED = true` and are view-only, so those calls are unreachable. They
@@ -204,11 +224,18 @@ the fix stands, but two things measured against production change this entry:
   disagree with their own lines, by +$50.00 and −$406.00. Roughly 3%, in
   production, today.
 
-**Prerequisite the earlier text missed:** the migration needs a layout exposing
-the line-item TABLE, as inspections have (`Script_Use__Inspections_Line_Items`).
-The replica's list scan carries no portal data, and per-record portal reads both
-cost 2,818 round trips and truncate at 50 rows. Whether such a layout exists for
-`estmt_ESTLI` must be checked in FileMaker before code is written.
+**The prerequisite is met.** The migration needs a layout on the line-item
+TABLE, because the replica's list scan carries no portal data and per-record
+portal reads both cost one round trip per estimate and truncate at 50 rows.
+That layout is **`est_li_vibe_2`** — 10,858 rows carrying `_kft__Estimate_ID`,
+confirmed by peeking it. (`estimate_li_vibe`, one character away, is the Items
+catalogue; peek caught that before anything was written.)
+
+**Built so far:** `api/_estimateLines.js` (store + computed totals),
+`api/estimate-lines.js` (runtime read/write), `api/estimate-lines-migrate.js`
+(paged migration with a read-only `peek`), `src/api/estimateLinesVibe.js`.
+**Remaining:** point `Estimates.jsx` at them instead of portalData and
+`RECALC_SCRIPT`, then run the migration.
 
 **B2. Bill of materials** (Products).
 
@@ -223,17 +250,28 @@ These two are the only reason the old Contacts page still exists.
 2026-08-06/07, ahead of where `contacts-model.md` says it stands. But two
 other subsystems still only know about the pre-rebuild world:
 
-- **Global search (`⌘K`).** `src/config/recordSources.js`'s `contacts`
-  entry reads the old `Contacts_New` FileMaker replica (`layout:
-  'Contacts_New', cv: 2`), not Vibe's own `vibe:{db}:person` /
-  `vibe:{db}:org` stores. Reported 2026-08-18: **a global search finds
-  organizations but not people.** Needs a source pointed at the new model
-  (or a second one added alongside), same repointing C1 already calls for
-  on derived fields — this is the search index's version of that problem.
-- **The agent** (`api/agent.js`). Still references `layout: 'Contacts_New'`
-  and carries no context describing the org/person/affiliation split, so it
-  has no way to answer a contact question using Contacts v2's real data or
-  to explain the new structure to whoever asks it something.
+- **Global search (`⌘K`) — DONE 2026-08-18.** Worth recording that the
+  symptom written here was **wrong**, and building from it would have fixed
+  nothing: `zz__Display__ct`, the only field the palette matched contacts on,
+  is populated on 9,511 of 9,512 production people, and searching a person's
+  name found them. The real defect was that search could not see contacts
+  that live **only in Vibe** — so every person and organization created in
+  Contacts v2 since 2026-08-06 was invisible, and creating one produced a
+  contact nobody could find.
+
+  Vibe's people and organizations are now sources in their own right. The
+  legacy `Contacts_New` source is kept and deduped **per record** on the
+  shared `_kpt__Contact_ID` — not suppressed wholesale, which was the first
+  attempt and which four seeded contacts in Dev were enough to break by
+  hiding all 15,450 real ones. Verified in production: a contact in both
+  stores appears exactly once. `RecordPicker` gets the same fix from the
+  shared config. Goes away entirely with B4.
+- **The agent** (`api/agent.js`) — STILL OPEN. Its `contacts` module is a
+  FileMaker find against `Contacts_New`, so it has the same blind spot search
+  had, plus no context describing the org/person/affiliation split. This is
+  not a config repoint like search was: the agent reaches contacts through a
+  FileMaker-find tool, so it needs a Vibe contacts tool and prompt text to
+  match. Its own change.
 
 Same root cause as B4: two Contacts systems exist right now, and most of
 the app outside `ContactsV2.jsx` itself still assumes the old one.
@@ -265,6 +303,16 @@ read it before acting on the C1 text below, which predates it:
   should be stated rather than worked around.
 - Historical address blocks must **not** be backfilled — they are snapshots of
   where work was actually invoiced.
+
+**What has shipped against C1 (2026-08-18):** `api/_contactDisplay.js` rebuilds
+the organization/contact names and address block from Vibe's contact model,
+measured at 295/295 names and 294/295 organizations over 300 production
+projects. Both write paths use it — records created from a contact, and the
+contact-reassignment handlers on CCS and Trainings, which were the last
+FileMaker writes on Vibe-owned layouts. RMI's e-mail and phones, blank on all
+119 records, now read Vibe. **Still open:** existing records keep the names
+FileMaker gave them (nothing was backfilled, deliberately), and the remaining
+C1 items below are untouched.
 
 **C1. Derived fields.** The app displays FileMaker calculations everywhere —
 `zz__Display_Organization__ct`, `zz__Display_Contact__ct`, `zz__Display__ct`,
@@ -346,23 +394,55 @@ This is the one capability to preserve, and it is mostly already right.
 
 ---
 
-## Decisions wanted before Phase A finishes
+## Decisions
 
-**Id scheme.** Contacts born in Vibe get `V-100001`. An inspection number is
-printed on the report that goes to customers, where a prefixed id would look
-wrong. Continue FileMaker's numeric sequence for those, or accept the prefix?
+**Settled 2026-08-18**
 
-**Scripts and integrations.** What runs inside FileMaker today, and does anything
-other than Vibe read that database?
+- **Id scheme — accept the prefix.** Records born in Vibe get `V-100001`, shown
+  wherever the id is shown including printed reports. Live since A1.
+- **No `_vibe` layouts in Dev.** So Vibe's contact model has no data there and
+  never will. Anything needing a populated contact model is verified by READING
+  production instead, and that limitation gets stated rather than worked around.
+- **Legacy Contacts will be retired, not extended** (B4). That is what finishes
+  A3 — its edit path is deliberately staying on FileMaker until the module goes.
+- **Delete means hide in Vibe, leave FileMaker alone** (A2). People working in
+  FileMaker Pro keep seeing records that are gone from Vibe; the deletion is
+  recoverable by hand.
 
-**Who still opens FMP Pro, and for what.** Every module already moved shows them
-values that stopped updating.
+**Still open**
+
+- **A tax rate.** Estimate tax is 0 on all 2,818 production estimates and no line
+  is taxable, so nothing is wrong today — but `Taxable` is a live checkbox and no
+  rate is stored anywhere in the file. B1 computes tax from taxable lines times a
+  rate, which is 0 until someone supplies one. **Needs Ian.**
+- **Scripts and integrations.** What runs inside FileMaker today, and does
+  anything other than Vibe read that database? Still the largest unknown — C4.
+  One instance is already retired: B1 removes the app's only script dependency.
+- **Who still opens FMP Pro, and for what.** Sharper now than when written: every
+  module already moved shows them values that stopped updating, and since A2 they
+  also see records that Vibe considers deleted.
 
 ---
 
 ## Rough size
 
-Eight to ten working sessions, sequenced A → B → C → D strictly, since each
-depends on the last. Phase C's derived-field audit should be done as its own
-piece of work before any code is written for it — it is the phase most likely to
-surface something that changes the plan.
+Originally eight to ten working sessions, sequenced A → B → C → D strictly.
+Two of those assumptions did not survive contact with the data:
+
+- **The strict sequence did not hold, and did not need to.** C1's resolver was
+  built before Phase B finished, because A4 was blocked on it — the contact
+  reassignment handlers could not leave FileMaker until something could rebuild
+  the names they re-derive. Phases describe dependencies, not an order to be
+  obeyed when the dependency runs the other way.
+- **The audit-first rule earned its keep.** Phase C's derived-field audit was
+  done as its own piece of work, and it changed the phase: the address block
+  turned out to be stored data needing no migration, and part of C1 turned out
+  to be deleting fields rather than moving them. The same habit caught
+  `estimate_li_vibe` being the wrong table before 1,267 product records were
+  written into the estimate-lines store.
+
+**Where the remaining work sits:** A is done except A4, which is gated on B1
+(in progress), B2, two creation paths and the legacy Contacts module. B3/B4 are
+untouched. C1 has shipped its resolver and both write paths; C2/C3/C4 are
+untouched, and C4 remains the largest unknown because it cannot be inventoried
+from the codebase.
