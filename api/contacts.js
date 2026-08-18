@@ -86,7 +86,18 @@ export default async function handler(req, res) {
       if (!org) return res.status(404).json({ error: 'no such organization' });
       const affIds = parse(await redis.hget(K.byOrg(db), orgId)) || [];
       const affs = affIds.length ? (await redis.hmget(K.aff(db), ...affIds)) : [];
-      const rows = (Array.isArray(affs) ? affs : Object.values(affs || {})).map(parse).filter(Boolean);
+      // byOrg IS the display order — it is what drag-to-sort rewrites — so the
+      // rows have to come back in that order. hmget can answer with an object,
+      // and Object.values then yields hash order, not the order asked for,
+      // which silently discarded the stored ordering. Index and re-map instead
+      // of trusting the shape.
+      const affById = new Map();
+      if (Array.isArray(affs)) {
+        affs.forEach((v, i) => { const a = parse(v); if (a) affById.set(String(affIds[i]), a); });
+      } else {
+        for (const [k, v] of Object.entries(affs || {})) { const a = parse(v); if (a) affById.set(String(k), a); }
+      }
+      const rows = affIds.map(id => affById.get(String(id))).filter(Boolean);
       const people = rows.length ? (await redis.hmget(K.person(db), ...rows.map(a => a.personId))) : [];
       const byId = new Map((Array.isArray(people) ? people : Object.values(people || {}))
         .map(parse).filter(Boolean).map(p => [p.id, p]));

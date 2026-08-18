@@ -27,7 +27,7 @@ import { Redis } from '@upstash/redis';
 import { normalisePhoneInput } from './_phone.js';
 import {
   K, parse, nextId, getEntity, putEntity, readHash, writeHash,
-  reindexPerson, reindexOrg, wouldCycle, displayName, isVibeId,
+  reindexPerson, reindexOrg, setOrgPeopleOrder, wouldCycle, displayName, isVibeId,
   METHODS, methodList, nextMethodId, tombstoneContact,
 } from './_contacts.js';
 
@@ -221,6 +221,18 @@ export default async function handler(req, res) {
       const remaining = await reindexPerson(db, aff.personId);
       await reindexOrg(db, aff.organizationId);
       return res.status(200).json({ removed: affiliationId, remaining: remaining.length });
+    }
+
+    // Drag-to-sort for the people shown on an organization. The order lives in
+    // the byOrg index that already drives the read, so this needs no new field
+    // and no new store — only that reindexOrg stopped discarding it.
+    if (action === 'reorder-org-people') {
+      const organizationId = str(body.organizationId);
+      const o = await getEntity(db, organizationId);
+      if (o.kind !== 'organization') return res.status(400).json({ error: 'organizationId is not an organization' });
+      if (!Array.isArray(body.affiliationIds)) return res.status(400).json({ error: 'affiliationIds must be an array' });
+      const order = await setOrgPeopleOrder(db, organizationId, body.affiliationIds);
+      return res.status(200).json({ organizationId, order });
     }
 
     if (action === 'set-primary') {

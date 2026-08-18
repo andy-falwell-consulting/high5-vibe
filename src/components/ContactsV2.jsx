@@ -1,13 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
 import { BRAND, UI } from '../config/brandColors';
 import { formatPhone, telHref } from '../../api/_phone';
 import { useRelatedRecords, sharedNameCount } from '../hooks/useRelatedRecords';
+import { createRecord, getRecord } from '../api/filemaker';
 import {
   listPeople, listOrganizations, getContact, getOrganizationPeople,
   createPerson, createOrganization, updateContact,
   affiliate, setPrimary, unaffiliate, setParent,
   addMethod, updateMethod, removeMethod, deleteContact,
+  reorderOrgPeople, contactDistance,
 } from '../api/vibeContacts';
 import './ContactsV2.css';
 
@@ -89,6 +94,14 @@ const METHOD_SPEC = {
     show: m => [m.street, [m.city, m.state].filter(Boolean).join(', '), m.zip, m.country]
       .map(s => String(s || '').trim()).filter(Boolean).join(' · '),
     href: null,
+    // Google's documented search URL, which drops a pin on the address rather
+    // than just centring the map near it. Opened in a new tab so nobody loses
+    // the record they were reading.
+    map: m => {
+      const q = [m.street, m.city, m.state, m.zip, m.country]
+        .map(v => String(v || '').trim()).filter(Boolean).join(', ');
+      return q ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}` : null;
+    },
   },
 };
 
@@ -165,6 +178,142 @@ function WorkNotes({ shared, children }) {
         <p className="c2-note">Includes {children === 1 ? 'one affiliated site' : `${children} affiliated sites`}.</p>
       )}
     </>
+  );
+}
+
+// A contact with an open risk item says so at a glance, wherever you land on
+// the record — not only on the RMI tab. High level of risk is called out
+// separately because that is the one that changes what someone does next.
+function RiskBadge({ active, high, onOpen }) {
+  if (!active?.length) return null;
+  const n = active.length;
+  return (
+    <button type="button" className={`c2-riskbadge${high ? ' c2-riskbadge--high' : ''}`}
+      onClick={onOpen}
+      title={`${n} active risk item${n === 1 ? '' : 's'} — open the RMI tab`}>
+      <span aria-hidden="true">⚠</span>
+      {high ? 'High risk' : 'Active RMI'}
+      {n > 1 && <span className="c2-riskbadge-count">{n}</span>}
+    </button>
+  );
+}
+
+// One draggable person row on an organization.
+function SortablePerson({ person, busy, onOpen }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: person.affiliationId,
+  });
+  return (
+    <li ref={setNodeRef}
+      className={`c2-person-row${isDragging ? ' dragging' : ''}`}
+      style={{ transform: CSS.Transform.toString(transform), transition }}>
+      {/* The handle, not the whole row, starts a drag — the name is a link and
+          has to stay clickable. */}
+      <span className="c2-drag" title="Drag to reorder" {...attributes} {...listeners}>⠿</span>
+      <button className="c2-link" disabled={busy} onClick={() => onOpen(person.id)}>{person.name}</button>
+      {person.title && <span className="c2-aff-title">{person.title}</span>}
+      {person.primary && <span className="c2-primary">primary</span>}
+    </li>
+  );
+}
+
+// The people on an organization, in an order the team drags by hand.
+//
+// The order is stored in the byOrg index that already drives the read, so no
+// field was added for it. Reordered optimistically and rolled back on failure:
+// this is a display order, and showing the drop then taking it away beats
+// freezing the list on a round trip.
+function OrgPeople({ people, busy, onOpen, onReorder }) {
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  if (!people) return <p className="c2-none">Loading…</p>;
+  if (!people.length) return <p className="c2-none">Nobody attached yet.</p>;
+
+  return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter}
+      onDragEnd={({ active, over }) => {
+        if (!over || active.id === over.id) return;
+        const from = people.findIndex(p => p.affiliationId === active.id);
+        const to = people.findIndex(p => p.affiliationId === over.id);
+        if (from < 0 || to < 0) return;
+        onReorder(arrayMove(people, from, to));
+      }}>
+      <SortableContext items={people.map(p => p.affiliationId)} strategy={verticalListSortingStrategy}>
+        <ul className="c2-people">
+          {people.map(p => (
+            <SortablePerson key={p.affiliationId} person={p} busy={busy} onOpen={onOpen} />
+          ))}
+        </ul>
+      </SortableContext>
+    </DndContext>
+  );
+}
+
+// Type-search for a PERSON, to attach one to an organization. Deliberately the
+// same interaction as OrgPicker below, which does the reverse from a person's
+// page — the two directions of one relationship should not feel different.
+function PersonPicker({ people, busy, excludeIds, placeholder, actionLabel, onPick }) {
+  const [q, setQ] = useState('');
+  const [title, setTitle] = useState('');
+  const [picked, setPicked] = useState(null);
+  const needle = q.trim().toLowerCase();
+  const skip = excludeIds || new Set();
+  const matches = needle.length < 2 ? [] : people
+    .filter(p => !skip.has(String(p.id)) && (p.name || '').toLowerCase().includes(needle))
+    .slice(0, 8);
+
+  return (
+    <div className="c2-picker">
+      {picked ? (
+        <div className="c2-picked">
+          <span className="c2-picked-name">{picked.name}</span>
+          <input className="c2-input c2-input--inline" placeholder="Title (optional)"
+            value={title} onChange={e => setTitle(e.target.value)} />
+          <button className="c2-btn c2-btn--primary" disabled={busy}
+            onClick={() => { onPick(picked, title.trim()); setPicked(null); setTitle(''); setQ(''); }}>
+            {actionLabel}
+          </button>
+          <button className="c2-btn" disabled={busy} onClick={() => { setPicked(null); setTitle(''); }}>Cancel</button>
+        </div>
+      ) : (
+        <>
+          <input className="c2-input" placeholder={placeholder} value={q} onChange={e => setQ(e.target.value)} />
+          {matches.length > 0 && (
+            <ul className="c2-matches">
+              {matches.map(p => (
+                <li key={p.id}><button onClick={() => setPicked(p)}>{p.name}{p.title ? ` · ${p.title}` : ''}</button></li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// Confirmation before an RMI is raised. A risk record is a real thing with a
+// person's name on it, so it is not created by a single stray click — and the
+// note is asked for here rather than left blank for someone to fill in later.
+function HighRiskModal({ name, busy, error, onCancel, onConfirm }) {
+  const [note, setNote] = useState('');
+  return (
+    <div className="c2-modal-backdrop" onClick={busy ? undefined : onCancel}>
+      <div className="c2-modal" onClick={e => e.stopPropagation()}>
+        <h2>Mark {name} as high risk?</h2>
+        <p className="c2-modal-note">
+          This creates an active Risk Management record at High level of risk and opens it.
+        </p>
+        <label className="c2-label">Note of concern</label>
+        <textarea className="c2-input c2-input--area" rows={4} autoFocus
+          placeholder="What is the concern?" value={note} onChange={e => setNote(e.target.value)} />
+        {error && <div className="c2-error">{error}</div>}
+        <div className="c2-modal-actions">
+          <button className="c2-btn" onClick={onCancel} disabled={busy}>Cancel</button>
+          <button className="c2-btn c2-btn--danger" disabled={busy} onClick={() => onConfirm(note.trim())}>
+            {busy ? 'Creating…' : 'Create RMI'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -252,6 +401,10 @@ function ContactMethods({ contact, busy, onAdd, onUpdate, onRemove }) {
                   {spec.href
                     ? <a className="c2-methodvalue" href={spec.href(m)}>{spec.show(m)}</a>
                     : <span className="c2-methodvalue">{spec.show(m)}</span>}
+                  {spec.map?.(m) && (
+                    <a className="c2-mini c2-mini--map" href={spec.map(m)}
+                      target="_blank" rel="noreferrer" title="Open in Google Maps">Map</a>
+                  )}
                   <button className="c2-mini" disabled={busy}
                     onClick={() => setForm({ kind, id: m.id })}>edit</button>
                   <button className="c2-mini c2-mini--danger" disabled={busy}
@@ -466,6 +619,12 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
   // is opened — carrying "Estimates" across to a contact that has none would
   // land the reader on an empty pane with no idea why.
   const [tab, setTab] = useState('overview');
+  // Mark-as-high-risk: null | 'asking' while the confirmation is open.
+  const [riskAsk, setRiskAsk] = useState(null);
+  const [riskBusy, setRiskBusy] = useState(false);
+  const [riskError, setRiskError] = useState(null);
+  // Distance / drive time to HQ, fetched per contact (api/contact-distance.js).
+  const [distance, setDistance] = useState(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState(null);
   const selectedId = useRef(null);
@@ -494,6 +653,19 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
     onClearNav?.();
   }, [navTarget]);   // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Distance / drive time for the open contact. Keyed by id so switching
+  // records reads as loading without an effect having to reset it first.
+  const openId = selected?.kind === 'organization' ? selected.organization?.id : selected?.person?.id;
+  useEffect(() => {
+    if (!openId) return undefined;
+    let alive = true;
+    contactDistance(openId)
+      .then(d => { if (alive) setDistance({ id: openId, ...d }); })
+      .catch(() => { if (alive) setDistance({ id: openId, distance: null, driveTime: null }); });
+    return () => { alive = false; };
+  }, [openId]);
+  const dist = distance?.id === openId ? distance : null;
+
   const records = kind === 'people' ? people : orgs;
 
   // Lifted out of the work tables so the tab strip can carry counts. One fetch
@@ -502,13 +674,16 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
   const selectedOrg = selected?.kind === 'organization' ? selected.organization : null;
   const sharedNames = selectedOrg ? sharedNameCount(selectedOrg, orgs) : 0;
 
-  // Overview always; People only for an organization. Work sources get a tab
-  // each — for an organization always, so the strip is the same shape on every
-  // record, but for a PERSON only when there is something in it: a person's
-  // work is the exception (records key to the site, not the employee), and five
-  // permanently empty tabs on 10,831 people would be noise.
+  // Overview always; People only for an organization. Every work source gets a
+  // tab on BOTH kinds, so the strip is the same shape on every record.
+  //
+  // People were once filtered to non-empty tabs, on the belief that a person's
+  // work was rare. Measured, that was wrong: the foreign key names a PERSON on
+  // four of the five sources — 1,090 of 1,091 inspection keys, 1,597 of 1,605
+  // CCS, 1,170 of 1,176 training, 98 of 98 RMI (only estimates key to the
+  // organization). 2,326 of 10,831 people, 21.5%, have work of their own, so
+  // hiding an empty tab was hiding a real one just as often.
   const workTabs = (related.groups || [])
-    .filter(g => selected?.kind === 'organization' || g.rows.length)
     .map(g => ({ id: g.src.id, label: g.src.label, count: g.rows.length }));
 
   const detailTabs = [
@@ -523,6 +698,22 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
   // rather than rendering nothing.
   const activeTab = detailTabs.some(t => t.id === tab) ? tab : 'overview';
   const activeGroup = (related.groups || []).find(g => g.src.id === activeTab);
+
+  // An RMI already loads with the rest of a contact's work, so "has an active
+  // risk item" costs nothing extra — Status is Active or Resolved, and only
+  // Active earns the badge.
+  const rmiRows = (related.groups || []).find(g => g.src.id === 'rmi')?.rows || [];
+  const activeRmi = rmiRows.filter(r => String(r.fieldData?.Status || '').toLowerCase() === 'active');
+  const highRisk = activeRmi.some(r => String(r.fieldData?.Level_of_Risk || '').toLowerCase() === 'high');
+
+  // Sites belonging to this organization — the same parent link that makes a
+  // district's work list include its schools, shown directly.
+  const childSites = selectedOrg
+    ? orgs.filter(o => String(o.parentOrganizationId ?? '') === String(selectedOrg.id))
+    : [];
+
+  // People already attached, so the picker cannot offer them again.
+  const attachedIds = new Set((orgPeople || []).map(p => String(p.id)));
 
   const controls = useListControls({
     records,
@@ -615,6 +806,51 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
   function goTo(id) {
     controls.setTyped('');
     open({ id });
+  }
+
+  // Reorder optimistically, roll back if the write fails. The order is a
+  // display preference, so a brief wrong order beats a frozen list.
+  async function handleReorderPeople(next) {
+    const before = orgPeople;
+    setOrgPeople(next);
+    try {
+      await reorderOrgPeople(selectedOrg.id, next.map(p => p.affiliationId));
+    } catch (e) {
+      setOrgPeople(before);
+      setActionError(e.message || 'Could not save that order.');
+    }
+  }
+
+  // Mark a contact high risk: create an active RMI against it and open it.
+  //
+  // This writes to FILEMAKER, not Vibe — RMI_New is not Vibe-owned yet, so it
+  // goes through createRecord exactly as RMI.jsx does. It therefore needs a real
+  // FileMaker session and cannot run on the preview bypass. It moves to Vibe
+  // with Phase A1 of docs/decoupling-plan.md.
+  async function confirmHighRisk(note) {
+    const id = selected?.kind === 'organization' ? selected.organization?.id : selected?.person?.id;
+    if (!id) return;
+    setRiskBusy(true); setRiskError(null);
+    try {
+      const fieldData = {
+        _kft__Contact_ID: String(id),
+        Status: 'Active',
+        Level_of_Risk: 'High',
+        Entry_Date: new Date().toLocaleDateString('en-US'),
+      };
+      if (note) fieldData.Note_Concern = note;
+      const res = await createRecord('RMI_New', fieldData);
+      const newId = res?.response?.recordId;
+      if (!newId) throw new Error(res?.messages?.[0]?.message || 'Could not create the risk record');
+      // Read it back so the RMI module opens a record that exists in its cache.
+      await getRecord('RMI_New', newId).catch(() => {});
+      setRiskAsk(null);
+      onNavigateTo?.('rmi', newId);
+    } catch (e) {
+      setRiskError(e.message || 'Could not create the risk record.');
+    } finally {
+      setRiskBusy(false);
+    }
   }
 
   async function act(fn) {
@@ -729,15 +965,25 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
                   <span className="c2-chip">Person</span>
                   {person.title && <span>{person.title}</span>}
                   {person.status && <span>{person.status}</span>}
+                  <RiskBadge active={activeRmi} high={highRisk} onOpen={() => setTab('rmi')} />
                   <span className="c2-id">{person.id}</span>
                   <button className="c2-mini c2-mini--flush" onClick={() => setEditing(true)}>Edit</button>
+                  {!highRisk && (
+                    <button className="c2-mini c2-mini--danger c2-mini--flush"
+                      onClick={() => { setRiskError(null); setRiskAsk('asking'); }}>Mark high risk</button>
+                  )}
                 </div>
-                {person.notes && <p className="c2-notes">{person.notes}</p>}
                 {actionError && <div className="c2-error">{actionError}</div>}
 
                 <Tabs tabs={detailTabs} active={activeTab} onPick={setTab} />
 
                 {activeTab === 'overview' && (<>
+                {/* Notes live INSIDE Overview, not above the strip. Some run to
+                    thousands of characters — one contact carries 4,303 — and
+                    above the tabs that pushed the strip clean off the screen. */}
+                {person.notes && (
+                  <Section icon="✎" title="Notes"><p className="c2-notes">{person.notes}</p></Section>
+                )}
                 <Section icon="✉" title="Contact details">
                   <ContactMethods contact={person} busy={busy}
                     onAdd={(k, v) => act(() => addMethod(person.id, k, v))}
@@ -811,20 +1057,61 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
                   <span className="c2-chip c2-chip--org">Organization</span>
                   {org.type && <span>{org.type}</span>}
                   {org.status && <span>{org.status}</span>}
+                  <RiskBadge active={activeRmi} high={highRisk} onOpen={() => setTab('rmi')} />
                   <span className="c2-id">{org.id}</span>
                   <button className="c2-mini c2-mini--flush" onClick={() => setEditing(true)}>Edit</button>
+                  {!highRisk && (
+                    <button className="c2-mini c2-mini--danger c2-mini--flush"
+                      onClick={() => { setRiskError(null); setRiskAsk('asking'); }}>Mark high risk</button>
+                  )}
                 </div>
-                {org.notes && <p className="c2-notes">{org.notes}</p>}
                 {actionError && <div className="c2-error">{actionError}</div>}
 
                 <Tabs tabs={detailTabs} active={activeTab} onPick={setTab} />
 
                 {activeTab === 'overview' && (<>
+                {org.notes && (
+                  <Section icon="✎" title="Notes"><p className="c2-notes">{org.notes}</p></Section>
+                )}
                 <Section icon="✉" title="Contact details">
                   <ContactMethods contact={org} busy={busy}
                     onAdd={(k, v) => act(() => addMethod(org.id, k, v))}
                     onUpdate={(k, id, v) => act(() => updateMethod(org.id, k, id, v))}
                     onRemove={(k, id) => act(() => removeMethod(org.id, k, id))} />
+                </Section>
+
+                <Section icon="⛗" title="Distance to HQ">
+                  {/* Derived from the address, not stored: Contacts_New has a
+                      drive_time field that is empty on every record, and no
+                      distance field at all. Served from the same cache
+                      distance-sync fills for CCS and trainings. */}
+                  {!dist ? <p className="c2-none">Checking…</p>
+                    : dist.distance || dist.driveTime ? (
+                      <div className="c2-distance">
+                        <div><span className="c2-dist-label">Distance</span>{dist.distance || '—'}</div>
+                        <div><span className="c2-dist-label">Drive time</span>{dist.driveTime || '—'}</div>
+                      </div>
+                    ) : (
+                      <p className="c2-none">
+                        {dist.reason === 'no address' ? 'No address on this organization.' : 'Could not work out a route.'}
+                      </p>
+                    )}
+                </Section>
+
+                <Section icon="◫" title={`Affiliated sites${childSites.length ? ` (${childSites.length})` : ''}`}>
+                {childSites.length === 0 ? (
+                  <p className="c2-none">No sites belong to this organization.</p>
+                ) : (
+                  <ul className="c2-people">
+                    {childSites.map(site => (
+                      <li key={site.id}>
+                        <button className="c2-link" onClick={() => goTo(site.id)}>{site.name}</button>
+                        {site.type && <span className="c2-aff-title">{site.type}</span>}
+                        {site.status && site.status !== 'Active' && <span className="c2-aff-title">{site.status}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 </Section>
 
                 <Section icon="⌂" title="Parent organization">
@@ -849,20 +1136,19 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
                 </>)}
 
                 {activeTab === 'people' && (
-                  <Section icon="◎" title={`People${orgPeople ? ` (${orgPeople.length})` : ''}`}>
-                  {!orgPeople ? <p className="c2-none">Loading…</p>
-                    : orgPeople.length === 0 ? <p className="c2-none">Nobody attached yet.</p>
-                    : (
-                      <ul className="c2-people">
-                        {orgPeople.map(p => (
-                          <li key={p.affiliationId}>
-                            <button className="c2-link" onClick={() => goTo(p.id)}>{p.name}</button>
-                            {p.title && <span className="c2-aff-title">{p.title}</span>}
-                            {p.primary && <span className="c2-primary">primary</span>}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
+                  <Section icon="◎" title={`People${orgPeople ? ` (${orgPeople.length})` : ''}`}
+                    aside={orgPeople && orgPeople.length > 1
+                      ? <span className="c2-section-hint">drag ⠿ to reorder</span> : null}>
+                    <OrgPeople people={orgPeople} busy={busy} onOpen={goTo} onReorder={handleReorderPeople} />
+                    <div className="c2-picker-block">
+                      <PersonPicker people={people} busy={busy} excludeIds={attachedIds}
+                        placeholder="Attach a person…" actionLabel="Attach"
+                        onPick={(p, title) => act(async () => {
+                          await affiliate(p.id, org.id, title);
+                          const op = await getOrganizationPeople(org.id);
+                          setOrgPeople(op.people || []);
+                        })} />
+                    </div>
                   </Section>
                 )}
 
@@ -879,6 +1165,14 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
           </div>
         ) : null}
       </main>
+
+      {riskAsk && (
+        <HighRiskModal
+          name={selected?.kind === 'organization' ? selected.organization?.name : selected?.person?.displayName}
+          busy={riskBusy} error={riskError}
+          onCancel={() => { setRiskAsk(null); setRiskError(null); }}
+          onConfirm={confirmHighRisk} />
+      )}
 
       {creating && (
         <CreateModal
