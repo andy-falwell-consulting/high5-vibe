@@ -789,6 +789,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
                 {/* Contact beside Contract & Financials — the contact is who you
                     call about the money, so the two belong on one line. */}
                 <div className="cv2-cols cv2-cols-third">
+                <div className="cv2-stack">
                 {/* contact */}
                   <div className="cv2-card">
                     <div className="cv2-card-head">
@@ -829,6 +830,37 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
                     </div>
                   </div>
 
+                  {/* team */}
+                  <div className="cv2-card">
+                    <div className="cv2-card-head"><span>Team</span></div>
+                      <div className="cv2-team">
+                        {/* Operations Lead is a Vibe-only field held in Redis, not
+                            FileMaker — so it saves immediately on change rather
+                            than going through stage()/the record's Save button. */}
+                        <div className="cv2-team-row">
+                          <Avatar name={opsLead.leadFor(selected.recordId)} lead />
+                          <div className="cv2-team-pick">
+                            <label>Operations lead</label>
+                            <InlineSelect
+                              value={opsLead.leadFor(selected.recordId)}
+                              options={['', ...opsLead.roster]}
+                              onChange={v => opsLead.assign(selected.recordId, v)}
+                            />
+                          </div>
+                        </div>
+                        <div className="cv2-team-row">
+                          <Avatar name={val('Lead Builder')} lead />
+                          <div className="cv2-team-pick"><label>Lead builder</label><InlineSelect value={val('Lead Builder')} options={builderOptions} onChange={v => stage('Lead Builder', v)} /></div>
+                        </div>
+                        {['Builder1', 'Builder2', 'Builder3'].map((bk, i) => (
+                          <div className="cv2-team-row" key={bk}>
+                            <Avatar name={val(bk)} />
+                            <div className="cv2-team-pick"><label>Builder {i + 1}</label><InlineSelect value={val(bk)} options={builderOptions} onChange={v => stage(bk, v)} /></div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                </div>
 
                 <div className="cv2-card">
                   <div className="cv2-card-head"><span>Contract &amp; Financials</span></div>
@@ -944,19 +976,33 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
                     <label>Distance to HQ</label><InlineText value={val('Distance to High5')} onChange={v => stage('Distance to High5', v)} placeholder="—" />
                     <label>Drive time</label><InlineText value={val('Drive Time')} onChange={v => stage('Drive Time', v)} placeholder="—" />
                   </div>
-                  <div className="cv2-field-block">
-                    <label>Work order</label>
-                    <InlineText value={val('Work Order')} onChange={v => stage('Work Order', v)} placeholder="Add a work order…" area big fixed />
-                    <div className="cv2-wo-actions">
-                      <button type="button" className="cv2-wo-btn" disabled={!!woBusy} onClick={handleGenerateWorkOrder}>
-                        {woBusy ? (woStage || 'Working…') : '⤓ Download work order'}
-                      </button>
+                </div>
+
+                {/* Work Order Notes and Notes side by side. Both are long free
+                    text read while doing the same thing, so stacking them meant
+                    scrolling past one to reach the other. */}
+                <div className="cv2-cols cv2-cols-even">
+                  <div className="cv2-card">
+                    <div className="cv2-card-head"><span>Work Order Notes</span></div>
+                    <div className="cv2-field-block cv2-field-block--card">
+                      <InlineText value={val('Work Order')} onChange={v => stage('Work Order', v)} placeholder="Add a work order…" area big fixed />
+                      <div className="cv2-wo-actions">
+                        <button type="button" className="cv2-wo-btn" disabled={!!woBusy} onClick={handleGenerateWorkOrder}>
+                          {woBusy ? (woStage || 'Working…') : '⤓ Download work order'}
+                        </button>
+                      </div>
+                      {woError && <p className="cv2-wo-error">{woError}</p>}
                     </div>
-                    {woError && <p className="cv2-wo-error">{woError}</p>}
                   </div>
-                  <div className="cv2-field-block">
-                    <label>Notes <button type="button" className="cv2-stamp-btn" onClick={() => stampNote('Notes')}>⏱ Stamp</button></label>
-                    <InlineText value={val('Notes')} onChange={v => stage('Notes', v)} placeholder="Add notes…" area fixed />
+
+                  <div className="cv2-card">
+                    <div className="cv2-card-head">
+                      <span>Notes</span>
+                      <button type="button" className="cv2-stamp-btn" onClick={() => stampNote('Notes')}>⏱ Stamp</button>
+                    </div>
+                    <div className="cv2-field-block cv2-field-block--card">
+                      <InlineText value={val('Notes')} onChange={v => stage('Notes', v)} placeholder="Add notes…" area big fixed />
+                    </div>
                   </div>
                 </div>
 
@@ -1033,36 +1079,6 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
                   </div>
                 </div>
 
-                {/* team */}
-                <div className="cv2-card">
-                  <div className="cv2-card-head"><span>Team</span></div>
-                    <div className="cv2-team">
-                      {/* Operations Lead is a Vibe-only field held in Redis, not
-                          FileMaker — so it saves immediately on change rather
-                          than going through stage()/the record's Save button. */}
-                      <div className="cv2-team-row">
-                        <Avatar name={opsLead.leadFor(selected.recordId)} lead />
-                        <div className="cv2-team-pick">
-                          <label>Operations lead</label>
-                          <InlineSelect
-                            value={opsLead.leadFor(selected.recordId)}
-                            options={['', ...opsLead.roster]}
-                            onChange={v => opsLead.assign(selected.recordId, v)}
-                          />
-                        </div>
-                      </div>
-                      <div className="cv2-team-row">
-                        <Avatar name={val('Lead Builder')} lead />
-                        <div className="cv2-team-pick"><label>Lead builder</label><InlineSelect value={val('Lead Builder')} options={builderOptions} onChange={v => stage('Lead Builder', v)} /></div>
-                      </div>
-                      {['Builder1', 'Builder2', 'Builder3'].map((bk, i) => (
-                        <div className="cv2-team-row" key={bk}>
-                          <Avatar name={val(bk)} />
-                          <div className="cv2-team-pick"><label>Builder {i + 1}</label><InlineSelect value={val(bk)} options={builderOptions} onChange={v => stage(bk, v)} /></div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
                 </div>
 
               {allPhasesDone && !(status || '').toLowerCase().includes('complet') && (
