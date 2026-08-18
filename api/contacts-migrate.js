@@ -76,15 +76,21 @@ function toMethodRow(kind, f) {
 // (not fine — "Layout is missing" is what a database that has never had the
 // _vibe layouts built says). Both returned `done: true`, so a driver looping
 // until done read a migration that copied NOTHING as a completed one. Hit for
-// real on 2026-08-18 against Dev, which has Contact_rltn but none of the other
-// four layouts.
+// real on 2026-08-18 against Dev, whose stored report from 2026-08-07 still
+// says organizations: 0, people: 0, relationshipRowsRead: 22962.
 //
-// `total` is the tell: FileMaker reports a foundCount on a successful read even
-// when the page is past the end, and null when it never got that far.
-function endOfPages(res, { step, offset, total, msg }) {
-  if (total == null) {
+// Decided on FileMaker's error CODE, not on the found count: a page past the
+// last record and a layout that does not exist BOTH come back with no rows and
+// no foundCount, so the count cannot tell them apart.
+const END_OF_PAGES_CODES = new Set([
+  '401',   // no records match the request
+  '101',   // record is missing — what an offset past the end returns
+]);
+
+function endOfPages(res, { step, offset, total, msg, code }) {
+  if (code && !END_OF_PAGES_CODES.has(String(code))) {
     return res.status(502).json({
-      step, offset, done: false, error: msg || 'FileMaker returned no rows and no found count',
+      step, offset, done: false, code, error: msg || 'FileMaker refused the read',
       hint: 'The layout this step reads is probably missing from that database.',
     });
   }
@@ -97,7 +103,12 @@ async function fmPage(db, layout, offset, token) {
     { headers: { Authorization: `Bearer ${token}` } }
   );
   const j = await r.json().catch(() => ({}));
-  return { rows: j?.response?.data || [], total: j?.response?.dataInfo?.foundCount ?? null, msg: j?.messages?.[0]?.message };
+  return {
+    rows: j?.response?.data || [],
+    total: j?.response?.dataInfo?.foundCount ?? null,
+    msg: j?.messages?.[0]?.message,
+    code: j?.messages?.[0]?.code,
+  };
 }
 
 export default async function handler(req, res) {
@@ -120,8 +131,8 @@ export default async function handler(req, res) {
     const token = await fmpToken(db);
 
     if (step === 'contacts') {
-      const { rows, total, msg } = await fmPage(db, CONTACTS_LAYOUT, offset, token);
-      if (!rows.length) return endOfPages(res, { step, offset, total, msg });
+      const { rows, total, msg, code } = await fmPage(db, CONTACTS_LAYOUT, offset, token);
+      if (!rows.length) return endOfPages(res, { step, offset, total, msg, code });
       // A contact deleted in Vibe still has its FileMaker row, and this step
       // writes every row it reads — so without checking, a re-run would restore
       // it. `ignoreTombstones=1` is the way back from a mistaken delete.
@@ -145,8 +156,8 @@ export default async function handler(req, res) {
     }
 
     if (step === 'relationships') {
-      const { rows, total, msg } = await fmPage(db, RELATIONS_LAYOUT, offset, token);
-      if (!rows.length) return endOfPages(res, { step, offset, total, msg });
+      const { rows, total, msg, code } = await fmPage(db, RELATIONS_LAYOUT, offset, token);
+      if (!rows.length) return endOfPages(res, { step, offset, total, msg, code });
       if (offset === 1) await redis.del(stageKey(db));
       const staged = {};
       for (const r of rows) {
@@ -169,8 +180,8 @@ export default async function handler(req, res) {
     // rewriting the same contact once per phone it owns.
     if (METHOD_STEPS[step]) {
       const { layout, kind } = METHOD_STEPS[step];
-      const { rows, total, msg } = await fmPage(db, layout, offset, token);
-      if (!rows.length) return endOfPages(res, { step, offset, total, msg });
+      const { rows, total, msg, code } = await fmPage(db, layout, offset, token);
+      if (!rows.length) return endOfPages(res, { step, offset, total, msg, code });
       if (offset === 1) await redis.del(methodKey(db, kind));
       const staged = {};
       let orphan = 0;
