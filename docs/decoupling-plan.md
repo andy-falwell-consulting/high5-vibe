@@ -149,6 +149,14 @@ Three implementation notes that are easy to get wrong:
   restorable.
 
 **A3. Extend `VIBE_OWNED`** to the remaining layouts, one module per change.
+
+**Decided 2026-08-18: A3 is finished as far as it will go.** `Contacts_New` will
+NOT be extended — the legacy module is to be retired (B4), so giving its edit
+path Vibe ownership would be work on something scheduled for deletion. That
+leaves only `OELookup_New`, which has no edit or create path in the UI at all;
+"extending" it means building a feature, not moving a write. Neither is a
+blocker for A4.
+
 6 of 8 done (RCD_New, Inspections_New, trainings_New, RMI_New, Products &
 Services_New, Estimates_New — the last two edits-only, see the notes above
 the table). Remaining: `OELookup_New` (currently read-only — no edit or create path exists
@@ -183,11 +191,24 @@ should be removed with the placeholder modules rather than counted as writes.
 
 ## Phase B — Move the remaining child collections
 
-**B1. Estimate line items.** Layouts already created. Carries a known trap: the
-parent totals (`zz__Subtotal__xn`, `zz__Tax__xn`, `zz__Total__xn`) cannot be
-written over the Data API at all — they return `201 Field cannot be modified` —
-so an app-added line leaves the stored total stale today. Moving to Vibe *fixes*
-this, because Vibe computes the total itself.
+**B1. Estimate line items — scoped 2026-08-18, see
+[b1-estimate-lines-scope.md](b1-estimate-lines-scope.md).** The trap is real and
+the fix stands, but two things measured against production change this entry:
+
+- **The totals are trivial.** Tax is 0 on all 2,818 estimates, no line has
+  `Taxable` set, and `Total = Subtotal + Tax` with zero exceptions. "Vibe
+  computing the totals first" is summing line amounts — not the blocker this
+  plan assumed. (Compute tax from taxable lines anyway, so it stays correct the
+  day someone charges it. The rate is not stored anywhere — needs Ian.)
+- **The stale total is not hypothetical.** 2 of 60 sampled estimates already
+  disagree with their own lines, by +$50.00 and −$406.00. Roughly 3%, in
+  production, today.
+
+**Prerequisite the earlier text missed:** the migration needs a layout exposing
+the line-item TABLE, as inspections have (`Script_Use__Inspections_Line_Items`).
+The replica's list scan carries no portal data, and per-record portal reads both
+cost 2,818 round trips and truncate at 50 rows. Whether such a layout exists for
+`estmt_ESTLI` must be checked in FileMaker before code is written.
 
 **B2. Bill of materials** (Products).
 
@@ -235,9 +256,13 @@ read it before acting on the C1 text below, which predates it:
 - Vibe's contact model can supply the rest and joins on the id records already
   hold, but composition must walk person → organization, choose between multiple
   affiliations, and respect address *type*.
-- **Hard prerequisite: Contacts v2 is empty in Dev** (0 of 26,257 entities).
-  C1 cannot be developed or verified anywhere but production until that is
-  fixed.
+- **Contacts v2 is empty in Dev** (0 of 26,257 entities), and **decided
+  2026-08-18: the four `_vibe` layouts will NOT be created in Dev.** So Vibe's
+  contact model has no data there and cannot get any. C1 work is therefore
+  verified by READING production, which is what the resolver's 300-record
+  measurement did. The standing consequence: anything needing a populated
+  contact model cannot be exercised end-to-end in Dev, and that limitation
+  should be stated rather than worked around.
 - Historical address blocks must **not** be backfilled — they are snapshots of
   where work was actually invoiced.
 
