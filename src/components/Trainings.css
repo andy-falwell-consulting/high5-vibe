@@ -263,7 +263,12 @@
 /* ── CCS-style header above the tab strip ──────────────────────── */
 /* The blocks themselves are styled by CCSv2.css (shared via RecordLayout);
    only what is specific to this module lives here. */
-.trn-canvas { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+/* flex-shrink: 0 is load-bearing. .trn-main is a scrolling flex column, and a
+   flex item defaults to shrink: 1 — without this the whole header collapses to
+   height 0 while still being in the DOM, which is exactly what it did. Same
+   trap CLAUDE.md documents for the module containers. */
+.trn-canvas { display: flex; flex-direction: column; gap: 12px; margin: 0 28px 16px; flex-shrink: 0; }
+.trn-canvas > * { flex-shrink: 0; }
 .trn-inline {
   width: 100%; font: inherit; font-size: 15px; color: inherit;
   background: transparent; border: none; border-bottom: 1px solid #1e2130;
