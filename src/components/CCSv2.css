@@ -1,10 +1,26 @@
 /* ── Theme tokens ──────────────────────────────────────────────── */
-/* The --cv2-* palette is what every block in RecordLayout.jsx paints with, so
-   it has to be in scope wherever those blocks are used — not only inside the
-   CCS module. Without .trn-canvas here the shared cards render transparent on
-   Trainings, which is exactly what happened the first time. */
+/* The --cv2-* palette, shared by every block in RecordLayout.jsx.
+   VARIABLES ONLY. This used to be folded into the .cv2-root selector, which
+   also carries `flex: 1 1 0%; overflow: hidden` — inheriting that collapsed the
+   Trainings header to zero height while its children still measured 84px. A
+   palette and a layout root are different things and must stay different rules. */
 .cv2-root,
 .trn-canvas {
+  --cv2-bg: #0f1117;
+  --cv2-surface: #13151c;
+  --cv2-surface-2: #1a1d2e;
+  --cv2-border: #1e2130;
+  --cv2-border-2: #2a2f45;
+  --cv2-text: #e2e8f0;
+  --cv2-text-2: #94a3b8;
+  --cv2-text-3: #8b97aa;
+  --cv2-text-4: #79859a;
+  --cv2-ring-track: #262b3d;
+  --cv2-line: #2a2f45;
+  --cv2-accent: var(--h5-red);
+}
+
+.cv2-root {
   --cv2-bg: #0f1117;
   --cv2-surface: #13151c;
   --cv2-surface-2: #1a1d2e;
