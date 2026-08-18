@@ -12,6 +12,7 @@
 //     add-method           { contactId, kind: phone|email|address, fields }  → VM-…
 //     update-method        { contactId, kind, methodId, fields }
 //     remove-method        { contactId, kind, methodId }
+//     reorder-methods      { contactId, kind, order: [methodId, …] }
 //
 // PHASE 2b of docs/vibe-owns-the-record.md. Writes go to Vibe only — FileMaker
 // is not touched, and needs only a Google session rather than a per-user
@@ -174,6 +175,38 @@ export default async function handler(req, res) {
           next = list.map(m => (String(m.id) === methodId ? row : m));
         }
       }
+
+      const updated = { ...entity, [spec.field]: next, ...stamp };
+      await putEntity(db, entityKind === 'person' ? 'person' : 'organization', updated);
+      return res.status(200).json({ contactId, kind, [spec.field]: next });
+    }
+
+    // Drag-to-sort for a contact's own phones/emails/addresses — same shape as
+    // reorder-org-people, but the order lives directly in the array (no byOrg
+    // index to consult) since a method belongs to exactly one contact.
+    // Non-destructive like that one too: an id the caller omitted is appended
+    // rather than dropped, so a stale client can't delete a method by sending a
+    // short list.
+    if (action === 'reorder-methods') {
+      const contactId = str(body.contactId);
+      const kind = str(body.kind);
+      const spec = METHODS[kind];
+      if (!spec) return res.status(400).json({ error: `kind must be one of ${Object.keys(METHODS).join(', ')}` });
+      if (!Array.isArray(body.order)) return res.status(400).json({ error: 'order must be an array' });
+
+      const { kind: entityKind, entity } = await getEntity(db, contactId);
+      if (!entityKind) return res.status(404).json({ error: 'no such contact' });
+      const list = methodList(entity, kind);
+      const byId = new Map(list.map(m => [String(m.id), m]));
+
+      const wanted = [];
+      const seen = new Set();
+      for (const id of body.order) {
+        const s = str(id);
+        if (!byId.has(s) || seen.has(s)) continue;
+        seen.add(s); wanted.push(byId.get(s));
+      }
+      const next = [...wanted, ...list.filter(m => !seen.has(String(m.id)))];
 
       const updated = { ...entity, [spec.field]: next, ...stamp };
       await putEntity(db, entityKind === 'person' ? 'person' : 'organization', updated);

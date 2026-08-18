@@ -7,11 +7,12 @@ import RecordSaveBar from './RecordSaveBar';
 import AttachmentsPanel from './AttachmentsPanel';
 import { trainingAttachments } from '../api/trainingAttachments';
 import { generateAndAttachWorkOrder, downloadWorkOrder } from '../api/trainingWorkOrder';
-import { LayoutCard, StatTiles, Pipeline, QuickActions, FinancialRows, ThirdsRow, ContactDetails } from './RecordLayout';
+import { LayoutCard, StatTiles, Pipeline, QuickActions, FinancialRows, NotesPair, ThirdsRow, ContactDetails } from './RecordLayout';
 import { PIPELINE_STAGES, PIPELINE_SHORT, ALL_STATUSES, stageIndex, statusColor as trnStatusColor } from '../config/trainingStatus';
 import { contactDetails } from '../api/contactLookup';
 import { updateVibeRecord } from '../api/vibeRecords';
 import { useCcsOrgs } from '../hooks/useCcsOrgs';
+import { useValueLists } from '../hooks/useValueLists';
 import ContactPicker from './ContactPicker';
 import { getCurrentEnv } from '../config/fmpEnvironments';
 import './Trainings.css';
@@ -71,8 +72,14 @@ const LOGISTICS_FIELDS = [
 // Dropdown options mirrored from the trainings_New layout's FileMaker value lists.
 const AUDIENCE_OPTIONS = ['Corporate', 'Adult', 'College', 'Youth Public', 'Youth Private', 'EOL'];
 const PROGRAM_TYPES = ['Adventure Basics: Level 1 Training', 'Adventure Facilitaton Training', 'Beyond Basics: Level 2 Training', 'CATSEL - custom', 'Certification Exam - custom', 'CIT Training', 'Climbing Wall/Tower & Belay Skills Training', 'Corporate Program', 'Curriculum Writing', 'Consultation', 'Dialogue', 'EOL/SEL', 'EOL Sports', 'Game Bag Training', 'Gathering Again (Games & Lows)', 'Gathering Again 2 (High Elements)', 'High Elements and Belay Skills Training', 'Leadership Development', 'Low Elements Course Training', 'Low Traverse Wall Training', 'Managing an Adventure Program', 'Mastermind/Adventure Circuit', 'New Student Orientation ', 'Portable Adventure', 'Program Review', 'Team-building', 'Team Development', 'Technical Skills Refresher', 'Technical Skills Training', 'Technical Skills Verification', 'Therapeutic', 'Virtual Team-building', 'Virtual Team Development', 'Virtual Training', 'Keynote', 'Playnote', 'Other'];
+// Fallback for first paint / if FileMaker's value list is unreachable — see
+// useValueLists below, which reads the live "Trainers" value list instead.
 const TRAINER_OPTIONS = ['Phil Brown', 'Lisa Hunt', 'Kyra Richardson', 'Elyse Norton', 'Cam Miller', 'Chris Damboise', 'Rich Keegan', 'Joshua Fisher', 'Alison Jackson-Frasier', 'Lisa Howard', 'Sadie Graham', 'Andrew  Wood', 'Olivia Howry', 'Hanne Bailey', 'Sam Copland', 'Stefanie Frazee', 'Jeff Frigon', 'Chris Ortiz', 'Ryan McCormick', 'Anne Louise Wagner', 'Chris Sanchez', 'Ky Schroeher', 'Jim Grout', 'Jiin Cruz', 'Sarah Morse', 'Phoebe Connolly', 'Ana Devlin Gauthier', 'Julia Stifler', 'Becky Proulx', 'Ron Vercellone', 'Amanda Klein', 'Mark Flynn', 'Beth Sayers', 'Nate Folan', 'Hutch Hutchinson', 'Stephanie Globus-Hoenig', 'Emily Kehoe', 'Tim Abraham', 'Ian Doak', 'Todd Brown', 'Jamie Thibodeau', 'Geoff Ward', "Constance O'Brien", 'Morgan Wiseman', 'Other'];
-const TRAINER_SLOTS = ['Trainers', 'trainers2', 'trainers3', 'trainers4', 'trainers5', 'trainers6', 'trainers7', 'trainers8', 'trainers9'];
+// trainers10-trainers18 are Vibe-only — trainings_New's real FileMaker fields
+// stop at trainers9, so these nine slots exist only as Vibe overlay fields
+// (fine: trainings_New is Vibe-owned, see api/_vibeStore.js).
+const TRAINER_SLOTS = ['Trainers', 'trainers2', 'trainers3', 'trainers4', 'trainers5', 'trainers6', 'trainers7', 'trainers8', 'trainers9',
+  'trainers10', 'trainers11', 'trainers12', 'trainers13', 'trainers14', 'trainers15', 'trainers16', 'trainers17', 'trainers18'];
 
 const num = v => Number(v || 0);
 const money = v => '$' + num(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -210,6 +217,30 @@ function SelectValue({ value, options, onChange }) {
   );
 }
 
+// Same cv2-inline-select class CCS's own Team card uses — this sits inside
+// the shared cv2-team-pick markup, so it needs CCS's styling, not trn-inline's.
+function InlineSelect({ value, options, onChange }) {
+  const opts = value && !options.includes(value) ? [value, ...options] : options;
+  return (
+    <select className="cv2-inline cv2-inline-select" value={value || ''} onChange={e => onChange(e.target.value)}>
+      <option value="">—</option>
+      {opts.filter(Boolean).map(o => <option key={o} value={o}>{o}</option>)}
+    </select>
+  );
+}
+
+// Native date input, same as CCS's own InlineDate (CCSv2.jsx) — FileMaker
+// stores M/D/YYYY, the input needs ISO.
+const toIso = v => {
+  if (!v) return '';
+  const p = String(v).split('/');
+  return p.length === 3 ? `${p[2]}-${p[0].padStart(2, '0')}-${p[1].padStart(2, '0')}` : '';
+};
+const fromIso = iso => { if (!iso) return ''; const [y, m, d] = iso.split('-'); return `${m}/${d}/${y}`; };
+function InlineDate({ value, onChange }) {
+  return <input type="date" className="trn-inline" value={toIso(value)} onChange={e => onChange(fromIso(e.target.value))} />;
+}
+
 const isOn = v => v === 1 || v === '1';
 
 export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNavigateApp } = {}) {
@@ -228,6 +259,8 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
   const [orgPicker, setOrgPicker] = useState(false);
   const [contactPicker, setContactPicker] = useState(false);
   const trainingOrgs = useCcsOrgs(getCurrentEnv().db, 'trainings');
+  const valueLists = useValueLists(LAYOUT, { Trainers: TRAINER_OPTIONS });
+  const trainerOptions = valueLists.Trainers ?? TRAINER_OPTIONS;
 
   // Same org-name join CCS uses: trainings_New has no writable org field
   // either, only the zz__Display_Organization__ct calc, so a Vibe override
@@ -414,7 +447,7 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
   useEffect(() => {
     if (!contactFk) return undefined;
     let alive = true;
-    contactDetails(contactFk)
+    contactDetails(contactFk, { firstEmail: true })
       .then(d => { if (alive) setContactInfo({ id: contactFk, ...d }); })
       .catch(() => { if (alive) setContactInfo({ id: contactFk }); });
     return () => { alive = false; };
@@ -598,21 +631,26 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
 
                   <LayoutCard title="Trainers">
                     <div className="cv2-team">
-                      {[['Lead Trainer', 'Lead trainer'], ...TRAINER_SLOTS.map((k, i) => [k, `Trainer ${i + 1}`])]
-                        .filter(([k]) => String(val(f, edits, k) || '').trim())
-                        .map(([k, label]) => (
+                      {/* Every filled slot, editable in place, plus exactly one
+                          open slot at the end so adding a trainer is just
+                          picking a name — filling it reveals the next blank
+                          one on the next render. Up to 19 total (Lead + 18
+                          numbered) now that trainers10-18 exist. */}
+                      {(() => {
+                        const allKeys = [['Lead Trainer', 'Lead trainer'], ...TRAINER_SLOTS.map((k, i) => [k, `Trainer ${i + 1}`])];
+                        const filled = allKeys.filter(([k]) => String(val(f, edits, k) || '').trim());
+                        const nextEmpty = allKeys.find(([k]) => !String(val(f, edits, k) || '').trim());
+                        const rows = nextEmpty ? [...filled, nextEmpty] : filled;
+                        return rows.map(([k, label]) => (
                           <div className="cv2-team-row" key={k}>
-                            <span className="trn-avatar">{String(val(f, edits, k)).split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}</span>
+                            <span className="trn-avatar">{String(val(f, edits, k) || '').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || '—'}</span>
                             <div className="cv2-team-pick">
                               <label>{label}</label>
-                              <div className="trn-team-name">{val(f, edits, k)}</div>
+                              <InlineSelect value={val(f, edits, k)} options={trainerOptions} onChange={v => handleFieldChange(k, v)} />
                             </div>
                           </div>
-                        ))}
-                      {![['Lead Trainer'], ...TRAINER_SLOTS.map(k => [k])]
-                        .some(([k]) => String(val(f, edits, k) || '').trim()) && (
-                          <p className="trn-none">No trainers assigned.</p>
-                        )}
+                        ));
+                      })()}
                     </div>
                   </LayoutCard>
                 </>}
@@ -655,39 +693,57 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
                 <div className="trn-detail-grid">
                   <label>Program type</label><SelectValue value={val(f, edits, 'Type of Program')} options={PROGRAM_TYPES} onChange={v => handleFieldChange('Type of Program', v)} />
                   <label>Audience</label><SelectValue value={val(f, edits, 'Audience')} options={AUDIENCE_OPTIONS} onChange={v => handleFieldChange('Audience', v)} />
-                  <label>Start date</label><InlineValue value={val(f, edits, 'Start Date')} onChange={v => handleFieldChange('Start Date', v)} />
-                  <label>End date</label><InlineValue value={val(f, edits, 'End Date')} onChange={v => handleFieldChange('End Date', v)} />
+                  <label>Start date</label><InlineDate value={val(f, edits, 'Start Date')} onChange={v => handleFieldChange('Start Date', v)} />
+                  <label>End date</label><InlineDate value={val(f, edits, 'End Date')} onChange={v => handleFieldChange('End Date', v)} />
                   <label># Days</label><InlineValue value={val(f, edits, '# Days')} onChange={v => handleFieldChange('# Days', v)} />
                   <label># Hours</label><InlineValue value={val(f, edits, '# Hours')} onChange={v => handleFieldChange('# Hours', v)} />
                   <label>Group size</label><InlineValue value={val(f, edits, 'Group Size')} onChange={v => handleFieldChange('Group Size', v)} />
                   <label>Workshop location</label><InlineValue value={val(f, edits, 'Workshop Location')} onChange={v => handleFieldChange('Workshop Location', v)} />
-                  <label>Distance to HQ</label><InlineValue value={val(f, edits, 'Distance To High5')} onChange={v => handleFieldChange('Distance To High5', v)} />
-                  <label>Drive time</label><InlineValue value={val(f, edits, 'Drive Time')} onChange={v => handleFieldChange('Drive Time', v)} />
+                  {/* Calculated — never editable, here or on any other layout. */}
+                  <label>Distance to HQ</label><span className="trn-static">{val(f, edits, 'Distance To High5') || '—'}</span>
+                  <label>Drive time</label><span className="trn-static">{val(f, edits, 'Drive Time') || '—'}</span>
                 </div>
               </LayoutCard>
 
-              {/* One Notes field, not a pair: the work order prints this same
-                  text as its body, so a second box would be the same content
-                  under a different name. */}
-              <LayoutCard
-                title="Notes"
-                action={<button type="button" className="trn-stamp-btn" onClick={() => stampNote('Notes')}>⏱ Stamp</button>}
-              >
-                <div>
-                  <textarea
-                    className="trn-notes-area"
-                    value={val(f, edits, 'Notes') || ''}
-                    placeholder="Add notes…"
-                    onChange={e => handleFieldChange('Notes', e.target.value)}
-                  />
-                  <div className="cv2-wo-actions">
-                    <button type="button" className="cv2-wo-btn" disabled={!!woBusy} onClick={() => handleGenerateWorkOrder(false)}>
-                      {woBusy === 'download' ? (woStage || 'Working…') : '⤓ Download work order'}
-                    </button>
-                  </div>
-                  {woError && <p className="cv2-wo-error">{woError}</p>}
-                </div>
-              </LayoutCard>
+              {/* Work Order Notes + Notes, side by side — mirrors CCS exactly.
+                  'Work Order' is a Vibe-only field (no such field exists on
+                  trainings_New in FileMaker; see api/_vibeStore.js) and is
+                  what the PDF prints as its body — see trainingWorkOrder.js.
+                  'Notes' is the general free-text field and keeps its own
+                  Stamp button, same as CCS's does. */}
+              <NotesPair
+                left={{
+                  title: 'Work Order Notes',
+                  children: (
+                    <>
+                      <textarea
+                        className="trn-notes-area"
+                        value={val(f, edits, 'Work Order') || ''}
+                        placeholder="Add a work order…"
+                        onChange={e => handleFieldChange('Work Order', e.target.value)}
+                      />
+                      <div className="cv2-wo-actions">
+                        <button type="button" className="cv2-wo-btn" disabled={!!woBusy} onClick={() => handleGenerateWorkOrder(false)}>
+                          {woBusy === 'download' ? (woStage || 'Working…') : '⤓ Download work order'}
+                        </button>
+                      </div>
+                      {woError && <p className="cv2-wo-error">{woError}</p>}
+                    </>
+                  ),
+                }}
+                right={{
+                  title: 'Notes',
+                  action: <button type="button" className="trn-stamp-btn" onClick={() => stampNote('Notes')}>⏱ Stamp</button>,
+                  children: (
+                    <textarea
+                      className="trn-notes-area"
+                      value={val(f, edits, 'Notes') || ''}
+                      placeholder="Add notes…"
+                      onChange={e => handleFieldChange('Notes', e.target.value)}
+                    />
+                  ),
+                }}
+              />
             </div>
 
             <div className="trn-tabs">
@@ -723,9 +779,9 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
 
               <Section title="Trainers" icon="◉">
                 <div className="trn-field-grid">
-                  <SelectField label="Lead trainer" fieldKey="Lead Trainer" f={f} edits={edits} onChange={handleFieldChange} options={TRAINER_OPTIONS} />
+                  <SelectField label="Lead trainer" fieldKey="Lead Trainer" f={f} edits={edits} onChange={handleFieldChange} options={trainerOptions} />
                   {TRAINER_SLOTS.map((fk, i) => (
-                    <SelectField key={fk} label={`Trainer ${i + 1}`} fieldKey={fk} f={f} edits={edits} onChange={handleFieldChange} options={TRAINER_OPTIONS} />
+                    <SelectField key={fk} label={`Trainer ${i + 1}`} fieldKey={fk} f={f} edits={edits} onChange={handleFieldChange} options={trainerOptions} />
                   ))}
                 </div>
               </Section>
@@ -749,8 +805,8 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
                     totals={{ est: 'TOTAL COSTS', act: 'Act ProgTotal' }} />
                   <Section title="Travel" icon="➤">
                     <div className="trn-field-grid">
-                      <TextField label="Distance to High 5" fieldKey="Distance To High5" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                      <TextField label="Drive time" fieldKey="Drive Time" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
+                      <TextField label="Distance to High 5" fieldKey="Distance To High5" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} />
+                      <TextField label="Drive time" fieldKey="Drive Time" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} />
                       <TextField label="Mileage" fieldKey="Mileage" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
                       <TextField label="Mileage quantity" fieldKey="mileage_quantity" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
                       <TextField label="Mileage price" fieldKey="mileage_price" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
