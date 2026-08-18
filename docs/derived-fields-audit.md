@@ -66,8 +66,34 @@ every work order ever generated printed "—" for them). Two are new here:
 Trainings' e-mail and RMI's address. Trainings' *phone* works (92%) while its
 *e-mail* is dead, so this is per-field breakage, not a broken layout.
 
-**These five should be deleted from the UI, not reproduced in Vibe.** Migrating
-a field that has never had a value is work spent carrying a bug forward.
+**These should not be reproduced in Vibe.** Migrating a field that has never had
+a value is work spent carrying a bug forward.
+
+### Corrected and acted on, 2026-08-18 (v1.0.389)
+
+Two corrections to the count above, found when acting on it:
+
+- **RMI has THREE dead contact fields, not one.** Its e-mail, work phone and
+  mobile phone are all 0/119 — the whole contact block was blank. The row above
+  measured `zz__Address__ct`, which is not the key RMI actually displays
+  (`rmi_cntct_INADR__emailIndividual::zz__Address__ct`); both are empty, so the
+  conclusion held, but by luck rather than by method.
+- **CCS's three were already superseded**, and had been before this audit — see
+  `api/contactLookup.js`, which records the identical finding and fixed it by
+  reading Vibe's contact store. They survived only as inert `||` fallbacks that
+  could never contribute. The same is true of the Trainings work order's e-mail.
+
+So "delete them" was only right for some. What was actually done:
+
+| | Action |
+|---|---|
+| RMI e-mail, work phone, mobile phone | **Wired to Vibe** via `contactDetails`, the CCS fix applied to the module that still had the defect. Three blank rows become real data for the 105 of 119 records that have a contact. |
+| CCS contact card + work order (×3), Trainings work order (×1) | Inert fallbacks removed — no behaviour change, the values already came from Vibe. |
+| T&D and Edge of Leadership e-mail row | Removed. Both modules are view-only placeholders and the row was blank on every record. |
+
+The lesson worth keeping: a field being empty everywhere does not by itself mean
+delete it. Ask first whether something already replaced it, and whether the
+module simply never got the fix another module did.
 
 `inspt_CNTCT::NameFirstLast` at 37% is not broken, just sparse — inspections
 often point at a site with no named person. It should degrade quietly, not show

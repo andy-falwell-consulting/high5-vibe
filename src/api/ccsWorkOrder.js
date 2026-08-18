@@ -54,9 +54,9 @@ export function buildWorkOrderDoc(record, logos, contactInfo) {
   // are empty on every record measured, so this is belt-and-braces rather than
   // a real second source — but it costs nothing and keeps the sheet working if
   // the contact lookup fails.
-  const email = contactInfo?.email || f['rcd_cntct_INADR__email::zz__Address__ct'] || '';
-  const workPhone = contactInfo?.workPhone || f['rcd_cntct_PHONE__work::Number'] || '';
-  const cellPhone = contactInfo?.cellPhone || f['rcd_cntct_PHONE__mobile::Number'] || '';
+  const email = contactInfo?.email || '';
+  const workPhone = contactInfo?.workPhone || '';
+  const cellPhone = contactInfo?.cellPhone || '';
   const staff = ['Lead Builder', 'Builder1', 'Builder2', 'Builder3'].map(k => f[k]).filter(Boolean).join(', ');
   const start = fmtDateNoZero(f['rcd start date']);
   const end = fmtDateNoZero(f['rcd end date']);

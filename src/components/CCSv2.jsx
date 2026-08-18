@@ -806,9 +806,9 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
                         </div>
                       )}
                       {(() => {
-                        const email = ci?.email || f['rcd_cntct_INADR__email::zz__Address__ct'] || '';
-                        const work = ci?.workPhone || f['rcd_cntct_PHONE__work::Number'] || '';
-                        const cell = ci?.cellPhone || f['rcd_cntct_PHONE__mobile::Number'] || '';
+                        const email = ci?.email || '';
+                        const work = ci?.workPhone || '';
+                        const cell = ci?.cellPhone || '';
                         const workHref = ci?.workHref || (work ? `tel:${work.replace(/[^\d+]/g, '')}` : '');
                         const cellHref = ci?.cellHref || (cell ? `tel:${cell.replace(/[^\d+]/g, '')}` : '');
                         if (!email && !work && !cell) {
