@@ -22,3 +22,19 @@ export async function updateVibeRecord(layout, recordId, fieldData) {
   if (!res.ok) throw new Error(body.error || `Save failed (${res.status})`);
   return body;
 }
+
+// Create a record that lives only in Vibe. Returns the minted `V-` record id,
+// which is also the value written to the table's own primary key — so a caller
+// needs no read-back to discover it, unlike a FileMaker create.
+export async function createVibeRecord(layout, fieldData) {
+  const db = getCurrentEnv().db;
+  const res = await fetch(`/api/vibe-record?db=${encodeURIComponent(db)}&layout=${encodeURIComponent(layout)}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ create: true, fieldData }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || `Create failed (${res.status})`);
+  return body;
+}

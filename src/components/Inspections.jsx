@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { getRecord, prefetchRecord, invalidateRecord, patchCachedRecord, createRecord, addCachedRecord } from '../api/filemaker';
-import { updateVibeRecord } from '../api/vibeRecords';
+import { getRecord, prefetchRecord, invalidateRecord, patchCachedRecord, addCachedRecord } from '../api/filemaker';
+import { updateVibeRecord, createVibeRecord } from '../api/vibeRecords';
 import { useAllRecords } from '../hooks/useAllRecords';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
 import RecordSaveBar from './RecordSaveBar';
@@ -311,32 +311,27 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
       if (src._kft__Contact_ID) payload._kft__Contact_ID = String(src._kft__Contact_ID);
     }
 
-    const res = await createRecord(LAYOUT, payload);
-    const newId = res?.response?.recordId;
-    if (!newId) throw new Error(res?.messages?.[0]?.message || 'Could not create the record');
+    // Born in Vibe, not FileMaker. The minted `V-` id IS the record id and the
+    // value of _kpt__Inspection_ID, so there is no read-back to discover the
+    // key — the two-step dance the FileMaker create needed is gone, along with
+    // its requirement for a per-user FileMaker session.
+    const made = await createVibeRecord(LAYOUT, payload);
+    const newId = made?.recordId;
+    if (!newId) throw new Error('Could not create the record');
 
-    // Read the new record back before copying: createRecord returns FileMaker's
-    // recordId, and the lines are keyed by _kpt__Inspection_ID, which FileMaker
-    // assigns. The old portal write also needed this read, but for a different
-    // reason — it failed with error 101 until the parent had an id. That trap
-    // is gone; the read is not, because the id is the key.
-    const created = await getRecord(LAYOUT, newId);
-    const rec = created?.response?.data?.[0];
-    const newInspectionId = rec?.fieldData?._kpt__Inspection_ID;
+    const rec = { recordId: newId, fieldData: made.fieldData, portalData: {} };
 
-    if (source && sourceInspectionId && newInspectionId) {
-      const copied = await copyLines(sourceInspectionId, newInspectionId);
+    if (source && sourceInspectionId) {
+      const copied = await copyLines(sourceInspectionId, newId);
       if (copied.length) {
         await markCarriedLines(newId, copied.map(l => String(l.recordId))).catch(() => {});
       }
     }
     copySourceRef.current = null;
 
-    if (rec) {
-      addCachedRecord(LAYOUT, CACHE_VERSION, rec);
-      handleSelect(rec);
-      onRecordSelect?.(rec.recordId, rec.fieldData?.Organization || rec.fieldData?.['inspt_CNTCT__site::Name_Organization']);
-    }
+    addCachedRecord(LAYOUT, CACHE_VERSION, rec);
+    handleSelect(rec);
+    onRecordSelect?.(rec.recordId, rec.fieldData?.Organization || rec.fieldData?.['inspt_CNTCT__site::Name_Organization']);
   }
 
   const handleFieldChange = useCallback((fk, v) => setEdits(p => ({ ...p, [fk]: v })), []);

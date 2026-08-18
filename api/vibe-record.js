@@ -2,6 +2,7 @@
 //
 //   POST   /api/vibe-record?db=High5_Core4&layout=RCD_New
 //     { recordId, fieldData }  → merges those fields into the record's fragment
+//     { create: true, fieldData } → a record born in Vibe, with a minted V- id
 //   DELETE /api/vibe-record?db=…&layout=…&recordId=…
 //     drops the fragment, so the record reverts to FileMaker's values
 //
@@ -19,7 +20,7 @@
 //    up, which is what the pending-write guard existed to paper over.
 import { getGoogleSession } from './_googleSession.js';
 import { ALLOWED_DBS } from './_fmp.js';
-import { VIBE_OWNED, writeFragment, dropFragment } from './_vibeStore.js';
+import { VIBE_OWNED, VIBE_PK, writeFragment, dropFragment, createFragment } from './_vibeStore.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'DELETE') {
@@ -52,6 +53,29 @@ export default async function handler(req, res) {
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
   const recordId = String(body.recordId || '').trim();
   const fieldData = body.fieldData;
+
+  // PHASE A1: a record that never existed in FileMaker. It gets a minted `V-`
+  // id which is BOTH the record id and the value of the table's own primary
+  // key, so everything downstream that joins on that key — inspection line
+  // items, related-record lists — works with no special case.
+  if (body.create === true) {
+    if (!fieldData || typeof fieldData !== 'object' || Array.isArray(fieldData)) {
+      return res.status(400).json({ error: 'fieldData must be an object' });
+    }
+    if (!VIBE_PK[layout]) {
+      return res.status(400).json({ error: `no primary key known for ${layout}` });
+    }
+    try {
+      const { recordId: id, fragment } = await createFragment(db, layout, fieldData, session.email);
+      return res.status(200).json({
+        recordId: id, layout, created: true,
+        primaryKey: VIBE_PK[layout], fieldData: fragment.fieldData,
+      });
+    } catch (e) {
+      return res.status(502).json({ error: String(e?.message || e).slice(0, 300) });
+    }
+  }
+
   if (!recordId) return res.status(400).json({ error: 'recordId required' });
   if (!fieldData || typeof fieldData !== 'object' || Array.isArray(fieldData)) {
     return res.status(400).json({ error: 'fieldData must be an object' });
