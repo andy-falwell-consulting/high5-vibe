@@ -68,5 +68,5 @@ export async function contactDetails(contactId, { firstEmail = false } = {}) {
 }
 
 /** The same, taking a whole record and reading its contact key. */
-export const contactDetailsFor = record =>
-  contactDetails(record?.fieldData?._kft__Contact_ID);
+export const contactDetailsFor = (record, opts) =>
+  contactDetails(record?.fieldData?._kft__Contact_ID, opts);

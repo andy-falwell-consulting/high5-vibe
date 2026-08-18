@@ -7,7 +7,7 @@ import RecordSaveBar from './RecordSaveBar';
 import AttachmentsPanel from './AttachmentsPanel';
 import { trainingAttachments } from '../api/trainingAttachments';
 import { generateAndAttachWorkOrder, downloadWorkOrder } from '../api/trainingWorkOrder';
-import { LayoutCard, StatTiles, Pipeline, QuickActions, FinancialRows, NotesPair, ThirdsRow, ContactDetails } from './RecordLayout';
+import { LayoutCard, StatTiles, Pipeline, FinancialRows, NotesPair, ThirdsRow, ContactDetails } from './RecordLayout';
 import { PIPELINE_STAGES, PIPELINE_SHORT, ALL_STATUSES, stageIndex, statusColor as trnStatusColor } from '../config/trainingStatus';
 import { contactDetails } from '../api/contactLookup';
 import { updateVibeRecord } from '../api/vibeRecords';
@@ -15,6 +15,7 @@ import { useCcsOrgs } from '../hooks/useCcsOrgs';
 import { useValueLists } from '../hooks/useValueLists';
 import ContactPicker from './ContactPicker';
 import { getCurrentEnv } from '../config/fmpEnvironments';
+import { qboLink } from '../config/qboLinks';
 import './Trainings.css';
 import DeleteRecordButton from './DeleteRecordButton'
 
@@ -85,6 +86,19 @@ const num = v => Number(v || 0);
 const money = v => '$' + num(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 // FileMaker stores line breaks as \r, which pre-wrap won't break on.
 const fmText = v => (typeof v === 'string' ? v.replace(/\r/g, '\n') : v);
+// Same as `money` above — named to match CCS's own helper (CCSv2.jsx) since
+// this is used in the mirrored Invoices/Payments block, where `money` inside
+// the component is shadowed by a no-cents variant for the stat tiles.
+const fmtMoneyFull = v => `$${num(v).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+// QBO returns ISO dates (2026-08-07), not FileMaker's MM/DD/YYYY. Parsed as
+// local parts rather than `new Date(iso)` — that would treat the value as UTC
+// and can shift the date back a day for anyone west of Greenwich.
+const fmtIsoShort = v => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || ''));
+  if (!m) return '—';
+  const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
 
 const parseFmDate = v => {
   if (!v) return 0;
@@ -108,23 +122,6 @@ function TextField({ label, fieldKey, f, edits, onChange, editing, editable, mon
       ) : (
         <span className={`trn-value${mono ? ' mono' : ''}`}>{fmText(v) || '—'}</span>
       )}
-    </div>
-  );
-}
-
-// Dropdown bound to a FileMaker value list. Keeps an off-list stored value
-// visible/selectable so opening a record never silently changes it.
-function SelectField({ label, fieldKey, f, edits, onChange, options, wide }) {
-  const v = val(f, edits, fieldKey);
-  const dirty = isDirty(f, edits, fieldKey);
-  const opts = v && !options.includes(v) ? [v, ...options] : options;
-  return (
-    <div className={`trn-field${wide ? ' wide' : ''}`}>
-      <label>{label}{dirty && <span className="trn-dirty-dot" />}</label>
-      <select className="trn-input trn-select" value={v || ''} onChange={e => onChange(fieldKey, e.target.value)}>
-        <option value="">—</option>
-        {opts.map(o => <option key={o} value={o}>{o}</option>)}
-      </select>
     </div>
   );
 }
@@ -200,9 +197,9 @@ function Section({ title, icon, children }) {
   );
 }
 
-// Bare inputs for the layout blocks. The tabs below keep using TextField /
-// SelectField, which carry their own labels and dirty dots; these take a value
-// and a setter because the layout components supply the label themselves.
+// Bare inputs for the layout blocks. The tabs below keep using TextField,
+// which carries its own label and dirty dot; these take a value and a
+// setter because the layout components supply the label themselves.
 function InlineValue({ value, onChange, placeholder = '—' }) {
   return <input className="trn-inline" value={value ?? ''} placeholder={placeholder} onChange={e => onChange(e.target.value)} />;
 }
@@ -238,7 +235,7 @@ const toIso = v => {
 };
 const fromIso = iso => { if (!iso) return ''; const [y, m, d] = iso.split('-'); return `${m}/${d}/${y}`; };
 function InlineDate({ value, onChange }) {
-  return <input type="date" className="trn-inline" value={toIso(value)} onChange={e => onChange(fromIso(e.target.value))} />;
+  return <input type="date" className="trn-inline trn-inline-date" value={toIso(value)} onChange={e => onChange(fromIso(e.target.value))} />;
 }
 
 const isOn = v => v === 1 || v === '1';
@@ -282,6 +279,9 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
   // a slow answer cannot land on a record the user has already moved off.
   const [contactInfo, setContactInfo] = useState(null);
   const [fin, setFin] = useState(null);
+  // Which of the Invoices/Payments tabs is showing, in the Contract and
+  // financials card — same control CCS's own card uses.
+  const [finTab, setFinTab] = useState('invoices');
   const isResizing = useRef(false);
 
   const orgName = f => f.zz__Display_Organization__ct || '';
@@ -592,25 +592,6 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
                 />
               )}
 
-              {/* Milestone toggles below the pipeline, same control as CCS's
-                  QUICK_ACTIONS. Only three of the four candidate fields are
-                  wired: in_house_recvd has never been set on a single one of
-                  the 2,478 trainings, so a pill for it would just be a button
-                  nobody has ever pressed, for a field nobody has ever used. */}
-              {stage >= 0 && (
-                <QuickActions actions={[
-                  { key: 'proposed_recvd', label: 'Proposal accepted', icon: '✓',
-                    on: isOn(val(f, edits, 'proposed_recvd')),
-                    onToggle: () => handleFieldChange('proposed_recvd', isOn(val(f, edits, 'proposed_recvd')) ? 0 : 1) },
-                  { key: 'confirmed_recvd', label: 'Confirmation received', icon: '✓',
-                    on: isOn(val(f, edits, 'confirmed_recvd')),
-                    onToggle: () => handleFieldChange('confirmed_recvd', isOn(val(f, edits, 'confirmed_recvd')) ? 0 : 1) },
-                  { key: 'po_received', label: 'PO received', icon: '$',
-                    on: isOn(val(f, edits, 'po_received')),
-                    onToggle: () => handleFieldChange('po_received', isOn(val(f, edits, 'po_received')) ? 0 : 1) },
-                ]} />
-              )}
-
               <StatTiles tiles={[
                 { label: 'Estimated', value: money(qb?.totals?.estimated) },
                 { label: 'Invoiced', value: money(qb?.totals?.invoiced) },
@@ -656,17 +637,21 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
                 </>}
                 right={
                   <LayoutCard title="Contract and financials">
+                    {/* Trainings' own 7 fields (kept as-is — Proposed/Confirmed
+                        etc. are not CCS's fields and aren't being renamed to
+                        match them), styled exactly like CCS's card: date
+                        fields get a real date picker, not a text box. */}
                     <FinancialRows
                       InlineText={InlineValue}
-                      InlineDate={InlineValue}
+                      InlineDate={InlineDate}
                       rows={[
                         { label: 'Estimate / D#', value: val(f, edits, '_kat__QuickBooks_Estimate_ID') || '', onChange: v => handleFieldChange('_kat__QuickBooks_Estimate_ID', v) },
-                        { label: 'Proposed', value: val(f, edits, 'Proposed') || '', onChange: v => handleFieldChange('Proposed', v),
+                        { label: 'Proposed', type: 'date', value: val(f, edits, 'Proposed') || '', onChange: v => handleFieldChange('Proposed', v),
                           received: isOn(val(f, edits, 'proposed_recvd')), onToggle: () => handleFieldChange('proposed_recvd', isOn(val(f, edits, 'proposed_recvd')) ? 0 : 1) },
-                        { label: 'Confirmed', value: val(f, edits, 'Confirmed') || '', onChange: v => handleFieldChange('Confirmed', v),
+                        { label: 'Confirmed', type: 'date', value: val(f, edits, 'Confirmed') || '', onChange: v => handleFieldChange('Confirmed', v),
                           received: isOn(val(f, edits, 'confirmed_recvd')), onToggle: () => handleFieldChange('confirmed_recvd', isOn(val(f, edits, 'confirmed_recvd')) ? 0 : 1) },
-                        { label: 'Sent in-house', value: val(f, edits, 'sent in-house') || '', onChange: v => handleFieldChange('sent in-house', v) },
-                        { label: 'Final sent', value: val(f, edits, 'Final Sent') || '', onChange: v => handleFieldChange('Final Sent', v) },
+                        { label: 'Sent in-house', type: 'date', value: val(f, edits, 'sent in-house') || '', onChange: v => handleFieldChange('sent in-house', v) },
+                        { label: 'Final sent', type: 'date', value: val(f, edits, 'Final Sent') || '', onChange: v => handleFieldChange('Final Sent', v) },
                         { label: 'Deposit #', value: val(f, edits, 'deposit_number') || '', onChange: v => handleFieldChange('deposit_number', v) },
                         { label: 'Invoice #', value: val(f, edits, '_kat__QuickBooks_Invoice_ID') || '', onChange: v => handleFieldChange('_kat__QuickBooks_Invoice_ID', v) },
                       ]}
@@ -685,6 +670,50 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
                         ))}
                       </div>
                     )}
+                    {/* Invoices / Payments — same placement and markup as
+                        CCS's card (cv2-fin-embed). api/ccs-estimate.js
+                        already returns both regardless of source, so this
+                        was just unwired UI, not missing data. */}
+                    <div className="cv2-fin-embed">
+                      <div className="cv2-fin-tabs">
+                        {[['invoices', 'Invoices', qb?.invoices?.length || 0], ['payments', 'Payments', qb?.payments?.length || 0]].map(([id, lbl, n]) => (
+                          <button key={id} className={`cv2-fin-tab${finTab === id ? ' active' : ''}`} onClick={() => setFinTab(id)}>{lbl}<span>{n}</span></button>
+                        ))}
+                      </div>
+                      <div className="cv2-fin-list">
+                        {finTab === 'invoices' && (qb?.invoices?.length ? qb.invoices.map(r => (
+                          <a className={`cv2-fin-row cv2-fin-link${r.customerMatch === false ? ' cv2-fin-suspect' : ''}`} key={r.qboId}
+                            href={qboLink('Invoice', r.qboId)} target="_blank" rel="noreferrer"
+                            title={r.customerMatch === false
+                              ? `This QuickBooks invoice belongs to "${r.customer}", not this training — check the invoice number on the record`
+                              : 'Open this invoice in QuickBooks Online'}>
+                            <span className="cv2-fin-main">
+                              #{r.docNumber || r.qboId} · {fmtIsoShort(r.date)}
+                              {r.customerMatch === false
+                                ? <span className="cv2-fin-warn">⚠ {r.customer}</span>
+                                : r.balance > 0
+                                  ? <span className="cv2-fin-tag due">{fmtMoneyFull(r.balance)} due</span>
+                                  : <span className="cv2-fin-tag paid">paid</span>}
+                            </span>
+                            <span className="cv2-fin-amt">{fmtMoneyFull(r.total)}<span className="cv2-fin-ext">↗</span></span>
+                          </a>
+                        )) : <div className="cv2-fin-empty">{qb ? 'No invoices in QuickBooks' : 'No invoice linked to this training'}</div>)}
+                        {finTab === 'payments' && (qb?.payments?.length ? qb.payments.map(r => (
+                          <a className="cv2-fin-row cv2-fin-link" key={r.qboId}
+                            href={qboLink('Payment', r.qboId)} target="_blank" rel="noreferrer"
+                            title="Open this payment in QuickBooks Online">
+                            <span className="cv2-fin-main">
+                              {fmtIsoShort(r.date)} · {r.method || 'Payment'}{r.reference ? ` · ${r.reference}` : ''}
+                              {r.paymentTotal > r.amount && <span className="cv2-fin-tag">of {fmtMoneyFull(r.paymentTotal)}</span>}
+                            </span>
+                            <span className="cv2-fin-amt">{fmtMoneyFull(r.amount)}<span className="cv2-fin-ext">↗</span></span>
+                          </a>
+                        )) : <div className="cv2-fin-empty">{qb?.invoices?.length ? 'No payments received yet' : 'No invoice linked to this training'}</div>)}
+                      </div>
+                      {((qb?.invoices?.length || 0) > 0 || (qb?.payments?.length || 0) > 0) && (
+                        <div className="cv2-fin-src">live from QuickBooks</div>
+                      )}
+                    </div>
                   </LayoutCard>
                 }
               />
@@ -776,25 +805,9 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
                   </div>
                 </div>
               </Section>
-
-              <Section title="Trainers" icon="◉">
-                <div className="trn-field-grid">
-                  <SelectField label="Lead trainer" fieldKey="Lead Trainer" f={f} edits={edits} onChange={handleFieldChange} options={trainerOptions} />
-                  {TRAINER_SLOTS.map((fk, i) => (
-                    <SelectField key={fk} label={`Trainer ${i + 1}`} fieldKey={fk} f={f} edits={edits} onChange={handleFieldChange} options={trainerOptions} />
-                  ))}
-                </div>
-              </Section>
-
-              <Section title="Contact" icon="◉">
-                <div className="trn-field-grid">
-                  <TextField label="Contact" fieldKey="zz__Display_Contact__ct" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} />
-                  <TextField label="Phone" fieldKey="trnpp_cntct_PHONE::Number" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} mono />
-                  <TextField label="Mobile" fieldKey="trnpp_cntct_PHONE_mobile::Number" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} mono />
-                  <TextField label="Email" fieldKey="trnpp_cntct_INADR__email::zz__Address__ct" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} />
-                  <TextField label="Billing address" fieldKey="Address_Block_Billing" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} wide />
-                </div>
-              </Section>
+              {/* Trainers and Contact sections removed — both are now shown
+                  at the top of the page (the hero's editable Trainers card
+                  and Contact card), so repeating them here was duplicative. */}
               </>)}
 
               {tab === 'costs' && (<>
