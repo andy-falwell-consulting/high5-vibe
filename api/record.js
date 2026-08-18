@@ -15,7 +15,7 @@
 // list read (_vibeStore.js) is applied. One merge implementation, both paths.
 import { fmpToken, ALLOWED_DBS } from './_fmp.js';
 import { getGoogleSession } from './_googleSession.js';
-import { readFragment, mergeRecord } from './_vibeStore.js';
+import { readFragment, mergeRecord, isVibeRecordId } from './_vibeStore.js';
 
 const FMP_HOST = 'https://ILELLCO.pcifmhosting.com';
 
@@ -30,6 +30,21 @@ export default async function handler(req, res) {
   if (!layout || !recordId) return res.status(400).json({ error: 'layout and recordId are required' });
 
   try {
+    // A `V-` id is Vibe's own and cannot exist in FileMaker — asking anyway
+    // costs a round trip and comes back as error 960 ("recordId must be an
+    // integer"), which is noise in the logs and a misleading error to pass on
+    // if the fragment has since been dropped. Answer from the fragment alone.
+    if (isVibeRecordId(recordId)) {
+      const frag = await readFragment(db, layout, recordId);
+      if (frag?.__created && !frag.__deleted) {
+        return res.status(200).json({
+          messages: [{ code: '0', message: 'OK' }],
+          response: { data: [{ recordId, modId: '0', fieldData: { ...(frag.fieldData || {}) }, portalData: {} }] },
+        });
+      }
+      return res.status(404).json({ messages: [{ code: '101', message: 'Record is missing' }], response: { data: [] } });
+    }
+
     const token = await fmpToken(db);
     const r = await fetch(
       `${FMP_HOST}/fmi/data/v2/databases/${db}/layouts/${encodeURIComponent(layout)}/records/${encodeURIComponent(recordId)}`,
