@@ -1,7 +1,7 @@
 // Move FileMaker's estimate line items into Vibe's own store — PHASE B1.
 //
-//   POST /api/estimate-lines-migrate?db=…&offset=1        → one page of 1,000
-//   POST /api/estimate-lines-migrate?db=…&offset=1&peek=1 → READ ONLY, writes nothing
+//   POST /api/estimate-lines-migrate?db=…&layout=…&offset=1        → one page of 1,000
+//   POST /api/estimate-lines-migrate?db=…&layout=…&offset=1&peek=1 → READ ONLY, writes nothing
 //   POST /api/estimate-lines-migrate?db=…&step=finish     → promote staging to live
 //   GET  /api/estimate-lines-migrate?db=…                 → the last report
 //
@@ -25,7 +25,17 @@ import { linesKey, cleanLine } from './_estimateLines.js';
 
 const redis = Redis.fromEnv();
 const FMP_HOST = 'https://ILELLCO.pcifmhosting.com';
-const LAYOUT = 'estimate_li_vibe';
+// NO DEFAULT, deliberately. `estimate_li_vibe` was believed to be the estimate
+// line-item table and is NOT — peeking it on 2026-08-18 returned the Items /
+// Products catalogue (`_kpt__Item_ID`, SKU, Vendor, Cost, QuickBooks/Shopify
+// ids; 1,267 rows, matching Products & Services_New exactly, with item 1000 the
+// same "1/2\" x 8\" Staple" that is in the products replica).
+//
+// The layout this migration needs does not exist yet: one on the table behind
+// the `estmt_ESTLI` portal, exposing the line's own key, its parent estimate
+// key, Item_Name, Description, Quantity, Unit_Price, Amount, Taxable and
+// Sort_Order. Until it does, the layout must be named explicitly with
+// `?layout=` — and `peek=1` used first, which is what caught this.
 const PAGE = 1000;
 
 const stageKey = db => `vibe:${db}:estli:staging`;
@@ -95,8 +105,16 @@ export default async function handler(req, res) {
     const offset = Math.max(1, Number(req.query?.offset) || 1);
     const peek = !!req.query?.peek;
 
+    const layout = String(req.query?.layout || '').trim();
+    if (!layout) {
+      return res.status(400).json({
+        error: 'layout is required — there is no default',
+        why: 'estimate_li_vibe is the Items catalogue, not estimate line items. See the note at the top of this file.',
+      });
+    }
+
     const token = await fmpToken(db);
-    const url = `${FMP_HOST}/fmi/data/v2/databases/${db}/layouts/${LAYOUT}/records?_limit=${peek ? 3 : PAGE}&_offset=${offset}`;
+    const url = `${FMP_HOST}/fmi/data/v2/databases/${db}/layouts/${encodeURIComponent(layout)}/records?_limit=${peek ? 3 : PAGE}&_offset=${offset}`;
     const page = await (await fetch(url, { headers: { Authorization: `Bearer ${token}` } })).json();
     const rows = page?.response?.data || [];
     const total = page?.response?.dataInfo?.foundCount ?? null;
@@ -114,7 +132,7 @@ export default async function handler(req, res) {
     if (peek) {
       const f = rows[0].fieldData || {};
       return res.status(200).json({
-        peek: true, layout: LAYOUT, total, wroteNothing: true,
+        peek: true, layout, total, wroteNothing: true,
         fieldNames: Object.keys(f),
         parentKeyFound: parentIdOf(f) ? PARENT_KEYS.find(k => String(f[k] ?? '').trim()) : null,
         sampleRows: rows.map(r => r.fieldData),

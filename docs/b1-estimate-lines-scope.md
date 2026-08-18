@@ -73,9 +73,32 @@ Estimate lines cannot be read that way today:
   a long estimate would silently truncate.
 
 So B1 needs a layout exposing the estimate line-item **table**, the way
-inspections have one. Whether such a layout already exists is the open question,
-and it is the same shape of dependency that stopped the contacts migration in
-Dev. **This needs checking in FileMaker before any code is written.**
+inspections have one.
+
+### Answered 2026-08-18: `estimate_li_vibe` is NOT it
+
+It was offered as the layout for this, and it does exist in Production — but
+peeking it (read-only, `?peek=1`, writes nothing) returned the **Items /
+Products catalogue**, not estimate lines:
+
+- fields are `_kpt__Item_ID`, `SKU`, `Vendor`, `Cost`, `Type: "Product"`,
+  `QuickBooks_Account_*`, Shopify ids — no parent estimate key, no per-line
+  `Quantity`/`Amount`/`Sort_Order`
+- **1,267 rows**, matching `Products & Services_New` exactly
+- item `1000` is `1/2" x 8" Staple`, SKU `115-STAP500x08` — the same record that
+  is in the products replica
+
+The name reads like "estimate line items" but the table behind it is the
+catalogue those lines *reference*. Had the migration trusted the name it would
+have written 1,267 product records into the estimate-lines store under keys that
+mean nothing. `peek` exists precisely so a layout is inspected before it is
+migrated, and it paid for itself the first time it ran.
+
+**Still needed:** a layout on the table behind the `estmt_ESTLI` portal exposing
+the line's own key, its parent estimate key, and `Item_Name`, `Description`,
+`Quantity`, `Unit_Price`, `Amount`, `Taxable`, `Sort_Order`. The migration takes
+the layout name as a parameter and has no default, so it cannot be pointed at
+the wrong table by accident.
 
 ---
 
