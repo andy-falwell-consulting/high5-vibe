@@ -11,7 +11,7 @@
 // 1,000 projects) and fills at least one of the three for 115 of a 120-contact
 // sample.
 import { getContact } from './vibeContacts';
-import { formatPhone } from '../../api/_phone';
+import { formatPhone, telHref } from '../../api/_phone';
 
 // Type vocabularies match METHOD_SPEC in ContactsV2 — the values actually in
 // the data, in preference order. A fax is never offered as a phone number.
@@ -19,7 +19,7 @@ const WORK_TYPES = ['Work', 'Main Office', 'Work Parent'];
 const CELL_TYPES = ['Mobile', 'Personal Mobile', 'Mobile Parent'];
 const MAIL_TYPES = ['Email', 'Home Email', 'Billing'];
 
-const EMPTY = { workPhone: '', cellPhone: '', email: '' };
+const EMPTY = { workPhone: '', workHref: '', cellPhone: '', cellHref: '', email: '' };
 
 const pickByType = (rows, types) => {
   for (const t of types) {
@@ -45,9 +45,15 @@ export async function contactDetails(contactId) {
     const c = pickByType(e.phones, CELL_TYPES);
     const m = pickByType(e.emails, MAIL_TYPES)
       || (e.emails || []).find(x => String(x.type || '') !== 'Web');
+    // Display text and dial link are both returned. They differ: the display
+    // reads "(781) 455-0800 ext. 2140", while the link has to be
+    // "tel:+17814550800,2140" — a comma is the pause convention, and folding the
+    // extension into the digits would dial a number that does not exist.
     return {
       workPhone: w ? formatPhone(w.number, w.ext) : '',
+      workHref: w ? telHref(w.number, w.ext) : '',
       cellPhone: c ? formatPhone(c.number, c.ext) : '',
+      cellHref: c ? telHref(c.number, c.ext) : '',
       email: m?.address || '',
     };
   } catch {

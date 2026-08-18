@@ -811,6 +811,8 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
                         const email = ci?.email || f['rcd_cntct_INADR__email::zz__Address__ct'] || '';
                         const work = ci?.workPhone || f['rcd_cntct_PHONE__work::Number'] || '';
                         const cell = ci?.cellPhone || f['rcd_cntct_PHONE__mobile::Number'] || '';
+                        const workHref = ci?.workHref || (work ? `tel:${work.replace(/[^\d+]/g, '')}` : '');
+                        const cellHref = ci?.cellHref || (cell ? `tel:${cell.replace(/[^\d+]/g, '')}` : '');
                         if (!email && !work && !cell) {
                           return contactFk
                             ? <div className="cv2-contact-row cv2-contact-none">{ci ? 'No phone or e-mail on this contact.' : 'Loading…'}</div>
@@ -819,8 +821,8 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
                         return (
                           <>
                             {email && <div className="cv2-contact-row"><span className="cv2-ic">✉</span><a href={`mailto:${email}`}>{email}</a></div>}
-                            {work && <div className="cv2-contact-row"><span className="cv2-ic">✆</span><a href={`tel:${work.replace(/[^\d+]/g, '')}`}>{work}</a><span className="cv2-contact-tag">work</span></div>}
-                            {cell && <div className="cv2-contact-row"><span className="cv2-ic">▢</span><a href={`tel:${cell.replace(/[^\d+]/g, '')}`}>{cell}</a><span className="cv2-contact-tag">mobile</span></div>}
+                            {work && <div className="cv2-contact-row"><span className="cv2-ic">✆</span><a href={workHref}>{work}</a><span className="cv2-contact-tag">work</span></div>}
+                            {cell && <div className="cv2-contact-row"><span className="cv2-ic">▢</span><a href={cellHref}>{cell}</a><span className="cv2-contact-tag">mobile</span></div>}
                           </>
                         );
                       })()}
