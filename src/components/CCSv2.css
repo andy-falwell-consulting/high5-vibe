@@ -269,6 +269,13 @@
 .cv2-inline-select { cursor: pointer; appearance: none; }
 .cv2-inline-date { color-scheme: dark; }
 [data-theme="light"] .cv2-inline-date { color-scheme: light; }
+/* color-scheme alone isn't reliable: Vite's CSS build (Lightning CSS)
+   compiles it down to something keyed off the visitor's OS light/dark
+   preference rather than this app's own [data-theme] toggle, so the icon
+   can silently disappear depending on the visitor's OS setting — see the
+   identical fix + explanation on .trn-inline-date in Trainings.css. */
+.cv2-inline-date::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
+[data-theme="light"] .cv2-inline-date::-webkit-calendar-picker-indicator { filter: none; }
 
 .cv2-detail-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; }
 /* A calculated field shown in the same grid as editable ones — same padding

@@ -1,6 +1,9 @@
 // Training "Work Order" PDF — a one-page trainer-facing sheet, same pattern as
-// ccsWorkOrder.js. Client-side pdfmake.
+// ccsWorkOrder.js (mirrored here: name de-duplication, 'Work Order' title
+// case, Vibe-sourced email/cell/phone, and a Training-type row). Client-side
+// pdfmake.
 import { trainingAttachments } from './trainingAttachments';
+import { contactDetailsFor } from './contactLookup';
 
 const fmtDateNoZero = v => {
   if (!v) return '';
@@ -17,14 +20,40 @@ export function workOrderMeta(record) {
   return { id, org, filename: `Work Order ${org} ${id}.pdf` };
 }
 
-export function buildWorkOrderDoc(record, logos) {
+// Two names are "the same" for de-duplication if they match once case and
+// punctuation are ignored, or if one is a prefix of the other — same rule
+// ccsWorkOrder.js uses, for the identical reason: a billing address block
+// often already opens with the organization and/or contact name.
+const nameKey = v => String(v || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+function sameish(a, b) {
+  const x = nameKey(a), y = nameKey(b);
+  if (!x || !y) return false;
+  return x === y || x.startsWith(y) || y.startsWith(x);
+}
+
+export function buildWorkOrderDoc(record, logos, contactInfo) {
   const f = record.fieldData || {};
   const org = f.zz__Display_Organization__ct || '—';
   const contact = f.zz__Display_Contact__ct || '';
   const addrLines = String(f['Address_Block_Billing'] || '').split(/\r|\n/).map(s => s.trim()).filter(Boolean);
-  const email = f['trnpp_cntct_INADR__email::zz__Address__ct'] || '';
-  const workPhone = f['trnpp_cntct_PHONE::Number'] || '';
-  const cellPhone = f['trnpp_cntct_PHONE_mobile::Number'] || '';
+  // Prepend org/contact only when the billing block doesn't already carry
+  // them, so a record with a block that opens "Weston Public Schools..."
+  // doesn't print the name twice.
+  const blockHasOrg = addrLines.some(l => sameish(l, org));
+  const blockHasContact = addrLines.some(l => sameish(l, contact));
+  const addressStack = [
+    ...(blockHasOrg ? [] : [org]),
+    ...(blockHasContact ? [] : [contact]),
+    ...addrLines,
+  ].filter(Boolean);
+
+  const trainingType = f['Type of Program'] || '';
+  // Vibe's contact store first (see contactLookup.js — FileMaker's related
+  // fields on trainings_New are largely empty, same problem CCS had), the
+  // raw FileMaker related fields as fallback.
+  const email = contactInfo?.email || f['trnpp_cntct_INADR__email::zz__Address__ct'] || '';
+  const workPhone = contactInfo?.workPhone || f['trnpp_cntct_PHONE::Number'] || '';
+  const cellPhone = contactInfo?.cellPhone || f['trnpp_cntct_PHONE_mobile::Number'] || '';
   const staff = STAFF_FIELDS.map(k => f[k]).filter(Boolean).join(', ');
   const start = fmtDateNoZero(f['Start Date']);
   const end = fmtDateNoZero(f['End Date']);
@@ -47,7 +76,7 @@ export function buildWorkOrderDoc(record, logos) {
       {
         columns: [
           { image: logos.header, width: 58 },
-          { text: 'Work order', fontSize: 22, alignment: 'right', margin: [0, 10, 0, 0] },
+          { text: 'Work Order', fontSize: 22, alignment: 'right', margin: [0, 10, 0, 0] },
         ],
         margin: [0, 0, 0, 10],
       },
@@ -59,7 +88,7 @@ export function buildWorkOrderDoc(record, logos) {
             width: '*',
             stack: [
               { text: 'Address', color: '#444444', fontSize: 10, margin: [0, 0, 0, 3] },
-              { text: [org, contact, ...addrLines].filter(Boolean).join('\n'), fontSize: 11, lineHeight: 1.3 },
+              { text: addressStack.join('\n'), fontSize: 11, lineHeight: 1.3 },
             ],
           },
           {
@@ -76,7 +105,7 @@ export function buildWorkOrderDoc(record, logos) {
 
       { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 486, y2: 0, dash: { length: 3 }, lineWidth: 0.75, lineColor: '#999999' }], margin: [0, 0, 0, 14] },
 
-      row('Training', org),
+      row('Training', trainingType),
       row('Staff', staff),
       row('Dates', dates),
 
@@ -94,10 +123,16 @@ export function buildWorkOrderDoc(record, logos) {
   };
 }
 
-async function generateWorkOrderPdf(record) {
-  const [pdfmakeMod, assets] = await Promise.all([
+async function generateWorkOrderPdf(record, onStage) {
+  // The contact lookup runs alongside the (heavy) pdfmake and font imports
+  // rather than after them, so it costs no extra wall-clock — same as
+  // ccsWorkOrder.js. firstEmail: true, since Trainings always reads the
+  // person's own first email rather than CCS's type-preference pick.
+  onStage?.('Reading contact…');
+  const [pdfmakeMod, assets, contactInfo] = await Promise.all([
     import('pdfmake/build/pdfmake'),
     import('../assets/reportAssets.js'),
+    contactDetailsFor(record, { firstEmail: true }),
   ]);
   const pdfMake = pdfmakeMod.default || pdfmakeMod;
   pdfMake.vfs = assets.reportFonts;
@@ -107,7 +142,8 @@ async function generateWorkOrderPdf(record) {
       italics: 'LiberationSans-Italic.ttf', bolditalics: 'LiberationSans-BoldItalic.ttf',
     },
   };
-  const doc = buildWorkOrderDoc(record, assets.reportLogos);
+  onStage?.('Building PDF…');
+  const doc = buildWorkOrderDoc(record, assets.reportLogos, contactInfo);
   const { filename } = workOrderMeta(record);
   const blob = await new Promise((resolve, reject) => {
     try { pdfMake.createPdf(doc).getBlob(resolve); } catch (e) { reject(e); }
@@ -119,7 +155,7 @@ async function generateWorkOrderPdf(record) {
 // photo/file table (Training_Pics, via the shared trainingAttachments pipeline).
 export async function generateAndAttachWorkOrder(record, onStage) {
   onStage?.('Building PDF…');
-  const { blob, filename } = await generateWorkOrderPdf(record);
+  const { blob, filename } = await generateWorkOrderPdf(record, onStage);
   const file = new File([blob], filename, { type: 'application/pdf' });
   const trainingId = record.fieldData?._kpt__TrainingProposal_ID;
   onStage?.('Uploading…');
@@ -129,7 +165,7 @@ export async function generateAndAttachWorkOrder(record, onStage) {
 // Generate + download (no attach).
 export async function downloadWorkOrder(record, onStage) {
   onStage?.('Building PDF…');
-  const { blob, filename } = await generateWorkOrderPdf(record);
+  const { blob, filename } = await generateWorkOrderPdf(record, onStage);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = filename; document.body.appendChild(a); a.click();

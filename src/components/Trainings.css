@@ -272,14 +272,16 @@
   padding: 3px 0; border-radius: 0;
 }
 .trn-inline:focus { outline: none; border-bottom-color: var(--cv2-accent); }
-/* Without this the native calendar-picker icon renders in the browser's
-   default (light) color scheme — a dark icon that's invisible against this
-   field's dark background. `input.` (not just `.trn-inline-date`) because
-   src/index.css sets `color-scheme: light dark` on :root at the same class-
-   level specificity — a bare class here can lose that tie depending on
-   build order, which is exactly what made the icon "not always" show. */
-input.trn-inline-date { color-scheme: dark; }
-[data-theme="light"] input.trn-inline-date { color-scheme: light; }
+/* color-scheme alone isn't reliable here: Vite's CSS build (Lightning CSS)
+   compiles it down to something keyed off the VISITOR'S OS light/dark
+   preference rather than this app's own [data-theme] toggle — so a
+   `color-scheme: dark` declaration can silently lose depending on the
+   visitor's OS setting, independent of which theme the app is actually
+   showing. That's what made the icon "not always" show. Targeting the
+   icon directly sidesteps it: default (dark theme) icon is invisible
+   against a dark field, so invert it; light theme needs it un-inverted. */
+input.trn-inline-date::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
+[data-theme="light"] input.trn-inline-date::-webkit-calendar-picker-indicator { filter: none; }
 /* A calculated field shown in the same grid as editable ones — same padding
    as .trn-inline so it lines up, but no border/focus since it isn't
    interactive. */
