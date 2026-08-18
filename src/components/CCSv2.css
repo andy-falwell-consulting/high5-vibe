@@ -447,3 +447,15 @@
    padding a .cv2-card-body would, without a wrapper element. */
 .cv2-field-block--card { padding: 12px 14px 14px; }
 .cv2-field-block--card > .cv2-inline-area { width: 100%; }
+
+/* Work Order Notes and Notes must finish level. Work Order carries a Download
+   button row that Notes does not, so matching only the text areas left the two
+   cards 42px apart. Stretch the row instead and let each text area take
+   whatever height is left, so the CARDS match and the shorter one's text area
+   simply gets bigger. */
+.cv2-notes-row { align-items: stretch; }
+.cv2-notes-row > .cv2-card { display: flex; flex-direction: column; }
+.cv2-notes-row .cv2-field-block--card { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.cv2-notes-row .cv2-inline-area-fixed {
+  flex: 1; height: auto; min-height: 200px;
+}

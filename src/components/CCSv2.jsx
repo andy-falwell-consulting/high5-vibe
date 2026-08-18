@@ -981,7 +981,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
                 {/* Work Order Notes and Notes side by side. Both are long free
                     text read while doing the same thing, so stacking them meant
                     scrolling past one to reach the other. */}
-                <div className="cv2-cols cv2-cols-even">
+                <div className="cv2-cols cv2-cols-even cv2-notes-row">
                   <div className="cv2-card">
                     <div className="cv2-card-head"><span>Work Order Notes</span></div>
                     <div className="cv2-field-block cv2-field-block--card">
