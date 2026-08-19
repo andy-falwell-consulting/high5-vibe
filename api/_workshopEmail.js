@@ -1,5 +1,5 @@
 import { Redis } from '@upstash/redis';
-import { getServiceAccountToken, GMAIL_SEND_SCOPE } from './_gsa.js';
+import { getServiceAccountToken, GMAIL_SEND_SCOPE, DRIVE_SCOPE } from './_gsa.js';
 import { scanReplica } from './_replica.js';
 import { courseKey } from './_oeTraining.js';
 import { listForParent, getFile, driveToken } from './_vibeFiles.js';
@@ -240,12 +240,38 @@ function buildMime({ from, to, replyTo, subject, body, attachments }) {
  *  impersonation to have actually worked. */
 export async function checkDelegation() {
   const from = senderAddress();
+  const account = process.env.GDRIVE_SA_EMAIL || null;
+
+  // Does delegation work for this SUBJECT at all, on a scope already known to
+  // be granted? This separates the two things the Gmail failure conflates:
+  //
+  //   drive ok, gmail not  -> the wiring and the mailbox are fine; only the
+  //                           gmail.send scope is missing from the entry.
+  //   both fail            -> the client id is wrong, the entry is missing
+  //                           entirely, or workshops@ cannot be impersonated.
+  //
+  // Without this, "unauthorized_client" is the same message for a missing scope
+  // and a wrong client id, which are very different things to go and fix.
+  let driveForSubject = null;
+  try {
+    await getServiceAccountToken({ scope: DRIVE_SCOPE, subject: from, force: true });
+    driveForSubject = 'ok';
+  } catch (e) {
+    driveForSubject = String(e?.message || e).slice(0, 200);
+  }
+
   let token;
   try {
     token = await getServiceAccountToken({ scope: GMAIL_SEND_SCOPE, subject: from, force: true });
   } catch (e) {
     return {
       ok: false, stage: 'token', from, scope: GMAIL_SEND_SCOPE,
+      serviceAccount: account,
+      delegationWorksForThisMailbox: driveForSubject === 'ok',
+      driveProbe: driveForSubject,
+      diagnosis: driveForSubject === 'ok'
+        ? 'Delegation IS working for this mailbox on the Drive scope, so the client id is right and workshops@ can be impersonated. The ONLY thing missing is the gmail.send scope on that same entry.'
+        : 'Delegation fails for this mailbox on the Drive scope too, so this is not a missing-scope problem. Either the client id on the entry is wrong, or workshops@ cannot be impersonated (a group alias rather than a real mailbox).',
       error: String(e?.message || e),
       // Match Google's PROSE, not just the error code. The body of this
       // rejection reads "Client is unauthorized to retrieve access tokens using
@@ -271,7 +297,7 @@ export async function checkDelegation() {
     };
   }
   return {
-    ok: true, from, mailbox: body.emailAddress,
+    ok: true, from, serviceAccount: account, mailbox: body.emailAddress,
     messagesTotal: body.messagesTotal ?? null,
     note: 'Delegation works — Vibe can send as this mailbox.',
   };

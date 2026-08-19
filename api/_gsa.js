@@ -24,6 +24,7 @@ import { createSign } from 'node:crypto';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const SCOPE = 'https://www.googleapis.com/auth/drive';
+export const DRIVE_SCOPE = SCOPE;
 export const GMAIL_SEND_SCOPE = 'https://www.googleapis.com/auth/gmail.send';
 
 const b64url = buf => Buffer.from(buf).toString('base64')
