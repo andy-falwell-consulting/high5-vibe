@@ -60,6 +60,11 @@ the ORGANIZATION, not the person — so to answer "where is X" for a person, fin
 their organization first. Ids are shared with FileMaker's contact id, so an id
 from a project or estimate record can be passed straight to get_contact.
 
+get_contact on an ORGANIZATION returns its people — that is how to answer "who
+works at X". get_contact on a PERSON returns their affiliations, the other
+direction. Searching for an organization's name will NOT return its people;
+fetch the organization and read `people`.
+
 Prefer these over search_records('contacts'), which reads the older FileMaker
 table: it cannot see any contact created since 2026-08-06, and it has no notion
 of the organization/person split at all. The FileMaker table is still the only
@@ -405,6 +410,7 @@ async function runTool(name, input, ctx) {
   if (name === 'get_contact') {
     const r = await resolveContactDisplay(ctx.db, input?.id);
     if (!r?.found) return { error: `No contact ${input?.id} in Vibe's contact model` };
+    if (r.kind === 'organization') r.people = await peopleAtOrganization(ctx.db, input.id);
     return r;
   }
 
@@ -551,6 +557,32 @@ import { resolveContactDisplay } from './_contactDisplay.js';
 // rather than replacing it: the legacy table still holds fields Vibe has no home
 // for (OE training, certifications — B3), so the agent needs both until B4
 // retires the old module.
+// Who belongs to an organization. `resolveContactDisplay` walks the other way —
+// person to organization — which is what a record needs to show its contact's
+// address. The agent needs BOTH directions, because "who works at X" is the
+// question the old FileMaker table could not answer at all.
+async function peopleAtOrganization(db, orgId) {
+  const affIds = (await readContactHash(CONTACT_KEYS.byOrg(db))).get(String(orgId));
+  const ids = Array.isArray(affIds) ? affIds : [];
+  if (!ids.length) return [];
+  const affs = await readContactHash(CONTACT_KEYS.aff(db));
+  const people = await readContactHash(CONTACT_KEYS.person(db));
+  const out = [];
+  for (const affId of ids) {
+    const a = affs.get(String(affId));
+    if (!a) continue;
+    const p = people.get(String(a.personId));
+    if (!p) continue;
+    out.push({
+      id: p.id, name: contactDisplayName(p), title: a.title || p.title || '',
+      primary: !!a.primary, status: p.status || '',
+      phones: contactMethods(p, 'phone').map(m => m.number).filter(Boolean),
+      emails: contactMethods(p, 'email').map(m => m.address).filter(Boolean),
+    });
+  }
+  return out;
+}
+
 async function searchVibeContacts(db, { query = '', kind = 'any', limit = 15 }) {
   const q = String(query).trim().toLowerCase();
   const cap = Math.min(Number(limit) || 15, 40);
