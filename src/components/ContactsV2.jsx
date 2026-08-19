@@ -1124,14 +1124,22 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
   // and RMI each have their own create button and were unaffected; CCS did not
   // and was. Trainings never had a path at all, which is what this change set
   // out to add.
+  //
+  // Built from `openId` and `contactLabel` rather than reaching into `selected`
+  // again: a person's name is `displayName` and an organization's is `name`, and
+  // contactLabel above already handles that fork. Doing it a second time here is
+  // how the dialog first showed the contact as "—" for every person.
   const quickAddContact = useMemo(() => {
-    const id = selected?.kind === 'organization' ? selected.organization?.id : selected?.person?.id;
-    if (!id) return null;
-    const name = selected?.kind === 'organization'
-      ? (selected.organization?.name || '')
-      : (selected.person?.name || '');
-    return { recordId: String(id), fieldData: { _kpt__Contact_ID: String(id), zz__Display__ct: name, Name_Organization: name } };
-  }, [selected]);
+    if (!openId) return null;
+    return {
+      recordId: String(openId),
+      fieldData: {
+        _kpt__Contact_ID: String(openId),
+        zz__Display__ct: contactLabel,
+        Name_Organization: contactLabel,
+      },
+    };
+  }, [openId, contactLabel]);
 
   const person = selected?.kind === 'person' ? selected.person : null;
   const org = selected?.kind === 'organization' ? selected.organization : null;
