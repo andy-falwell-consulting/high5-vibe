@@ -5,6 +5,7 @@ import { readWorkshop, patchWorkshop } from './_oeTraining.js';
 import {
   TEMPLATES, isTemplateId, readTemplate, readTemplates, writeTemplate,
   pickEmail, render, templateVars, sendAsWorkshops, senderAddress, catalogueForCourse,
+  templateFiles, loadAttachments,
 } from './_workshopEmail.js';
 
 // Workshop e-mails — preview, send, and template administration.
@@ -74,10 +75,14 @@ export default async function handler(req, res) {
     const catalogue = await catalogueForCourse(db, workshop.courseNumber);
     const vars = templateVars({ workshop, catalogue, recipient });
 
+    // The attachments are whatever is filed against this template in Vibe's
+    // file store — not a list of ids kept on the template, which could drift
+    // from the files actually there.
+    const files = tpl ? await templateFiles(db, version) : [];
     const rendered = tpl ? {
       subject: render(tpl.subject, vars),
       body: render(tpl.body, vars),
-      attachments: tpl.attachments || [],
+      attachments: files.map(f => ({ fileId: f.fileId, name: f.name, size: f.size, mime: f.mime })),
     } : null;
 
     // ── Preview ────────────────────────────────────────────────────────────
@@ -98,12 +103,17 @@ export default async function handler(req, res) {
     const to = String(req.body?.to || recipient?.address || '').trim();
     if (!to) return res.status(400).json({ error: 'no e-mail address for this registrant' });
 
+    // Resolve the template's attachments to bytes HERE, on the server. An
+    // earlier draft passed `req.body.attachments` straight through, which meant
+    // a template could list attachments, the preview could show them, and the
+    // message would go out with none — a silent omission is worse than an
+    // obvious absence.
+    const attachments = await loadAttachments(db, version);
+
     const sent = await sendAsWorkshops({
       to, replyTo: senderAddress(),
       subject: rendered.subject, body: rendered.body,
-      // Attachments are resolved by the caller passing bytes; template
-      // attachment ids are carried through so the UI can show what will go.
-      attachments: req.body?.attachments || [],
+      attachments,
     });
 
     // Record it on the registration, mirroring the two FileMaker fields so the
@@ -115,7 +125,10 @@ export default async function handler(req, res) {
       lastEmailBy: session.email,
     });
 
-    return res.status(200).json({ ...sent, version, workshop: updated });
+    return res.status(200).json({
+      ...sent, version, workshop: updated,
+      attachmentsSent: attachments.map(a => a.filename),
+    });
   } catch (e) {
     return res.status(500).json({ error: String(e?.message || e) });
   }

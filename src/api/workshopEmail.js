@@ -1,4 +1,5 @@
 import { getCurrentEnv } from '../config/fmpEnvironments';
+import { makeVibeAttachments } from './vibeFiles';
 
 // Workshop e-mails — preview and send, from Vibe (no Tray).
 //
@@ -44,3 +45,12 @@ export const saveTemplate = (id, { subject, body, attachments }) =>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id, subject, body, attachments }),
   }).then(json);
+
+// ── Template attachments ────────────────────────────────────────────────────
+//
+// The files that go out with a template, managed from Admin. Reuses Vibe's own
+// file store — the same one CCS and inspection attachments use — under a
+// `wsemail` parent kind, with the template id as the parent. The bytes land in
+// Drive under the folder IT owns, so an attachment stays openable by a person
+// with a browser even if this app disappears.
+export const templateAttachments = makeVibeAttachments('wsemail');

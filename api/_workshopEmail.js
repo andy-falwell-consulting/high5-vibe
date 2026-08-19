@@ -2,6 +2,8 @@ import { Redis } from '@upstash/redis';
 import { getServiceAccountToken, GMAIL_SEND_SCOPE } from './_gsa.js';
 import { scanReplica } from './_replica.js';
 import { courseKey } from './_oeTraining.js';
+import { listForParent, getFile, driveToken } from './_vibeFiles.js';
+import { downloadFile } from './_backupDrive.js';
 
 // Workshop e-mails, sent by Vibe.
 //
@@ -152,6 +154,45 @@ export function templateVars({ workshop, catalogue, recipient }) {
     balance_due: money(Math.round((fee - Number(w.depositReceived || 0)) * 100) / 100),
     recipient_email: recipient?.address || '',
   };
+}
+
+// ── Attachments ─────────────────────────────────────────────────────────────
+
+// Gmail's own ceiling is 25 MB for the whole encoded message; base64 inflates
+// bytes by about a third, so the raw budget is nearer 18 MB. Refusing loudly
+// beats Gmail rejecting the send with a message nobody will connect to the
+// size of a PDF somebody attached weeks earlier.
+export const MAX_ATTACHMENT_BYTES = 18 * 1024 * 1024;
+
+/** The files attached to a template, as metadata only. */
+export const templateFiles = (db, templateId) => listForParent(db, 'wsemail', String(templateId));
+
+/** Fetch a template's attachments as base64 parts ready for the MIME builder.
+ *
+ *  Reads from Vibe's file store, whose bytes live in Drive under the folder IT
+ *  owns — so an attachment stays openable by a person with a browser even if
+ *  this app disappears, which is the same reason the store exists at all. */
+export async function loadAttachments(db, templateId) {
+  const metas = await templateFiles(db, templateId);
+  if (!metas.length) return [];
+  const token = await driveToken();
+  const out = [];
+  let total = 0;
+  for (const m of metas) {
+    const meta = m.driveId ? m : await getFile(db, m.fileId);
+    if (!meta?.driveId) continue;
+    const bytes = await downloadFile(token, meta.driveId);
+    total += bytes.length;
+    if (total > MAX_ATTACHMENT_BYTES) {
+      throw new Error(`Attachments exceed ${Math.round(MAX_ATTACHMENT_BYTES / 1024 / 1024)} MB — Gmail will reject the message. Remove one from this template.`);
+    }
+    out.push({
+      filename: meta.name || 'attachment',
+      mimeType: meta.mime || 'application/octet-stream',
+      base64: Buffer.from(bytes).toString('base64'),
+    });
+  }
+  return out;
 }
 
 // ── Send ────────────────────────────────────────────────────────────────────

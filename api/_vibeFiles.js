@@ -43,6 +43,17 @@ export const SOURCES = {
   training: { layout: 'Training_Pics', container: 'image', fk: 'ID', nameField: 'File Name' },
 };
 
+// Parent kinds that are Vibe's own and have NO FileMaker counterpart, so they
+// cannot live in SOURCES — that map describes container tables to migrate FROM,
+// and a migration would go looking for a layout that does not exist.
+//
+//   wsemail — the files attached to a workshop e-mail template. parentId is the
+//             template id (Training, Exam_L1, Exam_L2, Exam_L3).
+export const NATIVE_KINDS = new Set(['wsemail']);
+
+/** Kinds the file store will accept as a parent. */
+export const isFileKind = k => !!SOURCES[k] || NATIVE_KINDS.has(k);
+
 // A field can be queryable on these layouts without being readable: a find on
 // RCD_Pics by rcd_id matches, but the field is absent from every row that comes
 // back. So the parent of a file cannot always be discovered by reading it, and

@@ -11,7 +11,7 @@
 import { getGoogleSession } from './_googleSession.js';
 import { ALLOWED_DBS } from './_fmp.js';
 import { Redis } from '@upstash/redis';
-import { FK, SOURCES, listForParent, getFile, driveToken } from './_vibeFiles.js';
+import { FK, SOURCES, isFileKind, listForParent, getFile, driveToken } from './_vibeFiles.js';
 import { downloadFile } from './_backupDrive.js';
 
 const redis = Redis.fromEnv();
@@ -50,7 +50,7 @@ export default async function handler(req, res) {
 
     const kind = String(req.query?.kind || '');
     const parentId = String(req.query?.parentId || '');
-    if (!SOURCES[kind]) return res.status(400).json({ error: `kind must be one of ${Object.keys(SOURCES).join(', ')}` });
+    if (!isFileKind(kind)) return res.status(400).json({ error: `kind must be one of ${[...Object.keys(SOURCES), 'wsemail'].join(', ')}` });
     if (!parentId) return res.status(400).json({ error: 'parentId is required' });
 
     const files = (await listForParent(db, kind, parentId))

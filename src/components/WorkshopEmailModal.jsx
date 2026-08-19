@@ -109,11 +109,14 @@ export default function WorkshopEmailModal({ workshop, courseLabel, onClose, onS
                     <span className="wem-subject">{preview.rendered.subject || '(no subject)'}</span>
                   </div>
                   <pre className="wem-preview-body">{preview.rendered.body}</pre>
-                  {preview.rendered.attachments?.length > 0 && (
+                  {preview.rendered.attachments?.length > 0 ? (
                     <div className="wem-attach">
-                      {preview.rendered.attachments.length} attachment
-                      {preview.rendered.attachments.length === 1 ? '' : 's'}
+                      {preview.rendered.attachments.map(a => (
+                        <span key={a.fileId} className="wem-file">📎 {a.name}</span>
+                      ))}
                     </div>
+                  ) : (
+                    <div className="wem-attach wem-attach--none">No attachments on this template.</div>
                   )}
                 </div>
               ) : null}

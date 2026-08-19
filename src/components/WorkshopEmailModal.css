@@ -55,3 +55,7 @@
 [data-theme="light"] .wem-btn { background: #e2e8f0; color: #0f172a; }
 [data-theme="light"] .wem-btn--ghost { border-color: #e2e8f0; color: #334155; }
 [data-theme="light"] .wem-btn--go { background: #e8322a; color: #fff; }
+.wem-attach { display: flex; gap: 10px; flex-wrap: wrap; }
+.wem-file { font-size: 12px; color: #cbd5e1; }
+.wem-attach--none { color: #64748b; font-style: italic; }
+[data-theme="light"] .wem-file { color: #334155; }

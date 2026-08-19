@@ -9,7 +9,7 @@
 // runtime. bodyParser is off for the same reason.
 import { getGoogleSession } from './_googleSession.js';
 import { ALLOWED_DBS } from './_fmp.js';
-import { SOURCES, putFile, nextFileId, deleteFile, driveToken, getFile } from './_vibeFiles.js';
+import { SOURCES, isFileKind, putFile, nextFileId, deleteFile, driveToken, getFile } from './_vibeFiles.js';
 
 // Vercel's request body cap. A 4.5 MB limit would have refused the largest file
 // already in the store (6.2 MB), so this is worth stating rather than
@@ -51,7 +51,7 @@ export default async function handler(req, res) {
 
     const kind = String(req.query?.kind || '');
     const parentId = String(req.query?.parentId || '').trim();
-    if (!SOURCES[kind]) return res.status(400).json({ error: `kind must be one of ${Object.keys(SOURCES).join(', ')}` });
+    if (!isFileKind(kind)) return res.status(400).json({ error: `kind must be one of ${[...Object.keys(SOURCES), 'wsemail'].join(', ')}` });
     // A file with no parent is invisible everywhere in the app, which reads as
     // "the upload failed" rather than "it went nowhere".
     if (!parentId) return res.status(400).json({ error: 'parentId is required' });

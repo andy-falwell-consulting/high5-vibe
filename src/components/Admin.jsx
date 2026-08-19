@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import ShopifyConnect from './ShopifyConnect';
 import { getVibeValueLists, seedValueLists, setValueList, compareValueLists } from '../api/valueLists';
-import { getTemplates, saveTemplate, TEMPLATE_VERSIONS } from '../api/workshopEmail';
+import { getTemplates, saveTemplate, TEMPLATE_VERSIONS, templateAttachments } from '../api/workshopEmail';
 import QboConnect from './QboConnect';
 import './Admin.css';
 
@@ -24,6 +24,81 @@ const EMAIL_TOKENS = [
   'start_date', 'end_date', 'start_time', 'location', 'instructor', 'hours',
   'fee_total', 'deposit_due', 'balance_due', 'recipient_email',
 ];
+
+const kb = n => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+
+// The files that go out with a template. Uploading here is the whole point of
+// managing e-mails in Vibe rather than Tray: the attachments were previously
+// only visible to whoever could open the Tray workflow.
+function TemplateAttachments({ templateId }) {
+  const [files, setFiles] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  const load = useCallback(async () => {
+    try { setFiles(await templateAttachments.list(templateId)); setError(null); }
+    catch (e) { setError(e.message); }
+  }, [templateId]);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try { const f = await templateAttachments.list(templateId); if (alive) { setFiles(f); setError(null); } }
+      catch (e) { if (alive) setError(e.message); }
+    })();
+    return () => { alive = false; };
+  }, [templateId]);
+
+  async function onPick(e) {
+    const picked = [...(e.target.files || [])];
+    e.target.value = '';
+    if (!picked.length) return;
+    setBusy(true); setError(null);
+    try { for (const f of picked) await templateAttachments.upload(templateId, f); await load(); }
+    catch (err) { setError(err.message); }
+    finally { setBusy(false); }
+  }
+
+  async function drop(id) {
+    setBusy(true); setError(null);
+    try { await templateAttachments.remove(id); await load(); }
+    catch (err) { setError(err.message); }
+    finally { setBusy(false); }
+  }
+
+  const total = (files || []).reduce((n, f) => n + (Number(f.size) || 0), 0);
+
+  return (
+    <div className="admin-tpl-files">
+      <div className="admin-tpl-files-head">
+        <span>Attachments{files?.length ? ` (${files.length}, ${kb(total)})` : ''}</span>
+        <label className={`admin-btn admin-btn--ghost${busy ? ' admin-btn--busy' : ''}`}>
+          {busy ? 'Working…' : '+ Add file'}
+          <input type="file" multiple hidden onChange={onPick} disabled={busy} />
+        </label>
+      </div>
+      {error && <p className="admin-error">{error}</p>}
+      {files === null ? <p className="admin-note">Loading…</p>
+        : files.length === 0 ? <p className="admin-note">No attachments. This template sends the message alone.</p>
+        : (
+          <ul className="admin-tpl-file-list">
+            {files.map(f => (
+              <li key={f.id}>
+                <a href={f.url} target="_blank" rel="noreferrer">{f.name}</a>
+                <span className="admin-vocab-count">{kb(f.size)}</span>
+                <button className="admin-btn admin-btn--ghost" disabled={busy} onClick={() => drop(f.id)}>Remove</button>
+              </li>
+            ))}
+          </ul>
+        )}
+      {total > 18 * 1024 * 1024 && (
+        <p className="admin-error">
+          Over 18 MB — Gmail will reject the message. Remove something before sending.
+        </p>
+      )}
+    </div>
+  );
+}
 
 // PHASE: workshop e-mail. These four templates used to live inside a Tray
 // workflow, which meant nobody at High 5 could read or change them without
@@ -116,6 +191,9 @@ function WorkshopEmailTab() {
                     Nothing here yet — this template still only exists inside the old Tray workflow.
                   </div>
                 )}
+                {/* Attachments are managed whether or not the body is written —
+                    the files can go up before the wording is settled. */}
+                <TemplateAttachments templateId={v.id} />
               </div>
             );
           })}
