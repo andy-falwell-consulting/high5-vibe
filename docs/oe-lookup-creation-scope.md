@@ -1,6 +1,6 @@
 # OE Lookups — creation scope
 
-**Status:** scoped, not built. Measured against FileMaker Production
+**Status:** scoped, not built. **Unblocked 2026-08-19** — see §1. Measured against FileMaker Production
 (`High5_Core4`) on 2026-08-19.
 
 Creating an OE Lookup is one of the two remaining prerequisites for the Phase D
@@ -48,25 +48,38 @@ There are four real problems, and none of them is the form.
 
 ---
 
-### 1. There is no primary key — a decision is required
+### 1. ~~There is no primary key~~ — **RESOLVED 2026-08-19**
 
-`OELookup_New` exposes **no `_kpt__` field at all**, and `VIBE_PK` has no entry
-for it. `createVibeRecord` would throw `no primary key known for OELookup_New`.
-Every other Vibe-owned layout keys on a business id that survives FileMaker's
-retirement. This one has nothing to key on but FileMaker's own recordId, which
-is exactly the internal that dies at cutover.
+Andy added **`_kpt__WorkshopLookup_ID`** to `OELookup_New`. Verified against
+Production the same day:
 
-Two ways out:
+| Check | Result |
+|---|---|
+| Field on the layout | yes — 17 fields now, was 16 |
+| Rows carrying it | **1,247 of 1,247** |
+| Unique | **1,247 unique, 0 blank, 0 duplicates** |
+| Range | 1 – 1275 |
 
-- **(a) Ask Ian to add `_kpt__OELookup_ID`** to the table and layout, then
-  backfill it. Consistent with all seven other layouts, keeps the replica join
-  clean, and makes Vibe-born `V-` ids reconcilable. **Recommended.** Note this
-  needs a `full=1` re-sync afterwards — incremental sync keys on
-  `zz__Modified_On` and a schema change does not touch it (the same trap that
-  hid `_kft__Contact_ID` on Estimates for a day).
-- **(b) Vibe mints `V-` ids; FileMaker-born rows keep keying on recordId.**
-  No FileMaker work, but it leaves one layout keyed differently from every
-  other, and the join gets fragile precisely when FileMaker is being retired.
+Fully backfilled and clean — a better starting position than `Program Code`,
+which has 6 duplicates and a row coded `"AB-"`.
+
+Note 1,247 rows across a 1–1275 range: **28 ids have been used and deleted.**
+The next id is 1276, not 1248. This does not affect Vibe, which mints `V-`
+prefixed ids from its own counter, but it does mean nothing should derive a
+next id by counting rows.
+
+**Two consequences to action:**
+
+- Add `'OELookup_New': '_kpt__WorkshopLookup_ID'` to `VIBE_PK` in
+  `api/_vibeStore.js`. Without it `createVibeRecord` throws
+  `no primary key known for OELookup_New`.
+- **The replica needed a full re-page, and this was not optional.** Incremental
+  sync keys on each record's `zz__Modified_On`, which a schema change does not
+  touch, so the new field never arrived on its own. Measured directly: the
+  replica still held 16 fields and no key while Production held 17. Fixed by
+  `/api/sync?db=High5_Core4&layout=oelookup&full=1`; re-verified at 17 fields
+  with the key populated on all 1,247 rows. **Any future field added to a
+  replicated layout needs the same step.**
 
 ### 2. `Program Code` has to be generated, and it is the SKU problem again
 
@@ -139,12 +152,11 @@ investigation should be recorded now because they shape it:
 
 ## Proposed order
 
-1. Decide the key (§1). If (a), Ian adds the field — everything else can proceed
-   meanwhile.
+1. ~~Decide the key~~ — **done** (§1). Register it in `VIBE_PK`.
 2. Give the layout edit ownership (§4) — the missing A3 step.
 3. Canonicalise `Open Enrollment or Custom` and normalise existing rows (§3).
 4. Program Code counter, seeded per prefix from the current max (§2).
-5. The create form itself — 16 flat fields, the smallest part of the work.
+5. The create form itself — 17 flat fields, the smallest part of the work.
 
-Steps 2–5 are one focused session. Step 1 is the only one that can block, and
-only under option (a).
+**Nothing blocks any more.** The one item that could stall this was the key, and
+it is resolved and verified. Steps 1–5 are a single focused session.
