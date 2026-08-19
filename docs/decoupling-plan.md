@@ -55,7 +55,7 @@ more instructive one.
 | **B5** search + agent | **done** — both repointed at Vibe's contact model |
 | **C1** derived fields | **audited; resolver and both write paths shipped**; existing records not backfilled |
 | **C2/C3/C4** | untouched — C4 is the largest unknown |
-| **D** cutover | untouched |
+| **D** cutover | untouched — **step 0 is a create/edit/delete path audit**, see Phase D |
 
 ---
 
@@ -462,12 +462,79 @@ and releases it).
 
 ## Phase D — Cutover
 
+0. **Audit every create / edit / delete path.** See below. **This is a
+   prerequisite, not a formality** — do it before step 1.
 1. **Final refresh** from FileMaker. The channel works right up to this moment.
 2. **Freeze FileMaker** to read-only for people. Divergence ends here; until
    then anyone editing in FMP Pro creates it, which is already true for CCS and
    Inspections.
 3. **Promote `repl:` into `vibe:`** so reads stop merging. **This is the
    irreversible step and must be last** — it is what ends the refresh ability.
+
+### Step 0 — the deliberate path audit
+
+**Why this is a required step, in one real example.** On 2026-08-19, A4 deleted
+the legacy Contacts module. `QuickAddFromContact` was mounted *only* there, and
+nothing else mounted it — so that deletion silently removed **the only way to
+create a CCS project anywhere in the app**. It shipped to production in v1.0.426
+and was found by accident hours later, while looking for somewhere to put an
+unrelated form. It was fixed in v1.0.432.
+
+Nothing failed. Nothing logged an error. The app loaded, every module rendered,
+every record opened, and reminders resolved — the checks actually performed.
+A whole verb had simply gone missing from one record type, and only a check that
+*asked the question directly* could have caught it.
+
+**Why it matters more at cutover than it did that day.** FMP Pro was still the
+escape hatch: someone could create the project by hand and the app would show
+it. Step 2 removes that hatch permanently. Any gap still open when FileMaker
+freezes becomes a record type nobody can create, edit or delete **at all**, with
+no workaround and no error message pointing at it.
+
+**What the audit is.** For every replicated layout, confirm each verb is
+reachable *from the running UI* — not that the API exists, not that the layout
+is in `VIBE_OWNED`, but that a person can get to it:
+
+| | Create | Edit | Delete |
+|---|---|---|---|
+| `RCD_New` (CCS) | ? | ? | ? |
+| `Inspections_New` | ? | ? | ? |
+| `trainings_New` | ? | ? | ? |
+| `Contacts_New` | ? | ? | ? |
+| `Estimates_New` | ? | ? | ? |
+| `Products & Services_New` | ? | ? | ? |
+| `OELookup_New` | ? | ? | ? |
+| `RMI_New` | ? | ? | ? |
+
+Fill it in by *using the app*, not by reading the code — the CCS gap was
+invisible in the code, because every layer below the missing mount was intact
+and correct.
+
+Two things make a gap easy to miss, both seen in practice:
+
+- **A shared component with a single mount.** `QuickAddFromContact` serves four
+  record types from one place; deleting that place took out a verb for a type
+  whose own module was never touched.
+- **A capability granted but never surfaced.** `OELookup_New` sat in
+  `VIBE_DELETES` for a day with no UI able to reach it, and `trainings_New` was
+  in `VIBE_OWNED` and `VIBE_PK` for weeks before anything could create one. The
+  registry says a verb is *permitted*, never that it is *available*.
+
+Extend the same check to the child collections (estimate lines, BOM, inspection
+lines, contact phones/emails/addresses) and to attachments, which have their own
+create and delete paths.
+
+**A starting point, not a substitute.** A code-level sweep on 2026-08-19 found
+create UI in `Inspections`, `Estimates`, `RMI`, `Products` and `OELookup`
+(module-level buttons), and in `QuickAddFromContact` (CCS, Inspections,
+Estimates, Trainings — one mount, on Contacts v2). `CCSv2.jsx` and
+`Trainings.jsx` have no create surface of their own and depend entirely on that
+shared mount. Deletion runs through one shared `DeleteRecordButton` across every
+module, which is why A2 moved it in a single change — and which also means one
+regression there would take out deletion everywhere at once.
+
+That sweep is where to *start*, not what to trust. It is the same kind of
+reading that showed nothing wrong on the day CCS creation disappeared.
 
 ---
 
