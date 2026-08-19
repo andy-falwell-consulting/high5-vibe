@@ -260,9 +260,13 @@ function buildMime({ from, to, replyTo, subject, body, attachments }) {
  *
  *  Reads the mailbox's own profile, which is the cheapest call that requires the
  *  impersonation to have actually worked. */
-export async function checkDelegation() {
-  const from = senderUser();          // the mailbox being impersonated
-  const showsAs = senderAddress();    // what recipients would see
+export async function checkDelegation({ as } = {}) {
+  // `as` probes an arbitrary mailbox rather than the configured one. Delegation
+  // is domain-wide, so whether a given address can be impersonated is purely a
+  // question of whether it is a real USER — which is exactly the question worth
+  // answering before pointing the app at it.
+  const from = as || senderUser();    // the mailbox being impersonated
+  const showsAs = as ? as : senderAddress();
   const account = process.env.GDRIVE_SA_EMAIL || null;
 
   // Does delegation work for this SUBJECT at all, on a scope already known to

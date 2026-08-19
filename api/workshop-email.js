@@ -47,7 +47,7 @@ export default async function handler(req, res) {
     // ── Is the Workspace grant in place? Sends nothing. ────────────────────
     if (req.query?.check === '1') {
       if (!(await isAdminEmail(session.email))) return res.status(403).json({ error: 'admin only' });
-      return res.status(200).json(await checkDelegation());
+      return res.status(200).json(await checkDelegation({ as: String(req.query?.as || '').trim() || undefined }));
     }
 
     // ── Templates ──────────────────────────────────────────────────────────
