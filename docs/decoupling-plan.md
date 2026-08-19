@@ -50,7 +50,7 @@ more instructive one.
 | **A4** delete the write token | **one thing away** — only the legacy Contacts module still writes |
 | **B1** estimate line items | **done** — migrated, wired, FileMaker module deleted |
 | **B2** bill of materials | **done** (2026-08-19) — tail migrated, 10 runaway parents left behind. See b2-bom-scope.md |
-| **B3** OE training | **scoped; blocked on a FileMaker layout** — and it gates A4 |
+| **B3** OE training | **done** (2026-08-19) — 5,142 workshops across 2,689 contacts |
 | **B4** retire legacy Contacts | untouched, but now decided |
 | **B5** search + agent | **done** — both repointed at Vibe's contact model |
 | **C1** derived fields | **audited; resolver and both write paths shipped**; existing records not backfilled |
@@ -84,11 +84,11 @@ Child collections:
 | Estimate line items (`estmt_ESTLI`) | 10,858 | **Vibe** (2026-08-19) |
 | Bill of materials (`item_ITMLI`) | 10,116 migrated *(of 125,047)* | **Vibe** (2026-08-19) |
 | Contact relationships (`cntct_RLTN`) | 23,302 | FileMaker (superseded by Vibe affiliations) |
-| OE training (`cntct_WKSRG`) | — | FileMaker, no module |
-| Certifications (`cntct_CTFC`) | — | FileMaker, no module |
+| OE training (`Workshops_New`) | 5,142 | **Vibe** (2026-08-19) |
+| Certifications (`CTFC`) | 3 | FileMaker — out of scope (Andy, 2026-08-19) |
 
 Roughly: **6 of 8 layouts own their edits, 6 of 8 own creation, 8 of 8 own
-deletion; 5 of 8 child collections have moved.**
+deletion; 6 of 8 child collections have moved.**
 
 Deletion is the only column that is finished, and it finished in one change
 because every module deletes through one shared control.

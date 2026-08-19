@@ -1,8 +1,15 @@
 # B3 — OE training
 
-**Scoped 2026-08-19** against production. **Blocked on one FileMaker layout**,
-specified at the end. Certifications are deliberately out of scope (Andy,
-2026-08-19).
+**Scoped and DONE 2026-08-19** against production. Certifications are
+deliberately out of scope (Andy).
+
+**The layout was `Workshops_New`** — it existed all along under a name none of
+the nine probes guessed. 5,217 rows, carrying `_kpt__Workshop_ID`,
+`_kft__Contact_ID` and the course fields.
+
+**Outcome:** 5,142 workshops across 2,689 contacts in Vibe (75 rows had no
+contact and were left). The OE Training tab reads one Vibe request instead of
+two live FileMaker round trips.
 
 ---
 
@@ -55,15 +62,27 @@ Worth ruling out explicitly, because the names invite the assumption.
 link of any kind**. It is a catalogue of programmes, not a record of who
 attended what. It cannot host per-contact training history.
 
-## The blocker
+## The layout — and how badly the sample underestimated this
 
-There is **no layout on the WKSRG table** that the Data API can read. Probed and
-absent: `WKSRG`, `cntct_WKSRG`, `OE_Training`, `OE Training`, `Workshop_Registration`,
-`Registrations`, `wksrg_vibe`, `WKSRG_vibe`, `Script_Use__WKSRG`.
+`Workshops_New`. Nine guessed names all missed it (`WKSRG`, `cntct_WKSRG`,
+`OE_Training`, `Workshop_Registration`, …), and `Script_Use__Orders` exists but
+exposes zero fields — a reminder that probing for a layout by plausible name is
+a poor substitute for asking someone who knows the file.
 
-`Script_Use__Orders` does exist and reports 17 rows, but exposes **zero fields** —
-the same state the contact-method tables were in before fields were added to
-them, where the API could count rows and read none of them.
+**And it is not a training log.** It carries tuition, food and lodging fees,
+deposits, balance due, QuickBooks invoice AND estimate ids, a Shopify order id,
+release forms and confirmation-email dates. The portal on the Contacts page
+selected five fields, so none of that was ever visible in the app.
+
+The 60-contact sample also under-read the volume badly: it suggested ~780
+contacts and ~2,600 rows. The truth is **2,689 contacts and 5,142 workshops** —
+about 3.5x on contacts. Small samples estimate a RATE poorly when the thing
+being measured is this lumpy.
+
+**Paging cost:** ~15s per 1,000 rows, because the layout carries related contact
+fields and `Address_Block_Billing` that FileMaker resolves per row. Fine over 6
+pages; it is the same shape that made the BOM table unpageable at 126. The
+migration pages at 500 to stay comfortably inside the function ceiling.
 
 ## What is needed
 
