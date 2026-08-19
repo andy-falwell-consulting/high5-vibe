@@ -88,7 +88,7 @@ export function applyOverlay(records, overlay, isLastPage) {
 // Layouts whose EDITS are Vibe's rather than FileMaker's. Deliberately a short
 // explicit list rather than "everything replicated": each layout moves in its
 // own phase, and a layout not named here still writes to FileMaker.
-export const VIBE_OWNED = new Set(['RCD_New', 'Inspections_New', 'trainings_New', 'RMI_New', 'Products & Services_New', 'Estimates_New']);
+export const VIBE_OWNED = new Set(['RCD_New', 'Inspections_New', 'trainings_New', 'RMI_New', 'Products & Services_New', 'Estimates_New', 'OELookup_New']);
 
 // Layouts whose DELETION is Vibe's — PHASE A2.
 //
@@ -96,8 +96,13 @@ export const VIBE_OWNED = new Set(['RCD_New', 'Inspections_New', 'trainings_New'
 // more layouts. Edits moved one layout at a time (A3) because each needed its
 // own module changed; deletion moved in a single change because every module
 // deletes through one shared component. Folding the two together would silently
-// grant edit ownership to OELookup_New and Contacts_New, which was never
-// decided — the plan tracks them as separate columns for exactly this reason.
+// grant edit ownership to Contacts_New, which was never decided — the plan
+// tracks them as separate columns for exactly this reason.
+//
+// OELookup_New used to be named here too. It joined VIBE_OWNED on 2026-08-19,
+// deliberately and as part of building creation for it: shipping a create path
+// without edit ownership would let someone create a record in Vibe and then be
+// unable to correct a typo in it.
 export const VIBE_DELETES = new Set([
   'RCD_New', 'Inspections_New', 'trainings_New', 'RMI_New',
   'Products & Services_New', 'Estimates_New', 'Contacts_New', 'OELookup_New',
@@ -113,6 +118,11 @@ export const VIBE_PK = {
   'Estimates_New': '_kpt__Estimate_ID',
   'trainings_New': '_kpt__TrainingProposal_ID',
   'Products & Services_New': '_kpt__Item_ID',
+  // Added to the FileMaker layout by Andy on 2026-08-19 specifically to make
+  // this possible — before that the layout had no key of any kind and
+  // createFragment could only throw. Backfilled and clean on arrival: 1,247 of
+  // 1,247 rows, all unique, no blanks.
+  'OELookup_New': '_kpt__WorkshopLookup_ID',
 };
 
 // Ids for records born in Vibe: `V-100001`, from a per-layout counter.
