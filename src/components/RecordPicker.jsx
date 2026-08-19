@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { readCacheAsync } from '../api/filemaker'
-import { RECORD_SOURCES } from '../config/recordSources'
+import { RECORD_SOURCES, buildRecordFilter } from '../config/recordSources'
 import './RecordPicker.css'
 
 const PER_SOURCE = 20
@@ -17,8 +17,13 @@ export default function RecordPicker({ onSelect, onClose, title = 'Attach a reco
 
   useEffect(() => {
     let alive = true
-    Promise.all(RECORD_SOURCES.map(s => readCacheAsync(s.layout, s.cv).then(r => r?.records || []).catch(() => [])))
-      .then(arr => { if (alive) setDatasets(Object.fromEntries(RECORD_SOURCES.map((s, i) => [s.module, arr[i]]))) })
+    // Keyed by source object, and honouring each source's own loader — see the
+    // same block in CommandPalette.jsx for why.
+    Promise.all(RECORD_SOURCES.map(s => (s.load
+      ? s.load()
+      : readCacheAsync(s.layout, s.cv).then(r => r?.records || [])
+    ).catch(() => [])))
+      .then(arr => { if (alive) setDatasets(new Map(RECORD_SOURCES.map((s, i) => [s, arr[i]]))) })
     return () => { alive = false }
   }, [])
 
@@ -33,10 +38,12 @@ export default function RecordPicker({ onSelect, onClose, title = 'Attach a reco
     if (!datasets) return []
     const term = q.trim().toLowerCase()
     const out = []
+    const keep = buildRecordFilter(src => datasets.get(src))
     for (const s of RECORD_SOURCES) {
-      const data = datasets[s.module] || []
+      const data = datasets.get(s) || []
       let n = 0
       for (const r of data) {
+        if (!keep(s, r)) continue
         const t = clean(s.title(r.fieldData))
         const sub = clean(s.sub(r.fieldData))
         if (!term || t.toLowerCase().includes(term) || sub.toLowerCase().includes(term)) {

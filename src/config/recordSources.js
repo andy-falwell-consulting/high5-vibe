@@ -1,4 +1,5 @@
 import { RCD_CACHE_VERSION } from './ccsCache'
+import { listPeople, listOrganizations } from '../api/vibeContacts'
 
 // Cross-module record sources — read from the already-prewarmed caches.
 // Shared by CommandPalette (⌘K search) and RecordPicker (reminder linking),
@@ -9,8 +10,47 @@ import { RCD_CACHE_VERSION } from './ccsCache'
 // type silently vanishes from search with no error — Products sat on a stale
 // cv: 4 against an actual 5 and never appeared in ⌘K at all. When you bump a
 // module's CACHE_VERSION, bump it here too.
+// A source normally reads a prewarmed FileMaker cache, named by `layout` + `cv`.
+// A source with its own `load()` reads from somewhere else instead — that is how
+// Vibe's contact model gets into search, since it has no FileMaker cache to read
+// (PHASE B5).
+//
+// `load()` returns records already in `{ recordId, fieldData }` shape so
+// everything downstream — CommandPalette, RecordPicker — stays identical.
 export const RECORD_SOURCES = [
+  // Contacts, from VIBE's own model.
+  //
+  // Measured 2026-08-18: searching for a person or organization that exists only
+  // in Vibe found NOTHING, while a FileMaker contact was found — so every
+  // contact created in Contacts v2 since it shipped (2026-08-06) has been
+  // invisible to ⌘K, and creating one today produced a contact nobody could
+  // find. The old entry read the `Contacts_New` FileMaker replica, which of
+  // course has no row for them.
+  //
+  // These come FIRST so their results outrank the legacy source below.
+  { module: 'contacts-v2', kind: 'organization', type: 'Contact', icon: '◎', color: '#8b5cf6',
+    load: () => listOrganizations().then(rows => rows.map(o => ({
+      recordId: o.id,
+      fieldData: { name: o.name, sub: [o.type, ...(o.phones || []), ...(o.emails || [])].filter(Boolean).join(' · ') },
+    }))),
+    title: f => f.name, sub: f => f.sub },
+  { module: 'contacts-v2', kind: 'person', type: 'Contact', icon: '◉', color: '#8b5cf6',
+    load: () => listPeople().then(rows => rows.map(p => ({
+      recordId: p.id,
+      fieldData: { name: p.name, sub: [p.title, ...(p.phones || []), ...(p.emails || [])].filter(Boolean).join(' · ') },
+    }))),
+    title: f => f.name, sub: f => f.sub },
+
+  // The legacy FileMaker contacts, kept as a FALLBACK rather than deleted.
+  //
+  // Both stores are populated in production and cover the same people, so a
+  // contact held in BOTH is dropped from this one per record — see
+  // buildRecordFilter, which dedupes on the shared `_kpt__Contact_ID` rather
+  // than suppressing the whole source. That keeps contacts searchable wherever
+  // Vibe's model is only partly populated, which is Dev by decision. It goes
+  // away with the legacy module in B4.
   { module: 'contacts', layout: 'Contacts_New', cv: 2, type: 'Contact', icon: '◉', color: '#8b5cf6',
+    legacyContactsFallback: true,
     title: f => f.zz__Display__ct, sub: f => f['cntct_ADDR::zz__Display_Single_Line_No_Zip__ct'] || f.Type || '' },
   { module: 'inspections', layout: 'Inspections_New', cv: 1, type: 'Inspection', icon: '⚑', color: '#3b82f6',
     title: f => f.Organization || f['inspt_CNTCT__site::Name_Organization'],
@@ -31,7 +71,42 @@ export const RECORD_SOURCES = [
     title: f => f['Program Type'], sub: f => f['Program Code'] || '' },
 ]
 
-const BY_MODULE = Object.fromEntries(RECORD_SOURCES.map(s => [s.module, s]))
+// FIRST entry wins per module, not last. Two sources share the `contacts-v2`
+// module (organizations and people are searched separately but open the same
+// page), and Object.fromEntries would otherwise silently keep whichever happened
+// to be listed second. Both carry the same type and colour, so a reminder's pill
+// reads the same either way — but relying on list order for that would be a trap
+// waiting for someone to reorder the array.
+const BY_MODULE = {}
+for (const s of RECORD_SOURCES) if (!(s.module in BY_MODULE)) BY_MODULE[s.module] = s
+
+// Drop a legacy FileMaker contact when Vibe already holds the same one.
+//
+// Both stores are populated in production and cover the same people, so showing
+// both would list most contacts twice. The first attempt at this dropped the
+// legacy source entirely whenever Vibe returned ANYTHING — which is wrong, and
+// testing caught it: four seeded contacts in Dev suppressed all 15,450 real
+// ones. "Vibe has some contacts" is not "Vibe has all contacts".
+//
+// So it dedupes per RECORD instead, which is exact because the two stores share
+// an id: a Vibe organization or person is keyed by the same
+// `_kpt__Contact_ID` FileMaker uses. That behaves correctly everywhere —
+// production suppresses the legacy copy of everyone, a partly-populated Dev
+// suppresses only the few it has, and a contact born in Vibe (a `V-` id) has no
+// legacy counterpart to collide with.
+//
+// The whole thing goes away with the legacy module in B4.
+export function buildRecordFilter(datasetFor) {
+  const vibeIds = new Set()
+  for (const s of RECORD_SOURCES) {
+    if (s.module !== 'contacts-v2') continue
+    for (const r of (datasetFor(s) || [])) vibeIds.add(String(r.recordId))
+  }
+  return (source, record) => !(
+    source.legacyContactsFallback &&
+    vibeIds.has(String(record?.fieldData?._kpt__Contact_ID ?? ''))
+  )
+}
 
 // Best-effort type/color lookup for a stored recordType — used to render a
 // colored pill for a reminder's linked record without re-fetching the source.

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { readCacheAsync } from '../api/filemaker'
-import { RECORD_SOURCES as SOURCES } from '../config/recordSources'
+import { RECORD_SOURCES as SOURCES, buildRecordFilter } from '../config/recordSources'
 
 const PER_SOURCE = 6
 const clean = v => (v || '').replace(/[\r\n]+/g, ' ').trim()
@@ -15,8 +15,18 @@ export default function CommandPalette({ open, onClose, onPick, onAsk, modules, 
   useEffect(() => {
     if (!open || datasets) return
     let alive = true
-    Promise.all(SOURCES.map(s => readCacheAsync(s.layout, s.cv).then(r => r?.records || []).catch(() => [])))
-      .then(arr => { if (alive) setDatasets(Object.fromEntries(SOURCES.map((s, i) => [s.module, arr[i]]))) })
+    // Keyed by the SOURCE OBJECT, not by module: organizations and people are
+    // two sources that both open the contacts-v2 module, and keying by module
+    // would silently collapse them into one.
+    //
+    // A source with its own `load()` fetches from Vibe rather than a prewarmed
+    // FileMaker cache; either way a failure yields an empty list, so one
+    // unreachable source cannot take the whole palette down with it.
+    Promise.all(SOURCES.map(s => (s.load
+      ? s.load()
+      : readCacheAsync(s.layout, s.cv).then(r => r?.records || [])
+    ).catch(() => [])))
+      .then(arr => { if (alive) setDatasets(new Map(SOURCES.map((s, i) => [s, arr[i]]))) })
     return () => { alive = false }
   }, [open, datasets])
 
@@ -33,10 +43,12 @@ export default function CommandPalette({ open, onClose, onPick, onAsk, modules, 
 
     if (q && datasets) {
       const records = []
-      for (const s of SOURCES) {
-        const data = datasets[s.module] || []
+      const keep = buildRecordFilter(src => datasets.get(src))
+    for (const s of SOURCES) {
+        const data = datasets.get(s) || []
         let n = 0
         for (const r of data) {
+          if (!keep(s, r)) continue
           const t = clean(s.title(r.fieldData))
           const sub = clean(s.sub(r.fieldData))
           if (t.toLowerCase().includes(q) || sub.toLowerCase().includes(q)) {
