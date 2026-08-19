@@ -430,6 +430,15 @@ This is the one capability to preserve, and it is mostly already right.
 
 **Settled 2026-08-19**
 
+- **Only FileMaker Production is referenced from here on.** It is the current
+  but soon-to-be-retired source of truth, and keeping three environments
+  coherent costs more than it returns. Dev and Staging had already diverged —
+  Dev never got the Contacts v2 `_vibe` layouts, and its `BOM` layout lacks
+  `_kft__Item_ID__assemblyLine` which production has. Consequence worth stating:
+  there is no longer a safe environment to rehearse a WRITE in, so production
+  writes are verified on records created and then removed, or on obviously-test
+  records — never by exercising a button that pushes to QuickBooks or Shopify.
+
 - **QuickBooks and Shopify have ONE environment, shared by every FileMaker
   database.** So `CreateInQBO` hardcoding `env="production"` and Shopify's single
   `SHOPIFY_STORE` are correct, not gaps — a push from a Dev record reaching the
