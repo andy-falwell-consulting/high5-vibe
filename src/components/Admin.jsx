@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import ShopifyConnect from './ShopifyConnect';
+import { getVibeValueLists, seedValueLists, setValueList, compareValueLists } from '../api/valueLists';
 import QboConnect from './QboConnect';
 import './Admin.css';
 
@@ -8,7 +9,153 @@ const TABS = [
   { id: 'preview', label: 'Preview access' },
   { id: 'fmp', label: 'FMP' },
   { id: 'backup', label: 'Backup' },
+  { id: 'vocab', label: 'Vocabularies' },
 ];
+
+// The layouts whose value lists drive dropdowns in the app. Adding one here is
+// all it takes to bring its lists under Vibe — the store is keyed by layout
+// name and nothing else needs to know.
+const VOCAB_LAYOUTS = [
+  { layout: 'RCD_New', label: 'CCS projects' },
+  { layout: 'trainings_New', label: 'Trainings' },
+  { layout: 'Estimates_New', label: 'Estimates' },
+  { layout: 'Inspections_New', label: 'Inspections' },
+  { layout: 'RMI_New', label: 'Risk management' },
+  { layout: 'Products & Services_New', label: 'Products & services' },
+];
+
+// PHASE C3. These vocabularies come from FileMaker today and have to outlive
+// it: after cutover there is no FileMaker copy to re-seed from, and no other
+// way to add a builder, a trainer or a program type without a code deploy.
+function VocabTab() {
+  const [layout, setLayout] = useState(VOCAB_LAYOUTS[0].layout);
+  const [state, setState] = useState(null);     // { lists, source }
+  const [cmp, setCmp] = useState(null);
+  const [busy, setBusy] = useState(null);       // 'load' | 'seed' | 'compare' | list name
+  const [error, setError] = useState(null);
+  const [editing, setEditing] = useState(null); // { name, text }
+
+  const load = useCallback(async () => {
+    setBusy('load'); setError(null);
+    try { setState(await getVibeValueLists(layout)); }
+    catch (e) { setError(e.message); }
+    finally { setBusy(null); }
+  }, [layout]);
+
+  // Fetch FIRST, then set state — a setState in the synchronous part of an
+  // effect body triggers a cascading render. `load` above is for the buttons,
+  // which are event handlers and so have no such constraint.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const data = await getVibeValueLists(layout);
+        if (alive) { setState(data); setCmp(null); setError(null); }
+      } catch (e) { if (alive) setError(e.message); }
+    })();
+    return () => { alive = false; };
+  }, [layout]);
+
+  async function run(label, fn) {
+    setBusy(label); setError(null);
+    try { await fn(); await load(); }
+    catch (e) { setError(e.message); setBusy(null); }
+  }
+
+  const lists = state?.lists || {};
+  const names = Object.keys(lists).sort();
+  const source = state?.source;
+
+  return (
+    <section className="admin-section">
+      <h2 className="admin-section-title">Vocabularies</h2>
+      <p className="admin-note">
+        The dropdown options across the app. They come from FileMaker&apos;s value lists
+        today; seeding copies them into Vibe, after which Vibe is the source and they
+        keep working once FileMaker is retired.
+      </p>
+
+      <div className="admin-vocab-bar">
+        <select value={layout} onChange={e => setLayout(e.target.value)} disabled={!!busy}>
+          {VOCAB_LAYOUTS.map(l => <option key={l.layout} value={l.layout}>{l.label}</option>)}
+        </select>
+        <button className="admin-btn" disabled={!!busy}
+          onClick={() => run('seed', () => seedValueLists(layout))}>
+          {busy === 'seed' ? 'Seeding…' : 'Seed from FileMaker'}
+        </button>
+        <button className="admin-btn" disabled={!!busy}
+          onClick={() => run('compare', async () => setCmp(await compareValueLists(layout)))}>
+          {busy === 'compare' ? 'Comparing…' : 'Compare with FileMaker'}
+        </button>
+        {source && (
+          <span className={`admin-vocab-src admin-vocab-src--${source}`}>
+            {source === 'vibe' ? 'Held by Vibe'
+              : source === 'filemaker' ? 'Still reading FileMaker — not seeded'
+              : 'Unavailable'}
+          </span>
+        )}
+      </div>
+
+      {error && <p className="admin-error">{error}</p>}
+
+      {cmp && (
+        <div className="admin-vocab-diff">
+          <strong>Differences vs FileMaker ({cmp.diff.length})</strong>
+          {cmp.diff.length === 0 ? <p>Identical.</p> : (
+            <ul>
+              {cmp.diff.map(d => (
+                <li key={d.name}>
+                  <code>{d.name}</code> — Vibe {d.inVibe}, FileMaker {d.inFileMaker}
+                  {d.onlyInFileMaker.length > 0 && <div className="admin-vocab-only">only in FileMaker: {d.onlyInFileMaker.join(', ')}</div>}
+                  {d.onlyInVibe.length > 0 && <div className="admin-vocab-only">only in Vibe: {d.onlyInVibe.join(', ')}</div>}
+                </li>
+              ))}
+            </ul>
+          )}
+          {cmp.skipped?.length > 0 && (
+            <p className="admin-vocab-only">
+              Skipped as too long to be a vocabulary: {cmp.skipped.map(s => `${s.name} (${s.count})`).join(', ')}
+            </p>
+          )}
+        </div>
+      )}
+
+      {busy === 'load' && !names.length ? <p>Loading…</p> : !names.length ? (
+        <p className="admin-note">Nothing held for this layout yet. Seed it from FileMaker to start.</p>
+      ) : (
+        <div className="admin-vocab-lists">
+          {names.map(name => (
+            <div key={name} className="admin-vocab-list">
+              <div className="admin-vocab-head">
+                <code>{name}</code>
+                <span className="admin-vocab-count">{lists[name].length}</span>
+                {editing?.name === name ? (
+                  <>
+                    <button className="admin-btn" disabled={busy === name}
+                      onClick={() => run(name, async () => {
+                        await setValueList(layout, name, editing.text.split('\n'));
+                        setEditing(null);
+                      })}>{busy === name ? 'Saving…' : 'Save'}</button>
+                    <button className="admin-btn admin-btn--ghost" onClick={() => setEditing(null)}>Cancel</button>
+                  </>
+                ) : (
+                  <button className="admin-btn admin-btn--ghost"
+                    onClick={() => setEditing({ name, text: lists[name].join('\n') })}>Edit</button>
+                )}
+              </div>
+              {editing?.name === name ? (
+                <textarea className="admin-vocab-edit" rows={Math.min(20, lists[name].length + 2)}
+                  value={editing.text} onChange={e => setEditing({ name, text: e.target.value })} />
+              ) : (
+                <div className="admin-vocab-values">{lists[name].join(' · ')}</div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
 
 function IntegrationsTab() {
   return (
@@ -593,6 +740,7 @@ export default function Admin() {
       {tab === 'preview' && <PreviewAccessTab />}
       {tab === 'fmp' && <FmpTab />}
       {tab === 'backup' && <><SaTestSection /><BackupTab /><RestoreSection /></>}
+      {tab === 'vocab' && <VocabTab />}
     </main>
   );
 }
