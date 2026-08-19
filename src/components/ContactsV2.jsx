@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -18,6 +18,7 @@ import {
 } from '../api/vibeContacts';
 import { getCurrentEnv } from '../config/fmpEnvironments';
 import ReminderModal from './ReminderModal';
+import QuickAddFromContact from './QuickAddFromContact';
 import './ContactsV2.css';
 
 // Contacts, on Vibe's own model — organizations, people and affiliations as
@@ -1112,6 +1113,26 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
     onRecordSelect?.(null);
   }
 
+  // QuickAddFromContact speaks FileMaker's record shape, so hand it one built
+  // from Vibe's contact model. Only `_kpt__Contact_ID` and a display name are
+  // load-bearing; the component's copy-a-previous-inspection list falls back to
+  // a direct FK query when there is no portalData, which is exactly this case.
+  //
+  // REGRESSION FIX, not a new feature. This component was mounted on the legacy
+  // Contacts module, which A4 deleted today (v1.0.424) — and with it went the
+  // ONLY way to create a CCS project anywhere in the app. Inspections, Estimates
+  // and RMI each have their own create button and were unaffected; CCS did not
+  // and was. Trainings never had a path at all, which is what this change set
+  // out to add.
+  const quickAddContact = useMemo(() => {
+    const id = selected?.kind === 'organization' ? selected.organization?.id : selected?.person?.id;
+    if (!id) return null;
+    const name = selected?.kind === 'organization'
+      ? (selected.organization?.name || '')
+      : (selected.person?.name || '');
+    return { recordId: String(id), fieldData: { _kpt__Contact_ID: String(id), zz__Display__ct: name, Name_Organization: name } };
+  }, [selected]);
+
   const person = selected?.kind === 'person' ? selected.person : null;
   const org = selected?.kind === 'organization' ? selected.organization : null;
 
@@ -1205,6 +1226,7 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
                   <span className="c2-id">{person.id}</span>
                   <button className="c2-mini c2-mini--flush" onClick={() => setEditing(true)}>Edit</button>
                   <button className="c2-mini c2-mini--flush" onClick={() => setRemindOpen(true)}>⏰ Remind</button>
+                  {quickAddContact && <QuickAddFromContact contact={quickAddContact} onNavigateTo={onNavigateTo} />}
                   {!highRisk && (
                     <button className="c2-mini c2-mini--danger c2-mini--flush"
                       onClick={() => { setRiskError(null); setRiskAsk('asking'); }}>Mark high risk</button>
@@ -1316,6 +1338,7 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
                   <span className="c2-id">{org.id}</span>
                   <button className="c2-mini c2-mini--flush" onClick={() => setEditing(true)}>Edit</button>
                   <button className="c2-mini c2-mini--flush" onClick={() => setRemindOpen(true)}>⏰ Remind</button>
+                  {quickAddContact && <QuickAddFromContact contact={quickAddContact} onNavigateTo={onNavigateTo} />}
                   {!highRisk && (
                     <button className="c2-mini c2-mini--danger c2-mini--flush"
                       onClick={() => { setRiskError(null); setRiskAsk('asking'); }}>Mark high risk</button>
