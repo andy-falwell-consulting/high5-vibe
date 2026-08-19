@@ -7,14 +7,25 @@ import { copyLines } from '../api/inspectionLinesVibe';
 import { markCarriedLines } from '../api/naFlags';
 import { autoAssignOpsLead } from '../api/opsLead';
 import { getCurrentEnv } from '../config/fmpEnvironments';
+import { TRAININGS_LAYOUT, TRAININGS_CACHE_VERSION } from '../config/trainingsCache';
+import { PIPELINE_STAGES } from '../config/trainingStatus';
+import { useValueLists } from '../hooks/useValueLists';
 import { displayFieldsForContact } from '../api/contactDisplay';
 import './QuickAddFromContact.css';
 
-// Shared "+ New" button for a contact: create a CCS project, Inspection, or
-// Estimate pre-linked to that contact (_kft__Contact_ID), then jump straight
-// to the new record in its module. Drop it anywhere a contact is in hand:
+// Shared "+ New" button for a contact: create a CCS project, Inspection,
+// Estimate or Training pre-linked to that contact (_kft__Contact_ID), then jump
+// straight to the new record in its module. Drop it anywhere a contact is in
+// hand:
 //   <QuickAddFromContact contact={selected} onNavigateTo={onNavigateTo} />
 const PROJECT_TYPES = ['Inspection', 'New Construction', 'Renovation', 'Repair', 'Training', 'Other'];
+
+// Mirrored from trainings_New's own FileMaker value lists, and used ONLY as the
+// first-paint fallback — useValueLists reads the live ones, exactly as
+// Trainings.jsx and CCSv2.jsx already do. A stale copy here shows briefly and is
+// then replaced; an empty dropdown would not be.
+const PROGRAM_TYPES = ['Adventure Basics: Level 1 Training', 'Adventure Facilitaton Training', 'Beyond Basics: Level 2 Training', 'CATSEL - custom', 'Certification Exam - custom', 'CIT Training', 'Climbing Wall/Tower & Belay Skills Training', 'Corporate Program', 'Curriculum Writing', 'Consultation', 'Dialogue', 'EOL/SEL', 'EOL Sports', 'Game Bag Training', 'Gathering Again (Games & Lows)', 'Gathering Again 2 (High Elements)', 'High Elements and Belay Skills Training', 'Leadership Development', 'Low Elements Course Training', 'Low Traverse Wall Training', 'Managing an Adventure Program', 'Mastermind/Adventure Circuit', 'New Student Orientation ', 'Portable Adventure', 'Program Review', 'Team-building', 'Team Development', 'Technical Skills Refresher', 'Technical Skills Training', 'Technical Skills Verification', 'Therapeutic', 'Virtual Team-building', 'Virtual Team Development', 'Virtual Training', 'Keynote', 'Playnote', 'Other', 'NCD'];
+const AUDIENCES = ['Corporate', 'Adult', 'College', 'Youth Public', 'Youth Private', 'EOL'];
 const KANBAN_FIRST_STAGE = 'New Project Inquiry';
 
 const todayFm = () => { const d = new Date(); return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`; };
@@ -44,6 +55,25 @@ const TYPES = {
     label: 'Estimate', icon: '◧', layout: 'Estimates_New', cacheVersion: 1, module: 'estimates',
     build: v => ({ Date: v.date ? isoToFm(v.date) : todayFm(), ...(v.title ? { Title: v.title } : {}) }),
   },
+  // Trainings had no create path ANYWHERE in the app until now — the last
+  // record type in that position besides OE Lookups, and a prerequisite for
+  // Phase D, which freezes FileMaker and takes the FMP Pro route away.
+  //
+  // Nothing new was needed to make this work: trainings_New was already in
+  // VIBE_OWNED, VIBE_PK and the C1 display-field map. It is only the form that
+  // was missing.
+  training: {
+    label: 'Training', icon: '◆', layout: TRAININGS_LAYOUT, cacheVersion: TRAININGS_CACHE_VERSION, module: 'trainings',
+    build: v => ({
+      ...(v.programType ? { 'Type of Program': v.programType } : {}),
+      // Every training starts at the top of the pipeline. Leaving Status blank
+      // would drop it out of the Kanban board and every status chip at once.
+      Status: v.status || PIPELINE_STAGES[0],
+      ...(v.date ? { 'Start Date': isoToFm(v.date) } : {}),
+      ...(v.leadTrainer ? { 'Lead Trainer': v.leadTrainer } : {}),
+      ...(v.audience ? { Audience: v.audience } : {}),
+    }),
+  },
 };
 
 export default function QuickAddFromContact({ contact, onNavigateTo }) {
@@ -54,6 +84,9 @@ export default function QuickAddFromContact({ contact, onNavigateTo }) {
   const [error, setError] = useState(null);
   const [prevInspections, setPrevInspections] = useState(null); // null = loading
   const menuRef = useRef(null);
+  const trainingLists = useValueLists(TRAININGS_LAYOUT, {
+    'Type of Program': PROGRAM_TYPES, 'Audience/Rate': AUDIENCES, Trainers: [],
+  });
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -68,7 +101,10 @@ export default function QuickAddFromContact({ contact, onNavigateTo }) {
 
   const openForm = t => {
     setType(t);
-    setVals(t === 'ccs' ? { projectType: 'New Construction', addToBoard: true } : t === 'inspection' ? { mode: 'blank' } : {});
+    setVals(t === 'ccs' ? { projectType: 'New Construction', addToBoard: true }
+      : t === 'inspection' ? { mode: 'blank' }
+      : t === 'training' ? { status: PIPELINE_STAGES[0] }
+      : {});
     setError(null); setMenuOpen(false);
     if (t === 'inspection') {
       // The site's previous inspections = the contact's own Inspections portal
@@ -246,6 +282,39 @@ export default function QuickAddFromContact({ contact, onNavigateTo }) {
                 <>
                   <div className="qa-row"><label>Title</label><input type="text" value={vals.title || ''} placeholder="Optional" onChange={e => set('title', e.target.value)} /></div>
                   <div className="qa-row"><label>Date</label><input type="date" value={vals.date || ''} onChange={e => set('date', e.target.value)} /></div>
+                </>
+              )}
+              {type === 'training' && (
+                <>
+                  <div className="qa-row"><label>Program type</label>
+                    <select value={vals.programType || ''} onChange={e => set('programType', e.target.value)}>
+                      <option value="">— choose —</option>
+                      {(trainingLists['Type of Program'] ?? PROGRAM_TYPES).map(t => <option key={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div className="qa-row"><label>Status</label>
+                    <select value={vals.status || PIPELINE_STAGES[0]} onChange={e => set('status', e.target.value)}>
+                      {PIPELINE_STAGES.map(t => <option key={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div className="qa-row"><label>Start date</label><input type="date" value={vals.date || ''} onChange={e => set('date', e.target.value)} /></div>
+                  <div className="qa-row"><label>Lead trainer</label>
+                    <select value={vals.leadTrainer || ''} onChange={e => set('leadTrainer', e.target.value)}>
+                      <option value="">— unassigned —</option>
+                      {(trainingLists.Trainers ?? []).filter(Boolean).map(t => <option key={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div className="qa-row"><label>Audience</label>
+                    <select value={vals.audience || ''} onChange={e => set('audience', e.target.value)}>
+                      <option value="">— not set —</option>
+                      {(trainingLists['Audience/Rate'] ?? AUDIENCES).map(t => <option key={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <p className="qa-note">
+                    Creating a training here does <strong>not</strong> fire FileMaker&apos;s
+                    “Notify CCS on New Training Record” script — script triggers never run for
+                    an API write. Tell whoever relied on that notification, or rebuild it in Vibe.
+                  </p>
                 </>
               )}
 
