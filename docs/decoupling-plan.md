@@ -49,7 +49,7 @@ more instructive one.
 | **A3** edit ownership | **done as far as it goes** — 6 of 8; the other two are decided against or need a feature built |
 | **A4** delete the write token | **blocked** — see the table in A4 |
 | **B1** estimate line items | **done** — migrated, wired, FileMaker module deleted |
-| **B2** bill of materials | untouched |
+| **B2** bill of materials | **blocked** — needs a lean FileMaker layout; see b2-bom-scope.md |
 | **B3** OE training / certifications | untouched |
 | **B4** retire legacy Contacts | untouched, but now decided |
 | **B5** search + agent | **done** — both repointed at Vibe's contact model |
@@ -236,7 +236,19 @@ catalogue; peek caught that before anything was written.)
 **Remaining:** point `Estimates.jsx` at them instead of portalData and
 `RECALC_SCRIPT`, then run the migration.
 
-**B2. Bill of materials** (Products).
+**B2. Bill of materials** (Products) — **scoped 2026-08-19, blocked. See
+[b2-bom-scope.md](b2-bom-scope.md).**
+
+The layout exists and carries the right keys (`Item_ITMLI_billOfMaterials`), and
+there are **125,047 rows**. But it cannot be paged: a 1,000-row page takes over
+30 seconds, because the layout carries table-wide aggregate calculations
+(`s_Cost`, `s_Total`) that FileMaker recomputes per row. 126 pages of that is
+about an hour of continuous load.
+
+**Needs a lean layout** — just `_kpt__Item_Line_Item_ID`,
+`_kft__Item_ID__parent`, `_kft__Item_ID__assemblyLine` and `Quantity`, with no
+aggregate calcs — exactly as `est_li_vibe_2` provided for B1. With that, B2 is
+the same routine job B1 was.
 
 **B3. OE training and certifications.** No module and no data source today.
 These two are the only reason the old Contacts page still exists.
