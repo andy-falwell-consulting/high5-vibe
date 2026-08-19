@@ -23,7 +23,7 @@
 import { getGoogleSession } from './_googleSession.js';
 import { ALLOWED_DBS } from './_fmp.js';
 import {
-  readLines, writeLines, nextLineId, cleanLine, LINE_FIELDS, totalsFor, sortLines,
+  readLines, writeLines, nextLineId, cleanLine, LINE_FIELDS, totalsFor, sortLines, linesExist,
 } from './_estimateLines.js';
 
 const respond = (res, estimateId, lines, extra = {}) =>
@@ -44,7 +44,14 @@ export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
       const lines = await readLines(db, estimateId);
-      return respond(res, estimateId, lines, { count: lines.length });
+      // `migrated` distinguishes an estimate Vibe knows about — even one whose
+      // lines were all deleted — from one it has never seen. The client falls
+      // back to FileMaker's portal rows only for the latter, which is what
+      // keeps estimates readable in an environment the migration cannot reach.
+      return respond(res, estimateId, lines, {
+        count: lines.length,
+        migrated: await linesExist(db, estimateId),
+      });
     }
     if (req.method !== 'POST') return res.status(405).json({ error: 'GET or POST' });
 

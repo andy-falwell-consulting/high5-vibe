@@ -71,6 +71,19 @@ export function lineFromProduct(product, quantity = 1, sortOrder = 1) {
   };
 }
 
+// A FileMaker portal row -> the shape the UI wants.
+//
+// The ONLY thing kept from the FileMaker-era module, and only because an
+// estimate the migration never reached still renders from its portal rows —
+// which is every estimate in an environment where `est_li_vibe_2` does not
+// exist. Reading, never writing.
+const PORTAL_FIELDS = ['Item_Name', 'Description', 'Quantity', 'Unit_Price', 'Amount', 'Total_Input', 'Sort_Order'];
+export function portalRowToLine(row) {
+  const out = { recordId: row.recordId };
+  for (const f of PORTAL_FIELDS) out[f] = row[`estmt_ESTLI::${f}`] ?? '';
+  return out;
+}
+
 // A Vibe line is already the shape the UI wants — there is no portal row with
 // `estmt_ESTLI::` prefixes to unwrap. Kept as a named identity so the callers
 // that mapped portal rows through `toLine` keep reading the same way.
@@ -78,12 +91,31 @@ export const toLine = line => ({ ...line, recordId: line?.id });
 
 // ── Reads and writes ─────────────────────────────────────────────────────────
 
-/** One estimate's lines, plus the totals computed from them. */
+/** One estimate's lines, the totals computed from them, and whether Vibe has
+ *  ever seen this estimate.
+ *
+ *  `migrated: false` means fall back to FileMaker's portal rows — the migration
+ *  reads a layout that exists only in Production, so a Dev estimate has no Vibe
+ *  lines and never will. An estimate whose lines were all DELETED still reports
+ *  `migrated: true` with an empty array, so removing the last line does not make
+ *  the old ones reappear from the portal. */
 export async function listLines(estimateId) {
-  if (!estimateId) return { lines: [], totals: { subtotal: 0, tax: 0, total: 0 } };
-  const body = await json(await fetch(`/api/estimate-lines?${qs(estimateId)}`, { credentials: 'include' }));
-  return { lines: (body.lines || []).map(toLine), totals: body.totals };
+  const empty = { lines: [], totals: { subtotal: 0, tax: 0, total: 0 }, migrated: false };
+  if (!estimateId) return empty;
+  try {
+    const body = await json(await fetch(`/api/estimate-lines?${qs(estimateId)}`, { credentials: 'include' }));
+    return { lines: (body.lines || []).map(toLine), totals: body.totals, migrated: !!body.migrated };
+  } catch {
+    // A failed read must not look like an emptied estimate — fall back.
+    return empty;
+  }
 }
+
+/** Seed Vibe from FileMaker's portal rows, for an estimate the migration never
+ *  reached. Called on the first WRITE to such an estimate: without it, editing
+ *  one line would create a Vibe record holding only that line and silently drop
+ *  the rest. */
+export const seedFromPortal = (estimateId, lines) => replaceLines(estimateId, lines);
 
 export const addLines = (estimateId, lines) => post(estimateId, { action: 'add', lines });
 export const updateLine = (estimateId, lineId, changes) => post(estimateId, { action: 'update', lineId, changes });

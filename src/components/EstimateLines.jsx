@@ -1,4 +1,4 @@
-import { lineAmount, subtotalOf, money } from '../api/estimateLines'
+import { lineAmount, subtotalOf, money } from '../api/estimateLinesVibe'
 import './EstimateLines.css'
 
 // Editable line-item table for an estimate. Presentational — the parent stages

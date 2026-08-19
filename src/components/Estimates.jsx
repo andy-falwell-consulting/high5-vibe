@@ -10,9 +10,10 @@ import EstimateLines from './EstimateLines'
 import BomPickerModal from './BomPickerModal'
 import { readCacheAsync } from '../api/filemaker'
 import {
-  toLine, sortLines, addLines, updateLine, deleteLine, recalcTotals,
-  lineFromProduct, nextSortOrder,
-} from '../api/estimateLines'
+  sortLines, addLines, updateLine, deleteLine, replaceLines,
+  lineFromProduct, nextSortOrder, listLines, subtotalOf,
+  portalRowToLine as portalToLine,
+} from '../api/estimateLinesVibe'
 import { BRAND, UI } from '../config/brandColors'
 import './Estimates.css'
 import DeleteRecordButton from './DeleteRecordButton'
@@ -111,6 +112,29 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
   const [lineEdits, setLineEdits] = useState({})
   const [newLines, setNewLines] = useState([])
   const [deletedIds, setDeletedIds] = useState(() => new Set())
+
+  // The selected estimate's line items, from Vibe (PHASE B1).
+  //
+  // Keyed on the estimate's own `_kpt__Estimate_ID`, not FileMaker's recordId —
+  // that is what the Vibe store keys on, and a recordId is a FileMaker internal
+  // that dies with it. `migrated: false` means Vibe has never seen this estimate
+  // and the FileMaker portal rows are used instead, which is the only way an
+  // environment the migration cannot reach still shows its lines.
+  const [vibeLines, setVibeLines] = useState({ lines: [], totals: null, migrated: false })
+  const estimateId = String(selected?.fieldData?._kpt__Estimate_ID || '').trim()
+
+  const refreshLines = useCallback(async () => {
+    if (!estimateId) return
+    const got = await listLines(estimateId)
+    setVibeLines({ ...got, id: estimateId })
+  }, [estimateId])
+
+  useEffect(() => {
+    if (!estimateId) return undefined
+    let alive = true
+    listLines(estimateId).then(got => { if (alive) setVibeLines({ ...got, id: estimateId }) })
+    return () => { alive = false }
+  }, [estimateId])
   const [pickerOpen, setPickerOpen] = useState(false)
   const [products, setProducts] = useState([])
   const tempId = useRef(0)
@@ -179,12 +203,16 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
   // Unit price always comes from the catalogue — no per-line override.
   const onPickProduct = useCallback(({ item, quantity }) => {
     setNewLines(rows => {
-      const existing = (selected?.portalData?.[ 'estmt_ESTLI' ] || []).map(toLine)
+      // Same precedence as the displayed lines — numbering from the portal on a
+      // migrated estimate would restart at 1 and collide with Vibe's rows.
+      const existing = vibeLines.migrated
+        ? vibeLines.lines
+        : (selected?.portalData?.['estmt_ESTLI'] || []).map(portalToLine)
       const order = nextSortOrder([...existing, ...rows]) + rows.length
       return [...rows, { ...lineFromProduct(item, Number(quantity) || 1, order), _tempId: `new:${++tempId.current}` }]
     })
     setPickerOpen(false)
-  }, [selected])
+  }, [selected, vibeLines.migrated, vibeLines.lines])
 
   useEffect(() => {
     if (!navTarget || navTarget.moduleId !== 'estimates') return
@@ -235,28 +263,31 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
     setSaving(true); setSaveStatus(null); setSaveErrorMsg(null)
     try {
       if (lineChanges) {
-        for (const id of deletedIds) await deleteLine(selected.recordId, id)
+        // Lines live in Vibe (PHASE B1). There is no recalcTotals any more: the
+        // totals are computed from the lines on every read, so they cannot go
+        // stale — which the stored ones already had, on ~7% of production
+        // estimates and almost always understated.
+        //
+        // An estimate the migration never reached is SEEDED from its portal
+        // rows first. Without that, editing one line on such an estimate would
+        // leave Vibe holding only that line and silently drop the rest.
+        if (!vibeLines.migrated) await replaceLines(estimateId, savedLines)
+
+        for (const id of deletedIds) await deleteLine(estimateId, id)
         for (const [id, changes] of Object.entries(lineEdits)) {
           if (deletedIds.has(String(id))) continue           // deleted beats edited
           const base = savedLines.find(l => String(l.recordId) === String(id))
-          await updateLine(selected.recordId, id, { ...base, ...changes })
+          await updateLine(estimateId, id, { ...base, ...changes })
         }
-        if (newLines.length) await addLines(selected.recordId, newLines)
+        if (newLines.length) await addLines(estimateId, newLines)
 
-        // The stored totals are script-maintained and reject direct writes, so
-        // this is the only way to keep them honest. Throws on script failure
-        // rather than leaving a silently stale total behind.
-        const fresh = await recalcTotals(selected.recordId)
-        if (fresh) setSelected(fresh)
+        await refreshLines()
         resetLines()
       }
       if (Object.keys(edits).length) {
-        // Estimates_New is Vibe-owned (api/_vibeStore.js) for field edits —
-        // same pattern as the other Vibe-owned layouts. Line items
-        // (updateLine/addLines/deleteLine above) and the totals recalc still
-        // go to FileMaker: the stored totals are script-maintained
-        // (RECALC_SCRIPT in api/estimateLines.js) and can't be reproduced in
-        // Vibe without Vibe computing them itself, which hasn't been built.
+        // Estimates_New is Vibe-owned (api/_vibeStore.js) for field edits, and
+        // as of B1 its line items are too — so nothing on this record goes to
+        // FileMaker any more.
         await updateVibeRecord(LAYOUT, selected.recordId, edits)
         patchCachedRecord(LAYOUT, CACHE_VERSION, selected.recordId, edits)
         setSelected(prev => ({ ...prev, fieldData: { ...prev.fieldData, ...edits } }))
@@ -274,7 +305,13 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
 
   // Saved rows in display order (the portal returns them backwards), with any
   // staged edits applied and removals marked, followed by lines added this session.
-  const savedLines = sortLines(lineItems.map(toLine))
+  // Vibe's lines when it has them; FileMaker's portal rows only for an estimate
+  // the migration never reached. `vibeLines.id === estimateId` guards against a
+  // reply for a previously selected estimate painting over this one.
+  const linesReady = vibeLines.id === estimateId
+  const savedLines = (linesReady && vibeLines.migrated)
+    ? sortLines(vibeLines.lines)
+    : sortLines(lineItems.map(portalToLine))
   const workingLines = [
     ...savedLines.map(l => {
       const staged = lineEdits[l.recordId]
@@ -286,7 +323,19 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
   const lineChangeCount = Object.keys(lineEdits).length + newLines.length + deletedIds.size
   const dirtyCount = Object.keys(edits).length + lineChangeCount
 
-  const displayTotal = parseFloat(String(f.zz__Total__xn ?? '').replace(/[^0-9.-]/g, '')) || 0
+  // COMPUTED from the lines, not read from the record. The stored
+  // zz__Total__xn is a cache FileMaker's recalc script maintained, and it is
+  // wrong on ~7% of production estimates — almost always too low, because a
+  // line was added and the script did not fire. Measured 2026-08-19: 43 of 591
+  // estimates disagreed, 42 of them understated, by up to $1,050.
+  const storedTotal = parseFloat(String(f.zz__Total__xn ?? '').replace(/[^0-9.-]/g, '')) || 0
+  const computedTotal = subtotalOf(savedLines.filter(l => !deletedIds.has(String(l.recordId))))
+  const displayTotal = savedLines.length ? computedTotal : storedTotal
+  // Flagged rather than silently corrected: the figure on screen changes for
+  // those estimates, and whoever quoted from the old one deserves to see that.
+  const totalMismatch = savedLines.length && Math.abs(computedTotal - storedTotal) > 0.02
+    ? { stored: storedTotal, computed: computedTotal }
+    : null
   const status = f.Status || ''
   const statusColor = STATUS_COLOR[status] ?? '#64748b'
 
@@ -380,6 +429,17 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
                   <div className="est-total-badge">
                     <span className="est-total-label">Total</span>
                     <span className="est-total-amount">{fmtCurrency(displayTotal)}</span>
+                  </div>
+                )}
+                {totalMismatch && (
+                  <div
+                    className="est-total-flag"
+                    title={`This estimate's line items add up to ${fmtCurrency(totalMismatch.computed)}. `
+                      + `FileMaker's stored total says ${fmtCurrency(totalMismatch.stored)}, which stopped `
+                      + `updating when a line was changed without its recalculation running. `
+                      + `The figure shown is the one the lines actually come to.`}
+                  >
+                    ⚠ was {fmtCurrency(totalMismatch.stored)} in FileMaker
                   </div>
                 )}
                 <CreateInQBO
