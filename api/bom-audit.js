@@ -16,7 +16,11 @@ import { getGoogleSession } from './_googleSession.js';
 import { isAdminEmail } from './_admin.js';
 
 const FMP_HOST = 'https://ILELLCO.pcifmhosting.com';
-const LAYOUT = 'Item_ITMLI_billOfMaterials';
+// Layout is a parameter: `Item_ITMLI_billOfMaterials` carries table-wide
+// aggregate calcs (s_Cost, s_Total) that FileMaker recomputes per row, making a
+// 1,000-row page take over 30 seconds. A lean layout over the same table reads
+// in well under a second. Being able to point this at either is how that gets
+// measured rather than assumed.
 const PAGE = 1000;
 
 export default async function handler(req, res) {
@@ -29,9 +33,11 @@ export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'GET only' });
 
   const offset = Math.max(1, Number(req.query?.offset) || 1);
+  const LAYOUT = String(req.query?.layout || 'Item_ITMLI_billOfMaterials').trim();
+  const limit = Math.min(Math.max(1, Number(req.query?.limit) || PAGE), PAGE);
   try {
     const token = await fmpToken(db);
-    const url = `${FMP_HOST}/fmi/data/v2/databases/${db}/layouts/${LAYOUT}/records?_limit=${PAGE}&_offset=${offset}`;
+    const url = `${FMP_HOST}/fmi/data/v2/databases/${db}/layouts/${LAYOUT}/records?_limit=${limit}&_offset=${offset}`;
     const page = await (await fetch(url, { headers: { Authorization: `Bearer ${token}` } })).json();
     const rows = page?.response?.data || [];
     const total = page?.response?.dataInfo?.foundCount ?? null;
@@ -57,7 +63,7 @@ export default async function handler(req, res) {
       if (!String(f._kft__Item_ID__assemblyLine ?? '').trim()) p.noComponent++;
     }
     return res.status(200).json({
-      offset, total, read: rows.length, noParent,
+      layout: LAYOUT, offset, total, read: rows.length, noParent,
       nextOffset: offset + rows.length, done: rows.length < PAGE, parents,
     });
   } catch (e) {
