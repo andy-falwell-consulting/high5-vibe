@@ -51,7 +51,7 @@ more instructive one.
 | **B1** estimate line items | **done** — migrated, wired, FileMaker module deleted |
 | **B2** bill of materials | **done** (2026-08-19) — tail migrated, 10 runaway parents left behind. See b2-bom-scope.md |
 | **B3** OE training | **done** (2026-08-19) — 5,142 workshops across 2,689 contacts |
-| **B4** retire legacy Contacts | **scoped** — one gap (invoices); it is the last domino before A4 |
+| **B4** retire legacy Contacts | **gap closed** — invoices migrated; only the deletion itself remains |
 | **B5** search + agent | **done** — both repointed at Vibe's contact model |
 | **C1** derived fields | **audited; resolver and both write paths shipped**; existing records not backfilled |
 | **C2/C3/C4** | untouched — C4 is the largest unknown |
@@ -84,6 +84,7 @@ Child collections:
 | Estimate line items (`estmt_ESTLI`) | 10,858 | **Vibe** (2026-08-19) |
 | Bill of materials (`item_ITMLI`) | 10,116 migrated *(of 125,047)* | **Vibe** (2026-08-19) |
 | Contact relationships (`cntct_RLTN`) | 23,302 | FileMaker (superseded by Vibe affiliations) |
+| Invoices (`Invoices_New`) | 13,141 | **Vibe** (2026-08-19) |
 | OE training (`Workshops_New`) | 5,142 | **Vibe** (2026-08-19) |
 | Certifications (`CTFC`) | 3 | FileMaker — out of scope (Andy, 2026-08-19) |
 

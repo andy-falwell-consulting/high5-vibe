@@ -1,7 +1,10 @@
 # B4 — retiring the legacy Contacts module
 
-**Scoped 2026-08-19.** One gap stands between here and deleting
-`src/components/Contacts.jsx` (748 lines) — and with it, **A4**.
+**Scoped 2026-08-19. The gap is now CLOSED.** Contacts v2 has an Invoices tab
+backed by Vibe, so `src/components/Contacts.jsx` (748 lines) can be deleted —
+and with it, **A4** becomes reachable.
+
+**Migrated:** 13,141 invoices across 1,439 contacts, **none without a contact**.
 
 ---
 
@@ -28,7 +31,7 @@ Vibe. Nothing writes through it that is not already written better elsewhere.
 | Estimates | work tab | ✅ |
 | RMI | work tab | ✅ |
 | Notes | inside Overview | ✅ |
-| **Invoices** | **nothing** | ❌ **the gap** |
+| **Invoices** | **Vibe (B4)** | ✅ |
 | Certifications | nothing | ⛔ out of scope (Andy) — 3 rows total |
 
 Everything except invoices is covered, and certifications have been ruled out.
@@ -94,3 +97,50 @@ Then, and only then:
   grep even though they cannot run. Remove the dead save paths.
 - **`src/api/estimateLines.js` is already deleted**; check nothing else imports
   FileMaker write helpers before removing them from `filemaker.js`.
+
+
+---
+
+## The migration, and the thing it nearly got wrong
+
+13,141 invoices across 1,439 contacts. Every row had a contact, so nothing was
+orphaned.
+
+**`Invoices_New` holds two different shapes**, and the first version of this
+migration only understood one:
+
+- **Legacy rows** carry their totals in `zz__Subtotal__xn` / `zz__Tax__xn` /
+  `zz__Total__xn`.
+- **Rows written by the QBO invoice mirror** leave those EMPTY and put
+  everything in the `Memo` field as JSON:
+  `{"qboId":"135052","subtotal":253.15,"total":253.15,"balance":0,"status":"Paid"}`
+
+Reading only the FileMaker fields gave contact 82201 — 37 invoices, several in
+the thousands — a **billed total of zero**. That is how this was found: a number
+that looked like a fact and was not. Correctly read, that contact has
+**$52,133.37** billed.
+
+The mirror's figures now win where present, QuickBooks' status decides
+paid-in-full on those rows (the FileMaker calc is empty on them), and the memo
+is only shown for legacy rows — raw JSON in a Memo column would be worse than
+nothing.
+
+**This also corrects an assumption in the scope above.** The QBO mirror clearly
+HAS run in production: those rows are dated into 2026 with QuickBooks ids and
+Paid status. So `Invoices_New` is not purely historical — it is historical
+invoices *plus* a live QuickBooks mirror. Migrating it captured both.
+
+## What is left of B4
+
+Only the deletion itself, which is deliberate and should be its own change:
+
+1. Delete `src/components/Contacts.jsx`, its `MODULES` entry in `App.jsx`, its
+   mount, and its `Contacts_New` cache prewarm.
+2. Point the legacy `contacts` record source in `recordSources.js` at nothing —
+   or remove it, since the per-record dedupe against Vibe contacts then has no
+   legacy side to dedupe.
+3. Remove the dead `updateRecord` save paths in `TandD.jsx` and `EOL.jsx`, which
+   are unreachable behind `RECORDS_LOCKED` but will still block A4's grep.
+4. **A4** — delete `getToken({ write: true })`.
+
+Certifications (3 rows) go with the module, by decision.
