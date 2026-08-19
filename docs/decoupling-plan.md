@@ -49,7 +49,7 @@ more instructive one.
 | **A3** edit ownership | **done as far as it goes** — 6 of 8; the other two are decided against or need a feature built |
 | **A4** delete the write token | **blocked** — see the table in A4 |
 | **B1** estimate line items | **done** — migrated, wired, FileMaker module deleted |
-| **B2** bill of materials | **blocked** — needs a lean FileMaker layout; see b2-bom-scope.md |
+| **B2** bill of materials | **layout resolved; blocked on a DATA question** — 91% of the rows are not a BOM. See b2-bom-scope.md |
 | **B3** OE training / certifications | untouched |
 | **B4** retire legacy Contacts | untouched, but now decided |
 | **B5** search + agent | **done** — both repointed at Vibe's contact model |

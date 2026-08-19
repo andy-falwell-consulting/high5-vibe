@@ -1,7 +1,13 @@
 # B2 — moving the bill of materials to Vibe
 
-**Scoped 2026-08-19**, measured against production. **Blocked on one FileMaker
-change**, described at the end.
+**Scoped 2026-08-19**, measured against production.
+
+**The layout blocker is resolved** — `BOM` (with `_kft__Item_ID__assemblyLine`
+added on request) pages a full 1,000 rows in **1.7 seconds** against the original
+layout's **30+ seconds**. The whole table now reads in about 90 seconds.
+
+**But the audit stopped the migration for a better reason.** 91% of the rows in
+that table are not a bill of materials at all. See "What the audit found".
 
 ---
 
@@ -80,9 +86,69 @@ the stored `::Total` (`ProductsAndServicesV2.jsx`, around the `_liveTotal`
 calculation). So the stored totals are already treated as unreliable — the same
 pattern B1 found and fixed, and the migration should not carry them across.
 
-## Still unanswered
+## What the audit found — do NOT migrate this table as it stands
 
-**Are there products with a filled-out BOM that are not marked as assemblies?**
-The audit endpoint (`api/bom-audit.js`, read-only) exists to answer it, but the
-sweep cannot complete while the layout pages this slowly. It should be run once
-the lean layout exists — cheaply, since the same pages will then be fast.
+Full sweep of all 125,047 rows against the 1,267 products:
+
+| | |
+|---|---:|
+| Rows | 125,047 |
+| Distinct parent products | 1,079 |
+| **Rows belonging to the top TEN parents** | **114,150 — 91.3%** |
+| Rows across the other 1,069 parents | 10,897 |
+| **Average lines for those 1,069** | **10.2** |
+| Parents not flagged `assembly_product` | 788 of 1,079 |
+| Rows with no parent at all | 2 |
+| Parents not present in the products table | 0 |
+
+**The tail is a perfectly normal bill of materials** — 1,069 products averaging
+10 components each, about 10,900 rows. That is the real data, and it is an
+order of magnitude smaller than the table's row count suggests.
+
+**The head is not.** Ten parents hold 114,150 rows, and the counts are absurd
+on their face:
+
+| Product | Rows |
+|---|---:|
+| Pick A Postcard | 29,124 |
+| Body Parts Debrief Kit; Deluxe | 20,750 |
+| Blocked Perspective Box Empty | 17,833 |
+| Omega Steel Screw Lock Carabiner | 12,692 |
+| Discount by the Dollar | 10,370 |
+| 8"x8"x12' Treated Lumber | 10,288 |
+
+A postcard does not have 29,124 components. Verified this is real and not a
+counting error: entire 1,000-row pages come back with a **single** parent id, and
+opening "Pick A Postcard" in the app shows a bill of materials whose first
+component is a *1½" Heavy Duty Fixed Eye Single Sheave Pulley*. None of these
+six are flagged as assemblies.
+
+So the honest reading is that the table contains a real BOM plus a large amount
+of runaway or duplicated data attached to a handful of items — and the app only
+ever showed 50 rows of it, because FileMaker portals cap there by default.
+Nobody would have seen the scale of it through the UI.
+
+### What this means for B2
+
+**Migrating the raw table would import 114,150 rows of apparent garbage** and
+give six ordinary products enormous bills of materials in Vibe — visible, since
+Vibe has no 50-row portal cap to hide behind.
+
+Options, in the order they should be considered:
+
+1. **Ask Ian what those rows are** before touching them. They may be a known
+   import artefact with an obvious disposal, in which case this is a five-minute
+   conversation rather than a design problem.
+2. **Migrate the tail only** — the ~10,900 rows across 1,069 parents — and leave
+   the ten outliers behind, recorded, for a decision.
+3. Migrate everything and clean up in Vibe. Least attractive: it moves the
+   problem rather than resolving it, and makes it more visible on the way.
+
+### The other half of the question
+
+**788 of 1,079 parents are not flagged `assembly_product`**, and one product is
+flagged with no BOM at all. That is too many to be simple mislabelling and is
+probably telling us the flag is not what decides whether something has a BOM —
+`ProductsAndServicesV2.jsx` uses it only to decide whether to SHOW the tab
+(`isAssembly = !!fval('assembly_product')`). Worth confirming with Ian rather
+than inferring, since it decides whether the flag should be trusted at all.
