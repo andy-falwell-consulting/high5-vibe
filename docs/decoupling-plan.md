@@ -49,7 +49,7 @@ more instructive one.
 | **A3** edit ownership | **done as far as it goes** — 6 of 8; the other two are decided against or need a feature built |
 | **A4** delete the write token | **blocked** — see the table in A4 |
 | **B1** estimate line items | **done** — migrated, wired, FileMaker module deleted |
-| **B2** bill of materials | **layout resolved; blocked on a DATA question** — 91% of the rows are not a BOM. See b2-bom-scope.md |
+| **B2** bill of materials | **done** (2026-08-19) — tail migrated, 10 runaway parents left behind. See b2-bom-scope.md |
 | **B3** OE training / certifications | untouched |
 | **B4** retire legacy Contacts | untouched, but now decided |
 | **B5** search + agent | **done** — both repointed at Vibe's contact model |
@@ -82,13 +82,13 @@ Child collections:
 | Inspection line items | 208,068 | **Vibe** |
 | Attachments (all modules) | — | **Vibe** (Drive + Redis) |
 | Estimate line items (`estmt_ESTLI`) | 10,858 | **Vibe** (2026-08-19) |
-| Bill of materials (`item_ITMLI`) | — | FileMaker |
+| Bill of materials (`item_ITMLI`) | 10,116 migrated *(of 125,047)* | **Vibe** (2026-08-19) |
 | Contact relationships (`cntct_RLTN`) | 23,302 | FileMaker (superseded by Vibe affiliations) |
 | OE training (`cntct_WKSRG`) | — | FileMaker, no module |
 | Certifications (`cntct_CTFC`) | — | FileMaker, no module |
 
 Roughly: **6 of 8 layouts own their edits, 5 of 8 own creation, 8 of 8 own
-deletion; 4 of 8 child collections have moved.**
+deletion; 5 of 8 child collections have moved.**
 
 Deletion is the only column that is finished, and it finished in one change
 because every module deletes through one shared control.
@@ -197,9 +197,7 @@ FileMaker any more, but these still do, and each needs its own decision first:
 
 | Still writes to FileMaker | Why it hasn't moved |
 |---|---|
-| Bill of materials (`ProductsAndServicesV2.jsx`) | B2 |
 | Products & Services creation | entangled with SKU assignment and live Shopify/QBO pushes |
-| Estimates creation | not yet moved; no blocker known, just untouched |
 | Legacy Contacts module — edits, creation, portals, `Contact_rltn` | B4 wants the module retired instead |
 
 `TandD.jsx` and `EOL.jsx` also still call `updateRecord`, but both set
@@ -236,8 +234,12 @@ catalogue; peek caught that before anything was written.)
 **Remaining:** point `Estimates.jsx` at them instead of portalData and
 `RECALC_SCRIPT`, then run the migration.
 
-**B2. Bill of materials** (Products) — **scoped 2026-08-19, blocked. See
+**B2. Bill of materials** (Products) — **DONE 2026-08-19. See
 [b2-bom-scope.md](b2-bom-scope.md).**
+
+10,116 lines across 311 products migrated; the ten runaway parents holding
+114,150 rows were deliberately left behind. `ProductsAndServicesV2.jsx` reads
+and writes through Vibe, and its three portal writes are gone.
 
 The layout exists and carries the right keys (`Item_ITMLI_billOfMaterials`), and
 there are **125,047 rows**. But it cannot be paged: a 1,000-row page takes over
@@ -468,8 +470,9 @@ Two of those assumptions did not survive contact with the data:
   `estimate_li_vibe` being the wrong table before 1,267 product records were
   written into the estimate-lines store.
 
-**Where the remaining work sits:** A is done except A4, which is gated on B1
-(in progress), B2, two creation paths and the legacy Contacts module. B3/B4 are
-untouched. C1 has shipped its resolver and both write paths; C2/C3/C4 are
+**Where the remaining work sits:** A is done except A4, which is now gated on
+just TWO things — Products & Services creation (entangled with SKU assignment
+and live Shopify/QBO pushes) and the legacy Contacts module (B4 wants it retired
+rather than moved). B1, B2 and B5 are done; B3/B4 are untouched. C1 has shipped its resolver and both write paths; C2/C3/C4 are
 untouched, and C4 remains the largest unknown because it cannot be inventoried
 from the codebase.
