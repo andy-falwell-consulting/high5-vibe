@@ -172,6 +172,41 @@ function WorkTable({ src, rows, onOpen }) {
 // The fee column is new, and is there because the migration surfaced it:
 // `Workshops_New` carries the money as well as the course, and it was only ever
 // invisible because the portal on the old page did not select those fields.
+// Invoices — a contact's billing HISTORY. Read-only, and deliberately so.
+//
+// FileMaker's Invoices_New is the historical record; live invoicing happens in
+// QuickBooks and surfaces through the Transactions module. This tab exists so
+// retiring the legacy Contacts module (B4) does not lose 13,140 invoices, not
+// to become a billing view.
+function InvoicesTable({ state, openId }) {
+  if (!state || state.id !== openId) return <p className="c2-none">Loading…</p>;
+  if (!state.rows.length) return <p className="c2-none">Nothing recorded.</p>;
+  const money = v => `$${Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+  return (
+    <div className="c2-table-scroll">
+      <table className="c2-table">
+        <thead><tr>
+          <th>Date</th><th>Invoice #</th><th>PO #</th><th>Memo</th>
+          <th className="num">Tax</th><th className="num">Total</th><th>Paid</th>
+        </tr></thead>
+        <tbody>
+          {state.rows.map(r => (
+            <tr key={r.id}>
+              <td>{r.date || '—'}</td>
+              <td className="mono">{r.quickbooksRef || r.id}</td>
+              <td className="mono">{r.poNumber || '—'}</td>
+              <td>{r.memo || '—'}</td>
+              <td className="num">{r.tax ? money(r.tax) : '—'}</td>
+              <td className="num">{money(r.total)}</td>
+              <td>{r.paidInFull ? '✓' : ''}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function OeTrainingTable({ state, openId }) {
   if (!state || state.id !== openId) return <p className="c2-none">Loading…</p>;
   if (!state.rows.length) return <p className="c2-none">Nothing recorded.</p>;
@@ -721,6 +756,8 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
   // { id, rows } keyed by the open contact, fetched lazily on first visit to
   // the tab rather than on every record open.
   const [oeTraining, setOeTraining] = useState(null);
+  // Invoice history, same lazy-on-first-open pattern as OE training.
+  const [invoices, setInvoices] = useState(null);
   // Sidebar width, dragged by the handle between the list and the record.
   // Persisted, unlike the other modules': the width someone picks is a
   // preference, and losing it on every reload is the reason nobody adjusts it.
@@ -818,6 +855,26 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
     return () => { alive = false; };
   }, [tab, openId, oeTraining]);
 
+  // Invoice history, from Vibe (B4).
+  useEffect(() => {
+    if (tab !== 'invoices' || !openId) return undefined;
+    if (invoices?.id === openId) return undefined;
+    let alive = true;
+    (async () => {
+      try {
+        const db = getCurrentEnv().db;
+        const res = await fetch(
+          `/api/invoices?db=${encodeURIComponent(db)}&contactId=${encodeURIComponent(openId)}`,
+          { credentials: 'include' });
+        const body = await res.json().catch(() => ({}));
+        if (alive) setInvoices({ id: openId, rows: body.invoices || [], billedTotal: body.billedTotal || 0 });
+      } catch {
+        if (alive) setInvoices({ id: openId, rows: [], billedTotal: 0 });
+      }
+    })();
+    return () => { alive = false; };
+  }, [tab, openId]);   // eslint-disable-line react-hooks/exhaustive-deps
+
   const records = kind === 'people' ? people : orgs;
 
   // Lifted out of the work tables so the tab strip can carry counts. One fetch
@@ -848,6 +905,8 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
     // above — so its count only appears once the tab has actually been
     // opened at least once for this contact.
     { id: 'oe_training', label: 'OE Trainings', count: oeTraining && oeTraining.id === openId ? oeTraining.rows.length : 0 },
+    // Same lazy-count caveat as OE training: only known once opened.
+    { id: 'invoices', label: 'Invoices', count: invoices && invoices.id === openId ? invoices.rows.length : 0 },
   ];
 
   // A tab can vanish between records (a person with no estimates). Falling back
@@ -1211,6 +1270,17 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
                     <OeTrainingTable state={oeTraining} openId={openId} />
                   </Section>
                 )}
+
+                {activeTab === 'invoices' && (
+                  <Section icon="$" title="Invoices"
+                    aside={invoices?.id === openId && invoices.rows.length
+                      ? <span className="c2-section-aside">
+                          {`$${Number(invoices.billedTotal || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} billed`}
+                        </span>
+                      : null}>
+                    <InvoicesTable state={invoices} openId={openId} />
+                  </Section>
+                )}
               </>
             )}
           </div>
@@ -1340,6 +1410,17 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
                 {activeTab === 'oe_training' && (
                   <Section icon="≡" title="OE Trainings">
                     <OeTrainingTable state={oeTraining} openId={openId} />
+                  </Section>
+                )}
+
+                {activeTab === 'invoices' && (
+                  <Section icon="$" title="Invoices"
+                    aside={invoices?.id === openId && invoices.rows.length
+                      ? <span className="c2-section-aside">
+                          {`$${Number(invoices.billedTotal || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} billed`}
+                        </span>
+                      : null}>
+                    <InvoicesTable state={invoices} openId={openId} />
                   </Section>
                 )}
               </>

@@ -483,3 +483,13 @@ a.c2-methodvalue:hover { color: var(--h5-red); text-decoration: underline; }
 
 [data-theme="light"] .c2-resize-handle { background: #e2e8f0; }
 [data-theme="light"] .c2-resize-handle:hover { background: var(--h5-red); }
+
+/* The billed-total shown beside the Invoices section heading. Muted: it is
+   context for the table below, not a figure to lead with. */
+.c2-section-aside {
+  margin-left: auto;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: #94a3b8;
+}
+[data-theme="light"] .c2-section-aside { color: #64748b; }
