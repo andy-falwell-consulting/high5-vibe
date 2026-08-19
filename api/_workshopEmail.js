@@ -330,26 +330,32 @@ export async function checkDelegation() {
         : 'The token request was rejected before Gmail was reached.',
     };
   }
-  const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile',
-    { headers: { Authorization: `Bearer ${token}` } });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    return {
-      ok: false, stage: 'mailbox', impersonating: from, showsAs,
-      serviceAccount: account, error: body.error?.message || `HTTP ${res.status}`,
-      hint: res.status === 400 || res.status === 404
-        ? `${from} may not be a real Workspace mailbox — a group alias or forwarding address cannot be impersonated and has no Sent folder.`
-        : 'The grant looks present but Gmail refused the impersonation.',
-    };
-  }
+  // A MINTED TOKEN IS THE PROOF. Google only issues one for this subject and
+  // scope if the delegation entry authorises it, so reaching this line already
+  // means the grant works.
+  //
+  // The earlier version read the mailbox profile here and reported failure when
+  // that was refused — but `gmail.send` is send-only and does not authorise
+  // reading a profile, so the check was failing on a call the granted scope was
+  // never meant to permit. It said "not working" about a grant that was working.
+  //
+  // tokeninfo needs no scope of its own and confirms what was actually issued,
+  // which is the closest thing to a proof that does not involve sending.
+  const info = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(token)}`)
+    .then(r => r.json()).catch(() => ({}));
+  const scopes = String(info.scope || '').split(/\s+/).filter(Boolean);
+  const hasSend = scopes.includes(GMAIL_SEND_SCOPE);
+
   return {
-    ok: true, impersonating: from, showsAs, serviceAccount: account,
-    mailbox: body.emailAddress,
-    messagesTotal: body.messagesTotal ?? null,
+    ok: hasSend,
+    impersonating: from, showsAs, serviceAccount: account,
+    grantedScopes: scopes,
     aliasNeeded: showsAs !== from,
-    note: showsAs === from
-      ? `Delegation works — Vibe can send as ${from}.`
-      : `Delegation works for ${from}. Sending as ${showsAs} additionally requires it to be a verified "Send mail as" alias on that account.`,
+    note: !hasSend
+      ? `A token was issued for ${from}, but without ${GMAIL_SEND_SCOPE}. Delegation is wired up; the scope on the entry is not the one Vibe asks for.`
+      : showsAs === from
+        ? `Delegation works — Vibe can send as ${from}. Only an actual send proves delivery end to end; use the test send to your own address for that.`
+        : `Delegation works for ${from}. Sending as ${showsAs} additionally requires it to be a verified "Send mail as" alias on that account.`,
   };
 }
 
