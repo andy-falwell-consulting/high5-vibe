@@ -5,7 +5,7 @@ import { readWorkshop, patchWorkshop } from './_oeTraining.js';
 import {
   TEMPLATES, isTemplateId, readTemplate, readTemplates, writeTemplate,
   pickEmail, render, templateVars, sendAsWorkshops, senderAddress, catalogueForCourse,
-  templateFiles, loadAttachments, checkDelegation, replyToAddress,
+  templateFiles, loadAttachments, checkDelegation, replyToAddress, sendTestMessage,
 } from './_workshopEmail.js';
 
 // Workshop e-mails — preview, send, and template administration.
@@ -48,6 +48,18 @@ export default async function handler(req, res) {
     if (req.query?.check === '1') {
       if (!(await isAdminEmail(session.email))) return res.status(403).json({ error: 'admin only' });
       return res.status(200).json(await checkDelegation({ as: String(req.query?.as || '').trim() || undefined }));
+    }
+
+    // ── Test send. Goes to the CALLER's own address, never anywhere else. ──
+    //
+    // The address is taken from the session rather than the request, so this
+    // cannot be pointed at a registrant even deliberately. Proving the pipe
+    // should not be capable of reaching a customer.
+    if (req.query?.test === '1') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'POST' });
+      if (!(await isAdminEmail(session.email))) return res.status(403).json({ error: 'admin only' });
+      const sent = await sendTestMessage(session.email);
+      return res.status(200).json({ ...sent, note: `Test message sent to ${session.email}.` });
     }
 
     // ── Templates ──────────────────────────────────────────────────────────

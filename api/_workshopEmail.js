@@ -38,9 +38,14 @@ const GMAIL_SEND = 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send
 // Until then From falls back to the impersonated user, which is honest: better a
 // visibly internal sender than a spoofed one Gmail would refuse or mark.
 
-/** The Workspace USER whose mailbox is impersonated. Must be a real user. */
+/** The Workspace USER whose mailbox is impersonated. Must be a real user.
+ *
+ *  workshops@ confirmed impersonable 2026-08-19 — a token minted for it with the
+ *  gmail.send scope. So the direct route works and no "Send mail as" alias is
+ *  involved: From reads workshops@, replies go there, and the copy lands in that
+ *  mailbox's own Sent folder, which is the behaviour the FileMaker button had. */
 export const senderUser = () =>
-  process.env.WORKSHOP_MAIL_USER || 'it@high5adventure.org';
+  process.env.WORKSHOP_MAIL_USER || 'workshops@high5adventure.org';
 
 /** The address the message appears FROM. Defaults to the impersonated user;
  *  set WORKSHOP_MAIL_FROM to a verified alias (e.g. workshops@) to change it. */
@@ -361,6 +366,30 @@ export async function checkDelegation({ as } = {}) {
         ? `Delegation works — Vibe can send as ${from}. Only an actual send proves delivery end to end; use the test send to your own address for that.`
         : `Delegation works for ${from}. Sending as ${showsAs} additionally requires it to be a verified "Send mail as" alias on that account.`,
   };
+}
+
+/** Send a fixed test message to one address, bypassing templates entirely.
+ *
+ *  The only thing that proves delivery end to end — a minted token proves the
+ *  grant, not that a message arrives. Deliberately does NOT render a template or
+ *  touch a registration: this is for confirming the pipe, and it should be
+ *  impossible to aim it at a customer by accident. The caller supplies its own
+ *  address and nothing else. */
+export async function sendTestMessage(to) {
+  const stamp = new Date().toISOString();
+  return sendAsWorkshops({
+    to,
+    subject: `Vibe test message — ${stamp}`,
+    body: [
+      'This is a test from Vibe, confirming that workshop e-mail delivery works.',
+      '',
+      `Sent as: ${senderAddress()}`,
+      `Impersonating: ${senderUser()}`,
+      `At: ${stamp}`,
+      '',
+      'No registrant was involved and no template was used.',
+    ].join('\n'),
+  });
 }
 
 /** Send as the shared workshops mailbox. Throws with Google's own message —
