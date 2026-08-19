@@ -12,7 +12,7 @@ import { readCacheAsync } from '../api/filemaker'
 import {
   sortLines, addLines, updateLine, deleteLine, replaceLines,
   lineFromProduct, nextSortOrder, listLines, subtotalOf,
-  portalRowToLine as portalToLine,
+  portalRowToLine as portalToLine, allTotals,
 } from '../api/estimateLinesVibe'
 import { BRAND, UI } from '../config/brandColors'
 import './Estimates.css'
@@ -121,6 +121,22 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
   // and the FileMaker portal rows are used instead, which is the only way an
   // environment the migration cannot reach still shows its lines.
   const [vibeLines, setVibeLines] = useState({ lines: [], totals: null, migrated: false })
+
+  // Every estimate's computed total, for the LIST. Without it the sidebar shows
+  // FileMaker's cached figure while the open record shows the computed one, and
+  // the same estimate reads as two different numbers on one screen.
+  const [listTotals, setListTotals] = useState({})
+  useEffect(() => {
+    let alive = true
+    allTotals().then(t => { if (alive) setListTotals(t) })
+    return () => { alive = false }
+  }, [])
+  const totalFor = useCallback(fd => {
+    const id = String(fd?._kpt__Estimate_ID || '')
+    const computed = listTotals[id]
+    return computed != null ? computed
+      : (parseFloat(String(fd?.zz__Total__xn ?? '').replace(/[^0-9.-]/g, '')) || 0)
+  }, [listTotals])
   const estimateId = String(selected?.fieldData?._kpt__Estimate_ID || '').trim()
 
   const refreshLines = useCallback(async () => {
@@ -166,7 +182,7 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
     sorts: [
       { id: 'date',   label: 'Date',    value: f => f.Date ?? '' },
       { id: 'client', label: 'Client',  value: f => f.zz__Display_Contact__ct ?? '' },
-      { id: 'total',  label: 'Total',   value: f => parseFloat(String(f.zz__Total__xn ?? '').replace(/[^0-9.-]/g, '')) || 0 },
+      { id: 'total',  label: 'Total',   value: f => totalFor(f) },
       { id: 'status', label: 'Status',  value: f => f.Status ?? '' },
     ],
     defaultSort: 'date', defaultOrder: 'desc',
@@ -363,7 +379,7 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
             const fd = r.fieldData
             const st = fd.Status || 'Draft'
             const color = STATUS_COLOR[st] ?? '#64748b'
-            const tot = parseFloat(String(fd.zz__Total__xn ?? '').replace(/[^0-9.-]/g, '')) || null
+            const tot = totalFor(fd) || null
             return (
               <div key={r.recordId}
                 className={`est-list-item ${selected?.recordId === r.recordId ? 'active' : ''}`}

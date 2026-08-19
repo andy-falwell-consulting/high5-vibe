@@ -117,6 +117,16 @@ export async function listLines(estimateId) {
  *  the rest. */
 export const seedFromPortal = (estimateId, lines) => replaceLines(estimateId, lines);
 
+/** Every estimate's computed total, keyed by `_kpt__Estimate_ID`.
+ *  One call for the whole list — see the endpoint for why. */
+export async function allTotals() {
+  try {
+    const body = await json(await fetch(
+      `/api/estimate-lines?db=${encodeURIComponent(getCurrentEnv().db)}&totals=1`, { credentials: 'include' }));
+    return body.totals || {};
+  } catch { return {}; }
+}
+
 export const addLines = (estimateId, lines) => post(estimateId, { action: 'add', lines });
 export const updateLine = (estimateId, lineId, changes) => post(estimateId, { action: 'update', lineId, changes });
 export const deleteLine = (estimateId, lineId) => post(estimateId, { action: 'remove', lineId });
