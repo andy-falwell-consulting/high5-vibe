@@ -48,11 +48,12 @@ function val(f, key) {
 // preview that consumed a number would burn one on every keystroke and on every
 // form the user opened and abandoned. Debounced because the lookup scans the
 // replica to find the prefix for a Program Type.
-function CodePreview({ programType, prefix }) {
+function CodePreview({ programType, prefix, startDate }) {
   const [info, setInfo] = useState(null)
   useEffect(() => {
     const type = String(programType ?? '').trim()
     const px = String(prefix ?? '').trim()
+    const sd = String(startDate ?? '').trim()
     let alive = true
     // Everything, including clearing, happens inside the timeout — a synchronous
     // setState in an effect body triggers a cascading render.
@@ -61,25 +62,30 @@ function CodePreview({ programType, prefix }) {
       const qs = new URLSearchParams({ db: getCurrentEnv().db })
       if (px) qs.set('prefix', px)
       else qs.set('programType', type)
+      if (sd) qs.set('startDate', sd)
       fetch(`/api/program-code?${qs}`, { credentials: 'include' })
         .then(r => r.json())
         .then(j => { if (alive) setInfo(j) })
         .catch(() => { if (alive) setInfo(null) })
     }, 400)
     return () => { alive = false; clearTimeout(t) }
-  }, [programType, prefix])
+  }, [programType, prefix, startDate])
 
   if (!info) return null
   if (info.newType) return (
     <div className="oe-code-preview warn">
       No existing program uses that type, so there is no code prefix to follow.
-      Enter one above (e.g. <code>AB</code>) and the first code will be <code>AB-0001</code>.
+      Enter one above (e.g. <code>AB</code>) and the first code will be
+      <code>{` AB-${info.year}-1`}</code>.
     </div>
   )
   return (
     <div className="oe-code-preview">
       Program Code will be <strong>{info.preview}</strong>
-      <span className="oe-code-note"> — assigned on save, so it cannot collide with anyone else&apos;s.</span>
+      <span className="oe-code-note">
+        {' '}— the {info.year} series for {info.prefix}. Assigned on save, so it cannot
+        collide with anyone else&apos;s.
+      </span>
     </div>
   )
 }
@@ -184,7 +190,13 @@ export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {})
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(__prefix ? { prefix: __prefix } : { programType: fields['Program Type'] }),
+      body: JSON.stringify({
+        ...(__prefix ? { prefix: __prefix } : { programType: fields['Program Type'] }),
+        // The sequence restarts each calendar year and is scoped to the
+        // PROGRAM's year, not today's — 37 programs starting in 2027 already
+        // exist, and one entered now belongs in the 2027 series.
+        startDate: fields['Program Start Date'] || '',
+      }),
     })
     const body = await res.json().catch(() => ({}))
     if (!res.ok || !body.code) {
@@ -414,7 +426,10 @@ export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {})
           submitLabel="Create program"
           onCreate={handleCreate}
           onClose={() => setShowNew(false)}>
-          {values => <CodePreview programType={values['Program Type']} prefix={values.__prefix} />}
+          {values => (
+            <CodePreview programType={values['Program Type']} prefix={values.__prefix}
+              startDate={values['Program Start Date']} />
+          )}
         </RecordFormModal>
       )}
     </div>

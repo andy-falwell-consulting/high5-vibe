@@ -81,20 +81,45 @@ next id by counting rows.
   with the key populated on all 1,247 rows. **Any future field added to a
   replicated layout needs the same step.**
 
-### 2. `Program Code` has to be generated, and it is the SKU problem again
+### 2. `Program Code` — the format was not what it looked like
 
-Codes look like `AB-0003`, `AGI-0001`, `MAP-0001` — a per-program-type prefix
-plus a 4-digit sequence. 1,238 of 1,241 rows carry one; **1,232 are unique**,
-so there are already 6 collisions and one row whose code is literally `"AB-"`
-with no number.
+**Corrected 2026-08-19, during the build.** The first reading of this — "prefix
+plus a 4-digit sequence, `AB-0003`" — was wrong, and testing the generator
+against the real data is what caught it. Measured shapes:
 
-This is the same shape as product SKUs, which we already solved: a single
-authoritative counter (`api/next-sku.js`) rather than a FileMaker script
-trigger. The same pattern applies — a per-prefix counter in Redis, seeded from
-the current maximum per prefix. **Do not** derive the next code by scanning the
-replica at write time; that is how the 6 existing collisions happen.
+| Shape | Rows | Meaning |
+|---|---:|---|
+| `PREFIX-YYYY-N` | 307 | **current** — `AB-2026-5` is the 5th Adventure Basics of 2026 |
+| `PREFIX-YYNN` | 839 | legacy — `AB-0003` is 2000 #03, `AB-1905` is 2019 #05 |
+| `PREFIX-NN` | 65 | legacy, no year — `AOC-01` |
+| junk | 28 | `AB-`, bare `01`–`05`, `sos`, `sos2` |
 
-Open question for Ian: are the 6 duplicate codes meaningful, or dirt?
+The `YYNN` reading was confirmed at **98.1%** against each program's start-date
+year. And the modern form has fully taken over: of programs starting in 2026,
+34 use it against 2 legacy; 2027 is 37 to 1.
+
+Three consequences the first draft got wrong:
+
+- **The sequence restarts each year and is scoped to (prefix, year)** — not a
+  single ever-growing counter per prefix.
+- **The year comes from the program's START DATE, not from today.** 37 programs
+  starting in 2027 already exist, so one entered now belongs in the 2027 series.
+- **Prefixes are alphanumeric** — `A50`, `L1`, `L2`. An `[A-Za-z]+` pattern
+  silently fails on 307 rows.
+
+Prefix is derived from what records of that Program Type actually *use*, giving
+modern codes priority over legacy ones. This matters: "adventure basics" has
+historically carried eight prefixes (AB:80, but also CTAB:19, BCS, SYR, ABL,
+RIAB, ABRI), and weighting all of history equally lets a one-off from 2004
+outvote current practice. A Program Type with no precedent gets no guess — the
+form asks for a prefix.
+
+Verified end to end against production data: `AB-2026-6` after `AB-2026-5`,
+`BB-2026-7` after `BB-2026-6`, `MAP-2026-3` after `MAP-2026-2`.
+
+The counter itself is still the SKU answer — one authoritative Redis counter per
+(prefix, year), seeded once, never a scan-at-write-time. The legacy data shows
+what scanning costs: 6 duplicate codes and a row coded literally `"AB-"`.
 
 ### 3. `Open Enrollment or Custom` is a dirty free-text vocabulary
 
@@ -130,14 +155,21 @@ controls — but it is not zero, and it belongs in this scope rather than after 
 Lookups, to be built after creation). Scoped out, but two findings from this
 investigation should be recorded now because they shape it:
 
-- **Registrations do not link to OE Lookups by any key.** `Workshops_New` has no
-  FK to `OELookup_New`. It carries `Course Number` in a *different* scheme —
-  `AB-2026-5` (`prefix-year-sequence`) versus the lookup's `AB-0003`
-  (`prefix-sequence`). Verified: searching `Workshops_New` for the first six
-  Program Codes returned **0 matches each**. So "who registered for this
-  program" is not currently an answerable query, by id or by code. Any email
-  feature has to establish that link first — a real design question, not
-  plumbing.
+- **Registrations DO link to OE Lookups — correction, 2026-08-19.** This
+  document previously said they did not. That was wrong, and wrong for an
+  avoidable reason: the six Program Codes tested were year-**2000** legacy codes
+  (`AB-0003`), which of course match nothing. Re-tested against the *modern*
+  codes: **33 of the first 40 matched a Workshops `Course Number` exactly.** The
+  join is `OELookup_New.Program Code` = `Workshops_New.Course Number`, and it
+  works because both tables converged on `PREFIX-YYYY-N` around 2020. The seven
+  unmatched are all 2020 programs, plausibly ones that ran without recorded
+  registrations.
+
+  So "who registered for this program" **is** answerable, and the confirmation
+  email feature is substantially easier than this document first claimed. It
+  needs no new linking design — only a decision about the legacy rows, which
+  have no counterpart and never will.
+
 - **The registrant's email address is not reachable on the Workshops layout.**
   `wkshp_cntct_INADR__email::zz__Address__ct` is present and **empty on all 400
   sampled rows** — the same "related field present, readable and empty" trap C2
