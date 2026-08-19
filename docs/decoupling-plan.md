@@ -408,6 +408,16 @@ This is the one capability to preserve, and it is mostly already right.
   FileMaker Pro keep seeing records that are gone from Vibe; the deletion is
   recoverable by hand.
 
+**Settled 2026-08-19**
+
+- **QuickBooks and Shopify have ONE environment, shared by every FileMaker
+  database.** So `CreateInQBO` hardcoding `env="production"` and Shopify's single
+  `SHOPIFY_STORE` are correct, not gaps — a push from a Dev record reaching the
+  live QuickBooks or Shopify is intended. Recorded because it looks like a
+  cross-environment leak on inspection, and is not one. (The
+  `QBO_SYNC_ALLOW_PROD` guard on the *sync* jobs is a separate thing: it stops
+  bulk background syncs, not deliberate one-off pushes.)
+
 **Still open**
 
 - **A tax rate.** Estimate tax is 0 on all 2,818 production estimates and no line

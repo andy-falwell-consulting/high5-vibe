@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { getRecord, invalidateRecord, patchCachedRecord, createRecord, addCachedRecord } from '../api/filemaker'
-import { updateVibeRecord } from '../api/vibeRecords'
+import { getRecord, invalidateRecord, patchCachedRecord, addCachedRecord } from '../api/filemaker'
+import { updateVibeRecord, createVibeRecord } from '../api/vibeRecords'
+import { displayFieldsForContact } from '../api/contactDisplay'
 import { useAllRecords } from '../hooks/useAllRecords'
 import ListToolbar, { useListControls, ListBody } from './ListControls'
 import RecordSaveBar from './RecordSaveBar'
@@ -252,13 +253,22 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
   ]
 
   async function handleCreate(fieldData) {
-    const res = await createRecord(LAYOUT, fieldData)
-    const newId = res?.response?.recordId
-    if (!newId) throw new Error(res?.messages?.[0]?.message || 'Could not create the record')
-    getRecord(LAYOUT, newId).then(d => {
-      const rec = d?.response?.data?.[0]
-      if (rec) { addCachedRecord(LAYOUT, CACHE_VERSION, rec); handleSelect(rec); onRecordSelect?.(rec.recordId, rec.fieldData?.zz__Display_Contact__ct || rec.fieldData?.Title) }
-    }).catch(() => {})
+    // Born in Vibe, like every other record this app creates. QuickAddFromContact
+    // has created estimates this way since A1; this module's own "+ New" was the
+    // last one still going through FileMaker — the same split that was found and
+    // closed for Inspections.
+    //
+    // The names and billing address block are resolved from the contact, exactly
+    // as the quick-add does, so an estimate created here is indistinguishable
+    // from one created there.
+    const { fields: display } = await displayFieldsForContact(LAYOUT, fieldData._kft__Contact_ID)
+    const made = await createVibeRecord(LAYOUT, { ...display, ...fieldData })
+    const newId = made?.recordId
+    if (!newId) throw new Error('Could not create the record')
+    const rec = { recordId: newId, fieldData: made.fieldData, portalData: {} }
+    addCachedRecord(LAYOUT, CACHE_VERSION, rec)
+    handleSelect(rec)
+    onRecordSelect?.(newId, rec.fieldData?.zz__Display_Contact__ct || rec.fieldData?.Title)
   }
 
   const onMouseDown = useCallback(e => {
