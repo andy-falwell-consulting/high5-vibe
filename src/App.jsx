@@ -7,7 +7,6 @@ import PreviewBypassBanner from './components/PreviewBypassBanner'
 import QboHealthBanner from './components/QboHealthBanner'
 import Home from './components/Home'
 import ProductsAndServicesV2 from './components/ProductsAndServicesV2'
-import Contacts from './components/Contacts'
 import Inspections from './components/Inspections'
 import TrainingsWorkspace from './components/TrainingsWorkspace'
 import EOL from './components/EOL'
@@ -23,7 +22,7 @@ import Admin from './components/Admin'
 import Help from './components/Help'
 import CommandPalette from './components/CommandPalette'
 import AgentPanel from './components/AgentPanel'
-import { getAllRecords, ensureFmpUserSession } from './api/filemaker'
+import { getAllRecords, ensureFmpUserSession, readCacheAsync } from './api/filemaker'
 import { listReminders, dueCount, subscribeReminders } from './api/reminders'
 import { RCD_LAYOUT, RCD_CACHE_VERSION, RCD_FIND_QUERY, RCD_SORT } from './config/ccsCache'
 import './light-theme.css'
@@ -32,7 +31,6 @@ import './components/CommandPalette.css'
 const MODULES = [
   { id: 'home', label: 'Home', icon: '⌂', group: 'Overview' },
   { id: 'reminders', label: 'Reminders', icon: '⏰', group: 'Overview' },
-  { id: 'contacts', label: 'Contacts', icon: '◉', group: 'Records' },
   { id: 'contacts-v2', label: 'Contacts v2', icon: '◎', group: 'Records' },
   { id: 'estimates',   label: 'Estimates',   icon: '◧', group: 'Records' },
   { id: 'inspections', label: 'Inspections', icon: '⚑', group: 'Records' },
@@ -150,7 +148,6 @@ export default function App() {
   useEffect(() => {
     const PREWARM = [
       { id: 'projects',    layout: RCD_LAYOUT,                opts: { cacheVersion: RCD_CACHE_VERSION, findQuery: RCD_FIND_QUERY, sort: RCD_SORT } },
-      { id: 'contacts',    layout: 'Contacts_New',            opts: { cacheVersion: 2, batchSize: 100 } },
       { id: 'estimates',   layout: 'Estimates_New',           opts: { cacheVersion: 2, batchSize: 100 } },
       { id: 'inspections', layout: 'Inspections_New',         opts: { cacheVersion: 1, batchSize: 100 } },
       { id: 'rmi',         layout: 'RMI_New',                 opts: { cacheVersion: 1, batchSize: 100 } },
@@ -226,7 +223,35 @@ export default function App() {
     setVisited(v => { const n = new Set(v); n.add(id); return n })
   }
 
+  // Reminders store the moduleId of the record they link to, and they live in
+  // each user's Google Calendar — so a reminder created before the legacy
+  // Contacts module was retired still says 'contacts', on a calendar this app
+  // cannot rewrite. Those links are translated here rather than left broken.
+  //
+  // The id needs translating too, not just the module: the legacy module stored
+  // FileMaker's recordId, while Contacts v2 keys on `_kpt__Contact_ID`. The
+  // replica has both, so the lookup is local.
+  async function resolveLegacyContact(recordId) {
+    try {
+      const cached = await readCacheAsync('Contacts_New', 2)
+      const rec = (cached?.records || []).find(r => String(r.recordId) === String(recordId))
+      return rec?.fieldData?._kpt__Contact_ID ? String(rec.fieldData._kpt__Contact_ID) : null
+    } catch { return null }
+  }
+
   function navigateTo(moduleId, recordId, view) {
+    if (moduleId === 'contacts') {
+      // Open the surviving module, translating the id on the way.
+      resolveLegacyContact(recordId).then(contactId => {
+        const id = contactId || recordId
+        setRecordTitle(null)
+        pushHash('contacts-v2', id)
+        setNavTarget({ moduleId: 'contacts-v2', recordId: id, view })
+        setActiveModule('contacts-v2')
+        setVisited(v => { const n = new Set(v); n.add('contacts-v2'); return n })
+      })
+      return
+    }
     setRecordTitle(null)
     pushHash(moduleId, recordId)
     setNavTarget({ moduleId, recordId, view })
@@ -283,7 +308,6 @@ export default function App() {
         <NavRail modules={visibleModules} activeId={activeModule} onSelect={handleSelect} theme={theme} onToggleTheme={toggleTheme} onOpenPalette={() => setPaletteOpen(true)} user={user} onLogout={handleLogout} badges={{ reminders: reminderDue }} />
         {visited.has('home') && <div style={{ display: activeModule === 'home' ? 'contents' : 'none' }}><Home onOpen={handlePalettePick} onGoto={handleSelect} onOpenView={(m, v) => navigateTo(m, null, v)} onOpenPalette={() => setPaletteOpen(true)} /></div>}
         {visited.has('reminders') && <div style={{ display: activeModule === 'reminders' ? 'contents' : 'none' }}><Reminders navTarget={navTarget} onClearNav={clearNavTarget} onNavigateTo={navigateTo} /></div>}
-        {visited.has('contacts') && <div style={{ display: activeModule === 'contacts' ? 'contents' : 'none' }}><Contacts navTarget={navTarget} onClearNav={clearNavTarget} onNavigateTo={navigateTo} onRecordSelect={makeRecordSelectHandler('contacts')} /></div>}
         {visited.has('contacts-v2') && <div style={{ display: activeModule === 'contacts-v2' ? 'contents' : 'none' }}><ContactsV2 navTarget={navTarget} onClearNav={clearNavTarget} onNavigateTo={navigateTo} onRecordSelect={makeRecordSelectHandler('contacts-v2')} /></div>}
         {visited.has('estimates') && <div style={{ display: activeModule === 'estimates' ? 'contents' : 'none' }}><Estimates navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('estimates')} /></div>}
         {visited.has('inspections') && <div style={{ display: activeModule === 'inspections' ? 'contents' : 'none' }}><Inspections navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('inspections')} /></div>}

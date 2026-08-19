@@ -133,32 +133,19 @@ export class FmpWriteAuthError extends Error {
 
 const isLocalDev = () => typeof window !== 'undefined' && window.location.hostname === 'localhost';
 
-async function getToken({ write = false } = {}) {
-  // Mutating calls REQUIRE the user-bound token — no admin fallback. This is
-  // the single chokepoint every write function (createRecord, updateRecord,
-  // deleteRecord, portal row ops, uploadContainer) routes through, so gating
-  // here locks down all of them at once.
-  if (write) {
-    let ut = activeUserToken();
-    if (!ut) {
-      // Cheap to retry: covers first-write-of-session and a token that expired
-      // mid-session (invalidateWriteAuth cleared it after a 401). No-op if the
-      // user has no matching FileMaker account.
-      await ensureFmpUserSession().catch(() => {});
-      ut = activeUserToken();
-    }
-    if (ut) return ut;
-    // Local dev has no serverless functions (see CLAUDE.md), so a per-user
-    // token can never be minted there — fall back to the shared dev session
-    // rather than hard-blocking every write during local development. Every
-    // deployed environment (preview + production) still requires a real
-    // per-user session; this bypass cannot trigger there.
-    if (isLocalDev()) {
-      // falls through to the shared-session logic below
-    } else {
-      throw new FmpWriteAuthError();
-    }
-  }
+// PHASE A4 — there is no `write` mode any more.
+//
+// This used to take `{ write: true }` and demand a user-bound FileMaker token,
+// because it was the single chokepoint every mutating call routed through.
+// Every one of those calls now writes to Vibe, and the write functions
+// themselves are gone, so "we still write to FileMaker" is no longer merely
+// untrue — it is unexpressible. The per-user-FileMaker-account failure class
+// goes with it: a user with no FMP account can now do everything the app
+// offers.
+//
+// What remains is read-only: the shared session used by the handful of direct
+// reads left (getRecord, findInLayout, container image URLs).
+async function getToken() {
   const env = getCurrentEnv();
   // Invalidate token if the environment changed
   if (sessionToken && _tokenEnvId !== env.id) {
@@ -750,42 +737,6 @@ export async function getRecord(layout, recordId) {
   return promise;
 }
 
-// Fetch a record AND run a FileMaker script against it in one request.
-//
-// Some fields are maintained by FileMaker scripts that only fire on human entry
-// in FMP Pro — the Data API doesn't trigger them, so values written through the
-// API leave those fields stale (estimate totals are the case that matters; they
-// also reject direct writes with `201 Field cannot be modified`). Running the
-// recalc script attached to a record GET fixes the record and returns it fresh
-// in the same round trip.
-//
-// The script must be server-compatible and must NOT be invoked via the
-// standalone /script/ endpoint — that runs with no record context and silently
-// does nothing. Verified against the live file 2026-07-28.
-//
-// Returns { data, scriptError } — scriptError is FileMaker's own code as a
-// string, '0' on success. Callers should surface a non-zero value rather than
-// let a stale total through unnoticed.
-export async function getRecordWithScript(layout, recordId, scriptName, scriptParam) {
-  const token = await getToken({ write: true });
-  const env = getCurrentEnv();
-  const qs = new URLSearchParams({ script: scriptName });
-  if (scriptParam != null) qs.set('script.param', String(scriptParam));
-  const res = await _scheduledFetch(_HIGH, () => fetch(
-    `${getBasePath()}/fmi/data/v2/databases/${env.db}/layouts/${encodeURIComponent(layout)}/records/${recordId}?${qs}`,
-    { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' }
-  ));
-  if (res.status === 401) { invalidateWriteAuth(); return getRecordWithScript(layout, recordId, scriptName, scriptParam); }
-  const data = await res.json();
-  const rec = data?.response?.data?.[0];
-  // Keep the caches honest — the script just changed stored fields.
-  if (rec) {
-    detailCache.delete(`${layout}:${recordId}`);
-    patchCachedRecordAcrossVersions(layout, recordId, rec.fieldData, rec.portalData);
-  }
-  return { data, scriptError: String(data?.response?.scriptError ?? '') };
-}
-
 // Fire-and-forget prefetch — call on hover so detail is ready before click
 export function prefetchRecord(layout, recordId) {
   const key = `${layout}:${recordId}`;
@@ -795,108 +746,6 @@ export function prefetchRecord(layout, recordId) {
 // Remove a record from the detail cache so the next getRecord call hits the server
 export function invalidateRecord(layout, recordId) {
   detailCache.delete(`${layout}:${recordId}`);
-}
-
-export async function createRecord(layout, fieldData) {
-  const token = await getToken({ write: true });
-  const env = getCurrentEnv();
-  const res = await fetch(
-    `${getBasePath()}/fmi/data/v2/databases/${env.db}/layouts/${encodeURIComponent(layout)}/records`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ fieldData }),
-    }
-  );
-  if (res.status === 401) { invalidateWriteAuth(); return createRecord(layout, fieldData); }
-  return res.json();
-}
-
-export async function addPortalRow(layout, recordId, portalName, rowData) {
-  return addPortalRows(layout, recordId, portalName, [rowData]);
-}
-
-// Bulk variant — FileMaker accepts many new portal rows in a single PATCH, which
-// matters when copying a whole set at once (an inspection carries 25-75 line
-// items; one request beats one round trip per line).
-export async function addPortalRows(layout, recordId, portalName, rows) {
-  if (!rows?.length) return { messages: [{ code: '0', message: 'OK' }] };
-  const token = await getToken({ write: true });
-  const env = getCurrentEnv();
-  const res = await fetch(
-    `${getBasePath()}/fmi/data/v2/databases/${env.db}/layouts/${encodeURIComponent(layout)}/records/${recordId}`,
-    {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ portalData: { [portalName]: rows } }),
-    }
-  );
-  if (res.status === 401) { invalidateWriteAuth(); return addPortalRows(layout, recordId, portalName, rows); }
-  return res.json();
-}
-
-export async function updateRecord(layout, recordId, fieldData) {
-  const token = await getToken({ write: true });
-  const env = getCurrentEnv();
-  const res = await fetch(
-    `${getBasePath()}/fmi/data/v2/databases/${env.db}/layouts/${encodeURIComponent(layout)}/records/${recordId}`,
-    {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ fieldData }),
-    }
-  );
-  if (res.status === 401) {
-    invalidateWriteAuth();
-    return updateRecord(layout, recordId, fieldData);
-  }
-  return res.json();
-}
-
-// Update fields on an existing portal row (e.g. change a BOM line quantity).
-// rowRecordId is the portal row's own recordId from portalData.
-export async function updatePortalRow(layout, recordId, portalName, rowRecordId, rowData) {
-  const token = await getToken({ write: true });
-  const env = getCurrentEnv();
-  const res = await fetch(
-    `${getBasePath()}/fmi/data/v2/databases/${env.db}/layouts/${encodeURIComponent(layout)}/records/${recordId}`,
-    {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ portalData: { [portalName]: [{ recordId: String(rowRecordId), ...rowData }] } }),
-    }
-  );
-  if (res.status === 401) { invalidateWriteAuth(); return updatePortalRow(layout, recordId, portalName, rowRecordId, rowData); }
-  return res.json();
-}
-
-// Delete a related/portal row by its record id. `tableOccurrence` is the related
-// table-occurrence name (the part before "::" in the portal's field keys), NOT
-// the portal object name.
-export async function deletePortalRow(layout, recordId, tableOccurrence, rowRecordId) {
-  const token = await getToken({ write: true });
-  const env = getCurrentEnv();
-  const res = await fetch(
-    `${getBasePath()}/fmi/data/v2/databases/${env.db}/layouts/${encodeURIComponent(layout)}/records/${recordId}`,
-    {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ fieldData: { deleteRelated: `${tableOccurrence}.${rowRecordId}` } }),
-    }
-  );
-  if (res.status === 401) { invalidateWriteAuth(); return deletePortalRow(layout, recordId, tableOccurrence, rowRecordId); }
-  return res.json();
-}
-
-export async function deleteRecord(layout, recordId) {
-  const token = await getToken({ write: true });
-  const env = getCurrentEnv();
-  const res = await fetch(
-    `${getBasePath()}/fmi/data/v2/databases/${env.db}/layouts/${encodeURIComponent(layout)}/records/${recordId}`,
-    { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }
-  );
-  if (res.status === 401) { invalidateWriteAuth(); return deleteRecord(layout, recordId); }
-  return res.json();
 }
 
 // Fetch a single record with explicit portal row limits (default getRecord caps portals).
@@ -923,20 +772,5 @@ export async function findInLayout(layout, query, { sort, limit = 500 } = {}) {
     { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }
   );
   if (res.status === 401) { sessionToken = null; return findInLayout(layout, query, { sort, limit }); }
-  return res.json();
-}
-
-// Upload a file (Blob/File) into a container field on a record. Works through the
-// /fmi proxy in dev and prod (multipart body is forwarded).
-export async function uploadContainer(layout, recordId, field, file, filename) {
-  const token = await getToken({ write: true });
-  const env = getCurrentEnv();
-  const fd = new FormData();
-  fd.append('upload', file, filename || file.name || 'file');
-  const res = await fetch(
-    `${getBasePath()}/fmi/data/v2/databases/${env.db}/layouts/${encodeURIComponent(layout)}/records/${recordId}/containers/${encodeURIComponent(field)}/1`,
-    { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd }
-  );
-  if (res.status === 401) { invalidateWriteAuth(); return uploadContainer(layout, recordId, field, file, filename); }
   return res.json();
 }

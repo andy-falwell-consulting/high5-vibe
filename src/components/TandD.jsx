@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { BRAND, UI } from '../config/brandColors'
-import { getRecord, prefetchRecord, updateRecord, invalidateRecord, patchCachedRecord } from '../api/filemaker';
+import { getRecord, prefetchRecord, invalidateRecord, patchCachedRecord } from '../api/filemaker';
+import { updateVibeRecord } from '../api/vibeRecords';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
 import RecordSaveBar from './RecordSaveBar';
 import AttachmentsPanel from './AttachmentsPanel';
@@ -166,7 +167,12 @@ export default function TandD({ navTarget, onClearNav, onRecordSelect } = {}) {
     if (!dirtyCount) { return; }
     setSaving(true); setSaveStatus(null); setSaveErrorMsg(null);
     try {
-      await updateRecord(LAYOUT, selected.recordId, edits);
+      // These modules are RECORDS_LOCKED and view-only, so this never runs —
+      // but it used to call FileMaker's updateRecord, which kept the last
+      // FileMaker write alive in a grep long after every reachable one had
+      // moved. `trainings_New` is Vibe-owned, so if editing is ever re-enabled
+      // here this is already the right call.
+      await updateVibeRecord(LAYOUT, selected.recordId, edits);
       patchCachedRecord(LAYOUT, CACHE_VERSION, selected.recordId, edits);
       invalidateRecord(LAYOUT, selected.recordId);
       setSelected(prev => ({ ...prev, fieldData: { ...prev.fieldData, ...edits } }));

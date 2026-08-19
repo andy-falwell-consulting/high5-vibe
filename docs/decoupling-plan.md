@@ -47,11 +47,11 @@ more instructive one.
 | **A1** record creation | **done** — 4 layouts moved via one shared component |
 | **A2** deletion | **done** — tombstones, all 8 layouts, one change |
 | **A3** edit ownership | **done as far as it goes** — 6 of 8; the other two are decided against or need a feature built |
-| **A4** delete the write token | **one thing away** — only the legacy Contacts module still writes |
+| **A4** delete the write token | **DONE** (2026-08-19) — the write surface no longer exists |
 | **B1** estimate line items | **done** — migrated, wired, FileMaker module deleted |
 | **B2** bill of materials | **done** (2026-08-19) — tail migrated, 10 runaway parents left behind. See b2-bom-scope.md |
 | **B3** OE training | **done** (2026-08-19) — 5,142 workshops across 2,689 contacts |
-| **B4** retire legacy Contacts | **gap closed** — invoices migrated; only the deletion itself remains |
+| **B4** retire legacy Contacts | **done** (2026-08-19) — module deleted |
 | **B5** search + agent | **done** — both repointed at Vibe's contact model |
 | **C1** derived fields | **audited; resolver and both write paths shipped**; existing records not backfilled |
 | **C2/C3/C4** | untouched — C4 is the largest unknown |
@@ -68,7 +68,7 @@ Eight layouts are replicated (`api/_replica.js`).
 | `RCD_New` (CCS) | 6,436 | **Vibe** | **Vibe** (2026-08-18) | **Vibe** (2026-08-18) |
 | `Inspections_New` | ~4,900 | **Vibe** | **Vibe** | **Vibe** (2026-08-18) |
 | `trainings_New` | 2,478 | **Vibe** (2026-08-18) | — *(no create path exists)* | **Vibe** (2026-08-18) |
-| `Contacts_New` | 15,582 | FileMaker | **Vibe** (`V-` ids) | **Vibe** (tombstone) |
+| `Contacts_New` | 15,582 | *(module retired 2026-08-19)* | **Vibe** (`V-` ids) | **Vibe** (tombstone) |
 | `Estimates_New` | 2,817 | **Vibe** (2026-08-18) | **Vibe** (2026-08-18) | **Vibe** (2026-08-18) |
 | `Products & Services_New` | 1,267 | **Vibe** (2026-08-18) | **Vibe** (2026-08-19) | **Vibe** (2026-08-18) |
 | `OELookup_New` | 1,247 | FileMaker | FileMaker | **Vibe** (2026-08-18) |
