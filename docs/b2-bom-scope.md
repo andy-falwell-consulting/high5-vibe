@@ -152,3 +152,49 @@ probably telling us the flag is not what decides whether something has a BOM —
 `ProductsAndServicesV2.jsx` uses it only to decide whether to SHOW the tab
 (`isAssembly = !!fval('assembly_product')`). Worth confirming with Ian rather
 than inferring, since it decides whether the flag should be trusted at all.
+
+
+---
+
+## Migration run — 2026-08-19, production
+
+Tail only, per the decision to leave the ten outliers behind.
+
+| | |
+|---|---:|
+| Rows read (whole table) | 125,047 |
+| Skipped — the ten excluded parents | 114,150 |
+| Dropped — no component id on the row | 779 |
+| Rows with no parent at all | 2 |
+| **Lines stored** | **10,116** |
+| **Products with a real bill of materials** | **311** |
+| Average components per product | 32.5 |
+
+Every row reconciles: 114,150 + 779 + 10,116 + 2 = 125,047.
+
+### The audit undercounted how much of this table is empty
+
+The audit found 1,069 non-excluded parents. Only **311** of them produced a
+single usable line — the other **758 had nothing but rows with no component id**.
+A BOM row that names no component cannot be rendered and cannot be priced, so
+those are placeholders, not bills of materials.
+
+This also probably explains the "788 parents not flagged `assembly_product`"
+puzzle: most of them are these empty single-row parents, which is why the flag
+looked so badly correlated with having a BOM. The real picture is far tidier —
+**311 products have a BOM, averaging 32 components each.**
+
+### Flagged, migrated, and worth a look
+
+Two parents exceeded the 500-line threshold and were **reported rather than
+skipped**, which is what that threshold is for:
+
+| Item | Product | Lines |
+|---|---|---:|
+| 1722 | Atomik Climbing Hold — Elementary Adventure Package 2, bolt on | 1,689 |
+| 2115 | New England Ropes, 1/2 KMIII Static, No Preference — by the foot | 1,137 |
+
+Neither is flagged as an assembly. Item 1722 is the sibling of 1721, which IS on
+the excluded list with an almost identical 1,689 lines — so whatever produced the
+runaway rows appears to have hit both variants of the same product. Worth
+mentioning to Ian alongside the ten.
