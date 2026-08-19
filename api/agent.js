@@ -63,7 +63,7 @@ from a project or estimate record can be passed straight to get_contact.
 get_contact on an ORGANIZATION returns its people — that is how to answer "who
 works at X". get_contact on a PERSON returns their affiliations, the other
 direction. Searching for an organization's name will NOT return its people;
-fetch the organization and read `people`.
+fetch the organization and read its people list.
 
 Prefer these over search_records('contacts'), which reads the older FileMaker
 table: it cannot see any contact created since 2026-08-06, and it has no notion
