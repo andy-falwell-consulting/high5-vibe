@@ -17,6 +17,7 @@ import {
   reorderOrgPeople, reorderMethods, contactDistance,
 } from '../api/vibeContacts';
 import { getCurrentEnv } from '../config/fmpEnvironments';
+import ReminderModal from './ReminderModal';
 import './ContactsV2.css';
 
 // Contacts, on Vibe's own model — organizations, people and affiliations as
@@ -758,6 +759,10 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
   const [oeTraining, setOeTraining] = useState(null);
   // Invoice history, same lazy-on-first-open pattern as OE training.
   const [invoices, setInvoices] = useState(null);
+  // Reminder-linking, which until now existed only on the legacy Contacts
+  // module. It has to live here before that module can be retired, or setting a
+  // reminder on a contact stops being possible at all.
+  const [remindOpen, setRemindOpen] = useState(false);
   // Sidebar width, dragged by the handle between the list and the record.
   // Persisted, unlike the other modules': the width someone picks is a
   // preference, and losing it on every reload is the reason nobody adjusts it.
@@ -821,6 +826,10 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
   // Distance / drive time for the open contact. Keyed by id so switching
   // records reads as loading without an effect having to reset it first.
   const openId = selected?.kind === 'organization' ? selected.organization?.id : selected?.person?.id;
+  // One label for whichever kind is open — used by the reminder chip and title.
+  const contactLabel = (selected?.kind === 'organization'
+    ? selected.organization?.name
+    : selected?.person?.displayName) || '';
   useEffect(() => {
     if (!openId) return undefined;
     let alive = true;
@@ -1195,6 +1204,7 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
                   <RiskBadge active={activeRmi} high={highRisk} onOpen={() => setTab('rmi')} />
                   <span className="c2-id">{person.id}</span>
                   <button className="c2-mini c2-mini--flush" onClick={() => setEditing(true)}>Edit</button>
+                  <button className="c2-mini c2-mini--flush" onClick={() => setRemindOpen(true)}>⏰ Remind</button>
                   {!highRisk && (
                     <button className="c2-mini c2-mini--danger c2-mini--flush"
                       onClick={() => { setRiskError(null); setRiskAsk('asking'); }}>Mark high risk</button>
@@ -1305,6 +1315,7 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
                   <RiskBadge active={activeRmi} high={highRisk} onOpen={() => setTab('rmi')} />
                   <span className="c2-id">{org.id}</span>
                   <button className="c2-mini c2-mini--flush" onClick={() => setEditing(true)}>Edit</button>
+                  <button className="c2-mini c2-mini--flush" onClick={() => setRemindOpen(true)}>⏰ Remind</button>
                   {!highRisk && (
                     <button className="c2-mini c2-mini--danger c2-mini--flush"
                       onClick={() => { setRiskError(null); setRiskAsk('asking'); }}>Mark high risk</button>
@@ -1428,6 +1439,23 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
           </div>
         ) : null}
       </main>
+
+      {remindOpen && openId && (
+        <ReminderModal
+          initial={{
+            // The CONTACT id, not a FileMaker recordId. The legacy module stored
+            // `selected.recordId` — a FileMaker internal — which is why an old
+            // contact reminder cannot be resolved by this page and has to be
+            // translated on navigation. Storing the contact id means these ones
+            // survive FileMaker's retirement untouched.
+            recordType: 'contacts-v2',
+            recordId: String(openId),
+            recordLabel: contactLabel,
+            title: `Follow up with ${contactLabel || 'contact'}`,
+          }}
+          onClose={() => setRemindOpen(false)}
+          onSaved={() => setRemindOpen(false)} />
+      )}
 
       {riskAsk && (
         <HighRiskModal
