@@ -260,3 +260,42 @@
 [data-theme="light"] .admin-sa-steps li { color: #334155; border-bottom-color: #f1f5f9; }
 [data-theme="light"] .admin-sa-detail { color: #5e6b7c; }
 [data-theme="light"] .admin-sa-hint { color: #b45309; }
+
+/* ── Vocabularies tab (C3) ───────────────────────────────────────────────── */
+.admin-vocab-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 14px 0 18px; }
+.admin-vocab-bar select { padding: 6px 10px; border-radius: 6px; background: #13151c; color: #e2e8f0; border: 1px solid #1e2130; }
+
+.admin-vocab-src { font-size: 12px; padding: 3px 9px; border-radius: 999px; font-weight: 600; }
+.admin-vocab-src--vibe { background: #064e3b; color: #6ee7b7; }
+.admin-vocab-src--filemaker { background: #422006; color: #fcd34d; }
+.admin-vocab-src--none { background: #450a0a; color: #fca5a5; }
+
+.admin-vocab-diff { background: #13151c; border: 1px solid #1e2130; border-radius: 8px; padding: 12px 14px; margin-bottom: 18px; font-size: 13px; }
+.admin-vocab-diff ul { margin: 8px 0 0; padding-left: 18px; }
+.admin-vocab-diff li { margin-bottom: 8px; }
+.admin-vocab-only { color: #94a3b8; font-size: 12px; margin-top: 2px; }
+
+.admin-vocab-lists { display: flex; flex-direction: column; gap: 12px; }
+.admin-vocab-list { background: #13151c; border: 1px solid #1e2130; border-radius: 8px; padding: 12px 14px; }
+.admin-vocab-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.admin-vocab-head code { font-size: 13px; font-weight: 600; color: #fff; }
+.admin-vocab-count { font-size: 11px; color: #94a3b8; background: #1e2130; padding: 1px 7px; border-radius: 999px; }
+.admin-vocab-head .admin-btn { margin-left: auto; }
+.admin-vocab-head .admin-btn + .admin-btn { margin-left: 0; }
+.admin-vocab-values { font-size: 12px; color: #cbd5e1; line-height: 1.7; }
+.admin-vocab-edit { width: 100%; background: #0f1117; color: #e2e8f0; border: 1px solid #1e2130; border-radius: 6px; padding: 8px 10px; font-size: 13px; font-family: inherit; resize: vertical; }
+.admin-btn--ghost { background: transparent; border: 1px solid #1e2130; color: #cbd5e1; }
+
+[data-theme="light"] .admin-vocab-bar select { background: #fff; color: #0f172a; border-color: #e2e8f0; }
+[data-theme="light"] .admin-vocab-diff,
+[data-theme="light"] .admin-vocab-list { background: #fff; border-color: #e2e8f0; }
+[data-theme="light"] .admin-vocab-head code { color: #0f172a; }
+[data-theme="light"] .admin-vocab-count { background: #e2e8f0; color: #475569; }
+[data-theme="light"] .admin-vocab-values { color: #334155; }
+[data-theme="light"] .admin-vocab-only { color: #64748b; }
+[data-theme="light"] .admin-vocab-edit { background: #f8fafc; color: #0f172a; border-color: #e2e8f0; }
+[data-theme="light"] .admin-btn--ghost { border-color: #e2e8f0; color: #334155; }
+[data-theme="light"] .admin-vocab-src--vibe { background: #d1fae5; color: #065f46; }
+[data-theme="light"] .admin-vocab-src--filemaker { background: #fef3c7; color: #92400e; }
+.admin-note--warn { border-left: 3px solid #b45309; padding-left: 10px; color: #fcd34d; }
+[data-theme="light"] .admin-note--warn { border-left-color: #f59e0b; color: #92400e; }
