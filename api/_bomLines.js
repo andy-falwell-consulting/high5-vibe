@@ -46,6 +46,11 @@ export async function writeLines(db, parentItemId, lines) {
   return lines;
 }
 
+/** Remove Vibe's copy entirely, so the product falls back to FileMaker. */
+export async function dropLines(db, parentItemId) {
+  return (await redis.hdel(bomKey(db), String(parentItemId))) > 0;
+}
+
 export async function linesExist(db, parentItemId) {
   return (await redis.hexists(bomKey(db), String(parentItemId))) === 1;
 }

@@ -21,7 +21,7 @@
 // ignored FileMaker's stored `::Total`.
 import { getGoogleSession } from './_googleSession.js';
 import { ALLOWED_DBS, fmpToken } from './_fmp.js';
-import { readLines, writeLines, nextLineId, cleanLine, LINE_FIELDS, linesExist } from './_bomLines.js';
+import { readLines, writeLines, nextLineId, cleanLine, LINE_FIELDS, linesExist, dropLines } from './_bomLines.js';
 
 const FMP_HOST = 'https://ILELLCO.pcifmhosting.com';
 
@@ -58,11 +58,23 @@ async function seedFromFileMaker(db, itemId) {
       + 'It was deliberately left out of the migration pending a decision — see docs/b2-bom-scope.md. '
       + 'Editing it here would import all of them.');
   }
-  return rows.map(row => ({
+  const lines = rows.map(row => ({
     id: String(row.fieldData?._kpt__Item_Line_Item_ID || row.recordId),
     componentItemId: String(row.fieldData?._kft__Item_ID__assemblyLine ?? '').trim(),
     quantity: Number(row.fieldData?.Quantity) || 0,
   })).filter(l => l.componentItemId);
+
+  // Rows exist but NONE names a component: refuse rather than seed an empty
+  // bill of materials. That combination means the layout is not exposing
+  // `_kft__Item_ID__assemblyLine` — which is the state of the Dev file, where
+  // the field was only ever added in production. Writing [] there would replace
+  // a working FileMaker-backed BOM with a blank one, silently.
+  if (rows.length && !lines.length) {
+    throw new Error(
+      `The BOM layout in ${db} returned ${rows.length} rows for this product but no component ids — `
+      + 'it is probably missing _kft__Item_ID__assemblyLine. Refusing to seed an empty bill of materials.');
+  }
+  return lines;
 }
 
 export default async function handler(req, res) {
@@ -93,7 +105,7 @@ export default async function handler(req, res) {
     // First write to a product Vibe has never seen: bring its existing
     // components across before applying the change, or the write would leave
     // Vibe holding only what was just edited.
-    if (!(await linesExist(db, itemId))) {
+    if (action !== 'reset' && !(await linesExist(db, itemId))) {
       await writeLines(db, itemId, await seedFromFileMaker(db, itemId));
     }
     const current = await readLines(db, itemId);
@@ -143,7 +155,15 @@ export default async function handler(req, res) {
       return res.status(200).json({ itemId, lines: await writeLines(db, itemId, rows) });
     }
 
-    return res.status(400).json({ error: 'action must be add, update, remove or replace' });
+    // Drop Vibe's copy entirely, so the product falls back to FileMaker's
+    // portal again. The counterpart of the DELETE verb on /api/vibe-record, and
+    // the way back from a bad seed.
+    if (action === 'reset') {
+      await dropLines(db, itemId);
+      return res.status(200).json({ itemId, reset: true });
+    }
+
+    return res.status(400).json({ error: 'action must be add, update, remove, replace or reset' });
   } catch (e) {
     return res.status(502).json({ error: String(e?.message || e).slice(0, 300) });
   }
