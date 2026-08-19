@@ -28,7 +28,14 @@ function Flag({ on, children }) {
 
 export default function OETrainings({ navTarget, onClearNav, onRecordSelect, onNavigateTo } = {}) {
   const [courses, setCourses] = useState(null)      // null = loading
-  const [lookups, setLookups] = useState(new Map()) // Program Code -> OE Lookup fieldData
+  // Program Code -> { f: fieldData, recordId }.
+  //
+  // The recordId is carried deliberately: OE Lookup keys its navTarget on the
+  // FileMaker recordId, so "View offering" cannot open the right program
+  // without it. v1.0.439 stored fieldData alone and passed null, which opened
+  // the OE Lookup LIST instead of the offering — it looked like a navigation
+  // that went to the wrong place, because it did.
+  const [lookups, setLookups] = useState(new Map())
   const [selected, setSelected] = useState(null)    // { course, rows } | null
   const [rosterBusy, setRosterBusy] = useState(false)
   const [error, setError] = useState(null)
@@ -46,7 +53,7 @@ export default function OETrainings({ navTarget, onClearNav, onRecordSelect, onN
       const m = new Map()
       for (const r of recs) {
         const k = courseKey(r.fieldData?.['Program Code'])
-        if (k && !m.has(k)) m.set(k, r.fieldData)
+        if (k && !m.has(k)) m.set(k, { f: r.fieldData, recordId: r.recordId })
       }
       setLookups(m)
       setCourses(cs)
@@ -56,7 +63,7 @@ export default function OETrainings({ navTarget, onClearNav, onRecordSelect, onN
 
   // One row per session, catalogue fields merged in where the code matches.
   const records = useMemo(() => (courses || []).map(c => {
-    const f = lookups.get(c.course) || {}
+    const f = lookups.get(c.course)?.f || {}
     return {
       recordId: c.course,
       fieldData: {
@@ -125,7 +132,8 @@ export default function OETrainings({ navTarget, onClearNav, onRecordSelect, onN
   }, [sidebarWidth])
 
   const rows = selected?.rows
-  const cat = selected ? lookups.get(selected.course) : null
+  const hit = selected ? lookups.get(selected.course) : null
+  const cat = hit?.f || null
   const totals = rows ? rosterTotals(rows) : null
 
   return (
@@ -180,8 +188,8 @@ export default function OETrainings({ navTarget, onClearNav, onRecordSelect, onN
                   )}
                   {cat?.['Lead Facilitator'] && <span className="oet-chip">{cat['Lead Facilitator']}</span>}
                   {!cat && <span className="oet-chip warn">Not in the OE Lookup catalogue</span>}
-                  {cat && (
-                    <button className="oet-link" onClick={() => onNavigateTo?.('oe-lookup', null)}>
+                  {hit?.recordId && (
+                    <button className="oet-link" onClick={() => onNavigateTo?.('oe-lookup', hit.recordId)}>
                       View offering →
                     </button>
                   )}
