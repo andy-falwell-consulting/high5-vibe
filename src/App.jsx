@@ -31,7 +31,14 @@ import './components/CommandPalette.css'
 const MODULES = [
   { id: 'home', label: 'Home', icon: '⌂', group: 'Overview' },
   { id: 'reminders', label: 'Reminders', icon: '⏰', group: 'Overview' },
-  { id: 'contacts-v2', label: 'Contacts v2', icon: '◎', group: 'Records' },
+  // Labelled just 'Contacts' since v1.0.427 — the legacy module it was
+  // distinguished from was deleted in B4/A4. The module ID stays 'contacts-v2'
+  // on purpose: it is embedded in every #contacts-v2/... URL and in the
+  // recordType of every reminder created since 2026-08-06, which lives in each
+  // user's Google Calendar and cannot be rewritten from here. Renaming the id
+  // is deferred to the Phase D cutover, when the legacy 'contacts' recordId
+  // translation goes away and #contacts/<id> stops being ambiguous.
+  { id: 'contacts-v2', label: 'Contacts', icon: '◎', group: 'Records' },
   { id: 'estimates',   label: 'Estimates',   icon: '◧', group: 'Records' },
   { id: 'inspections', label: 'Inspections', icon: '⚑', group: 'Records' },
   { id: 'rmi',         label: 'Risk Management', icon: '⚠', group: 'Records' },
