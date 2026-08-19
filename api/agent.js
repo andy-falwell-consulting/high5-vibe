@@ -50,11 +50,31 @@ function buildSystem(googleUser) {
 
 ${userCtx}
 
+## Contacts — use these FIRST for anything about a person or organization
+Tools: search_contacts(query, kind?, limit?), get_contact(id)
+
+Contacts live in VIBE's own model, not FileMaker: organizations and people are
+SEPARATE entities joined by affiliations. A person belongs to zero or more
+organizations; one may be marked primary. Addresses and site numbers hang off
+the ORGANIZATION, not the person — so to answer "where is X" for a person, find
+their organization first. Ids are shared with FileMaker's contact id, so an id
+from a project or estimate record can be passed straight to get_contact.
+
+get_contact on an ORGANIZATION returns its people — that is how to answer "who
+works at X". get_contact on a PERSON returns their affiliations, the other
+direction. Searching for an organization's name will NOT return its people;
+fetch the organization and read its people list.
+
+Prefer these over search_records('contacts'), which reads the older FileMaker
+table: it cannot see any contact created since 2026-08-06, and it has no notion
+of the organization/person split at all. The FileMaker table is still the only
+place OE training and certifications live, so use it for those.
+
 ## FileMaker (read-only)
 Tools: get_schema(module), search_records(module, query, limit), get_record(module, recordId)
 Modules:
 - inspections: ${MODULES.inspections.keyFields.join(', ')}. Line items in get_record. "needs_repair" non-empty / "Report Ready"=Yes are flags.
-- contacts: ${MODULES.contacts.keyFields.join(', ')}.
+- contacts (LEGACY FileMaker table — prefer search_contacts above): ${MODULES.contacts.keyFields.join(', ')}.
 - projects (RCD): ${MODULES.projects.keyFields.join(', ')}. "kanban_status" is the pipeline stage.
 - products (internal catalog): ${MODULES.products.keyFields.join(', ')}.
 FileMaker find query syntax: array of field→value objects (OR-combined, AND within one object). Operators: ">=date", "*wildcard*", "==exact". Dates are M/D/YYYY.
@@ -383,6 +403,17 @@ async function runTool(name, input, ctx) {
   }
 
   // ── Shopify GraphQL ──────────────────────────────────────────────────────
+  if (name === 'search_contacts') {
+    return await searchVibeContacts(ctx.db, input || {});
+  }
+
+  if (name === 'get_contact') {
+    const r = await resolveContactDisplay(ctx.db, input?.id);
+    if (!r?.found) return { error: `No contact ${input?.id} in Vibe's contact model` };
+    if (r.kind === 'organization') r.people = await peopleAtOrganization(ctx.db, input.id);
+    return r;
+  }
+
   if (name === 'shopify_graphql') {
     const store = process.env.SHOPIFY_STORE;
     const token = await shopifyToken();
@@ -461,6 +492,8 @@ const TOOLS = [
   { name: 'get_schema', description: 'List field names on a FileMaker module layout.', input_schema: { type: 'object', properties: { module: { type: 'string', enum: Object.keys(MODULES) } }, required: ['module'] } },
   { name: 'search_records', description: 'Find FileMaker records via a query.', input_schema: { type: 'object', properties: { module: { type: 'string', enum: Object.keys(MODULES) }, query: { type: 'array', items: { type: 'object' } }, limit: { type: 'number' } }, required: ['module', 'query'] } },
   { name: 'get_record', description: 'Full detail for one FileMaker record.', input_schema: { type: 'object', properties: { module: { type: 'string', enum: Object.keys(MODULES) }, recordId: { type: 'string' } }, required: ['module', 'recordId'] } },
+  { name: 'search_contacts', description: "Search VIBE's contact model — organizations and people as separate entities, with their phones and emails. Use this for any contact question in preference to search_records(contacts), which reads the older FileMaker table and cannot see contacts created since 2026-08-06.", input_schema: { type: 'object', properties: { query: { type: 'string', description: 'name, phone or email fragment' }, kind: { type: 'string', enum: ['any', 'person', 'organization'] }, limit: { type: 'number' } }, required: ['query'] } },
+  { name: 'get_contact', description: "One contact from VIBE's model: an organization with its site number and addresses, or a person with their affiliations (which organizations they belong to) and which is primary.", input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
   { name: 'shopify_graphql', description: 'Read-only or write GraphQL query against the Shopify Admin API (products, orders, customers, inventory).', input_schema: { type: 'object', properties: { query: { type: 'string' }, variables: { type: 'object' } }, required: ['query'] } },
   { name: 'qbo_query', description: 'SQL query against QuickBooks Online (invoices, payments, items, customers).', input_schema: { type: 'object', properties: { sql: { type: 'string' } }, required: ['sql'] } },
   {
@@ -509,6 +542,71 @@ function collectSources(name, input, result, add) {
 }
 
 // ── Handler (Server-Sent Events) ──────────────────────────────────────────────
+import { K as CONTACT_KEYS, readHash as readContactHash, displayName as contactDisplayName, methodList as contactMethods } from './_contacts.js';
+import { resolveContactDisplay } from './_contactDisplay.js';
+
+// Vibe's contact model, for the agent — PHASE B5.
+//
+// The `contacts` module below is a FileMaker find against Contacts_New, and it
+// has the same blind spot global search had until v1.0.392: it cannot see a
+// person or organization that lives only in Vibe, which is every contact
+// created since Contacts v2 shipped on 2026-08-06. It also has no notion of the
+// org/person/affiliation split, so it cannot answer "who works at X" at all.
+//
+// These two tools read Vibe directly. Kept SEPARATE from the FileMaker module
+// rather than replacing it: the legacy table still holds fields Vibe has no home
+// for (OE training, certifications — B3), so the agent needs both until B4
+// retires the old module.
+// Who belongs to an organization. `resolveContactDisplay` walks the other way —
+// person to organization — which is what a record needs to show its contact's
+// address. The agent needs BOTH directions, because "who works at X" is the
+// question the old FileMaker table could not answer at all.
+async function peopleAtOrganization(db, orgId) {
+  const affIds = (await readContactHash(CONTACT_KEYS.byOrg(db))).get(String(orgId));
+  const ids = Array.isArray(affIds) ? affIds : [];
+  if (!ids.length) return [];
+  const affs = await readContactHash(CONTACT_KEYS.aff(db));
+  const people = await readContactHash(CONTACT_KEYS.person(db));
+  const out = [];
+  for (const affId of ids) {
+    const a = affs.get(String(affId));
+    if (!a) continue;
+    const p = people.get(String(a.personId));
+    if (!p) continue;
+    out.push({
+      id: p.id, name: contactDisplayName(p), title: a.title || p.title || '',
+      primary: !!a.primary, status: p.status || '',
+      phones: contactMethods(p, 'phone').map(m => m.number).filter(Boolean),
+      emails: contactMethods(p, 'email').map(m => m.address).filter(Boolean),
+    });
+  }
+  return out;
+}
+
+async function searchVibeContacts(db, { query = '', kind = 'any', limit = 15 }) {
+  const q = String(query).trim().toLowerCase();
+  const cap = Math.min(Number(limit) || 15, 40);
+  const out = [];
+  const wants = k => kind === 'any' || kind === k;
+
+  const scan = (entities, k) => {
+    for (const e of entities.values()) {
+      if (out.length >= cap) return;
+      const name = k === 'person' ? contactDisplayName(e) : (e.name || '');
+      const phones = contactMethods(e, 'phone').map(m => m.number).filter(Boolean);
+      const emails = contactMethods(e, 'email').map(m => m.address).filter(Boolean);
+      const hay = [name, ...phones, ...emails].join(' ').toLowerCase();
+      if (q && !hay.includes(q)) continue;
+      out.push({ id: e.id, kind: k, name, status: e.status || '', phones, emails,
+        ...(k === 'organization' ? { siteNumber: e.siteNumber || '' } : { title: e.title || '' }) });
+    }
+  };
+
+  if (wants('organization')) scan(await readContactHash(CONTACT_KEYS.org(db)), 'organization');
+  if (wants('person')) scan(await readContactHash(CONTACT_KEYS.person(db)), 'person');
+  return { found: out.length, records: out };
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!process.env.ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set.' });

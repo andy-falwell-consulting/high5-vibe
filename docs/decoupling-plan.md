@@ -52,7 +52,7 @@ more instructive one.
 | **B2** bill of materials | untouched |
 | **B3** OE training / certifications | untouched |
 | **B4** retire legacy Contacts | untouched, but now decided |
-| **B5** search + agent | **search done**, agent still open |
+| **B5** search + agent | **done** — both repointed at Vibe's contact model |
 | **C1** derived fields | **audited; resolver and both write paths shipped**; existing records not backfilled |
 | **C2/C3/C4** | untouched — C4 is the largest unknown |
 | **D** cutover | untouched |
@@ -265,12 +265,18 @@ other subsystems still only know about the pre-rebuild world:
   hiding all 15,450 real ones. Verified in production: a contact in both
   stores appears exactly once. `RecordPicker` gets the same fix from the
   shared config. Goes away entirely with B4.
-- **The agent** (`api/agent.js`) — STILL OPEN. Its `contacts` module is a
-  FileMaker find against `Contacts_New`, so it has the same blind spot search
-  had, plus no context describing the org/person/affiliation split. This is
-  not a config repoint like search was: the agent reaches contacts through a
-  FileMaker-find tool, so it needs a Vibe contacts tool and prompt text to
-  match. Its own change.
+- **The agent** (`api/agent.js`) — **DONE 2026-08-19.** It had the same blind
+  spot search did, and for the same reason: its `contacts` module is a FileMaker
+  find against `Contacts_New`. It now has two tools reading Vibe's model —
+  `search_contacts` (organizations and people, by name/phone/email) and
+  `get_contact` (an organization with its addresses, or a person with their
+  affiliations and which is primary) — and prompt text explaining the split,
+  including that addresses hang off the ORGANIZATION so answering "where is X"
+  for a person means finding their organization first.
+
+  The FileMaker module is deliberately KEPT alongside rather than replaced: the
+  legacy table is still the only home for OE training and certifications (B3),
+  so the agent needs both until B4 retires it.
 
 Same root cause as B4: two Contacts systems exist right now, and most of
 the app outside `ContactsV2.jsx` itself still assumes the old one.
