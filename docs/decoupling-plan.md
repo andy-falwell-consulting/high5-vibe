@@ -51,7 +51,7 @@ more instructive one.
 | **B1** estimate line items | **done** — migrated, wired, FileMaker module deleted |
 | **B2** bill of materials | **done** (2026-08-19) — tail migrated, 10 runaway parents left behind. See b2-bom-scope.md |
 | **B3** OE training | **done** (2026-08-19) — 5,142 workshops across 2,689 contacts |
-| **B4** retire legacy Contacts | untouched, but now decided |
+| **B4** retire legacy Contacts | **gap closed** — invoices migrated; only the deletion itself remains |
 | **B5** search + agent | **done** — both repointed at Vibe's contact model |
 | **C1** derived fields | **audited; resolver and both write paths shipped**; existing records not backfilled |
 | **C2/C3/C4** | untouched — C4 is the largest unknown |
@@ -84,6 +84,7 @@ Child collections:
 | Estimate line items (`estmt_ESTLI`) | 10,858 | **Vibe** (2026-08-19) |
 | Bill of materials (`item_ITMLI`) | 10,116 migrated *(of 125,047)* | **Vibe** (2026-08-19) |
 | Contact relationships (`cntct_RLTN`) | 23,302 | FileMaker (superseded by Vibe affiliations) |
+| Invoices (`Invoices_New`) | 13,141 | **Vibe** (2026-08-19) |
 | OE training (`Workshops_New`) | 5,142 | **Vibe** (2026-08-19) |
 | Certifications (`CTFC`) | 3 | FileMaker — out of scope (Andy, 2026-08-19) |
 
@@ -270,7 +271,20 @@ calculation on a layout makes paging 18x slower.
 It is NOT the OE Lookup module: `OELookup_New` is a catalogue of programmes with
 no contact link of any kind.
 
-**B4. Retire the old Contacts module** once B3 lands.
+**B4. Retire the old Contacts module** — **scoped 2026-08-19, see
+[b4-retire-legacy-contacts.md](b4-retire-legacy-contacts.md).** B3 has landed,
+so this is now the last domino before A4.
+
+Contacts v2 covers every legacy tab except **invoices** (certifications are out
+of scope at 3 rows). The legacy tab reads `Portal__Invoices`; `Invoices_New` is
+the layout to migrate from — 13,140 rows, carrying `_kft__Contact_ID`, the
+totals and the paid flag, and peeking in 659ms with no aggregate-calc problem.
+
+Worth deciding first: FileMaker's INVO is HISTORICAL. The QBO invoice mirror
+writes into it and is deferred in production, so live invoices are in
+QuickBooks and surface through Transactions. Migrating `Invoices_New` preserves
+history; a live per-contact QBO view is a different feature needing a
+contact→QBO customer mapping that is not finished for production.
 
 **B5. Repoint search and the agent to the new contacts model.** Contacts v2
 (organizations, people and affiliations as separate Vibe entities —
