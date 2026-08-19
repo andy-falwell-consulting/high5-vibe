@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { getRecord } from '../api/filemaker'
+import { getRecord, addCachedRecord } from '../api/filemaker'
+import { createVibeRecord } from '../api/vibeRecords'
+import { getCurrentEnv } from '../config/fmpEnvironments'
+import RecordFormModal from './RecordFormModal'
+import { canonicalEnrollment, ENROLLMENT_OPTIONS, OPEN_ENROLLMENT } from '../config/oeEnrollment'
 import { BRAND } from '../config/brandColors'
 import { useAllRecords } from '../hooks/useAllRecords'
 import ListToolbar, { useListControls, ListBody } from './ListControls'
@@ -13,6 +17,11 @@ const TYPE_COLOR = {
   'Open Enrollment': BRAND.blue,
   'Custom': BRAND.purple,
 }
+
+// Look the colour up by the CANONICAL value, not the raw one — 44 records are
+// stored as "OPEN ENROLLMENT", "Open Enrollment " or "Open Enrollement" and
+// used to fall through to the neutral grey as if they had no type at all.
+const typeColor = raw => TYPE_COLOR[canonicalEnrollment(raw)] ?? '#4a5568'
 
 function fmtDate(val) {
   if (!val) return '—'
@@ -32,6 +41,55 @@ function val(f, key) {
   return (v === null || v === undefined || v === '') ? '—' : String(v)
 }
 
+
+// Shows the Program Code that WILL be assigned, without consuming it.
+//
+// Deliberately a separate read-only GET from the POST that issues the code: a
+// preview that consumed a number would burn one on every keystroke and on every
+// form the user opened and abandoned. Debounced because the lookup scans the
+// replica to find the prefix for a Program Type.
+function CodePreview({ programType, prefix, startDate }) {
+  const [info, setInfo] = useState(null)
+  useEffect(() => {
+    const type = String(programType ?? '').trim()
+    const px = String(prefix ?? '').trim()
+    const sd = String(startDate ?? '').trim()
+    let alive = true
+    // Everything, including clearing, happens inside the timeout — a synchronous
+    // setState in an effect body triggers a cascading render.
+    const t = setTimeout(() => {
+      if (!type && !px) { setInfo(null); return }
+      const qs = new URLSearchParams({ db: getCurrentEnv().db })
+      if (px) qs.set('prefix', px)
+      else qs.set('programType', type)
+      if (sd) qs.set('startDate', sd)
+      fetch(`/api/program-code?${qs}`, { credentials: 'include' })
+        .then(r => r.json())
+        .then(j => { if (alive) setInfo(j) })
+        .catch(() => { if (alive) setInfo(null) })
+    }, 400)
+    return () => { alive = false; clearTimeout(t) }
+  }, [programType, prefix, startDate])
+
+  if (!info) return null
+  if (info.newType) return (
+    <div className="oe-code-preview warn">
+      No existing program uses that type, so there is no code prefix to follow.
+      Enter one above (e.g. <code>AB</code>) and the first code will be
+      <code>{` AB-${info.year}-1`}</code>.
+    </div>
+  )
+  return (
+    <div className="oe-code-preview">
+      Program Code will be <strong>{info.preview}</strong>
+      <span className="oe-code-note">
+        {' '}— the {info.year} series for {info.prefix}. Assigned on save, so it cannot
+        collide with anyone else&apos;s.
+      </span>
+    </div>
+  )
+}
+
 export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {}) {
   const { records, total, loading, error } = useAllRecords(LAYOUT, { cacheVersion: CACHE_VERSION })
 
@@ -41,8 +99,11 @@ export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {})
     name: f => f['Program Type'],
     searchKeys: ['Program Type', 'Program Code', 'Lead Facilitator', 'Co Trainer 1', 'Co Trainer 2', 'Custom Site:'],
     chips: [
-      { id: 'oe',     label: 'Open Enrollment', match: f => f['Open Enrollment or Custom'] === 'Open Enrollment' },
-      { id: 'custom', label: 'Custom',           match: f => f['Open Enrollment or Custom'] === 'Custom' },
+      // Measured 2026-08-19: exact-equality matching missed 44 of 1,117
+      // open-enrollment programs, because the field is free text with no value
+      // list and holds five spellings of two concepts.
+      { id: 'oe',     label: 'Open Enrollment', match: f => canonicalEnrollment(f['Open Enrollment or Custom']) === OPEN_ENROLLMENT },
+      { id: 'custom', label: 'Custom',           match: f => canonicalEnrollment(f['Open Enrollment or Custom']) === 'Custom' },
     ],
     sorts: [
       { id: 'date',  label: 'Start date', value: f => f['Program Start Date'] ?? '' },
@@ -54,6 +115,7 @@ export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {})
   })
 
   const [selected, setSelected] = useState(null)
+  const [showNew, setShowNew] = useState(false)
   const [sidebarWidth, setSidebarWidth] = useState(300)
   const dragging = useRef(false)
 
@@ -92,8 +154,73 @@ export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {})
     window.addEventListener('mouseup', onUp)
   }, [sidebarWidth])
 
+  // ── Create a new program ──
+  //
+  // `__prefix` is NOT a FileMaker field. It only matters when the Program Type
+  // is one nobody has used before, so there is no existing code to take a
+  // prefix from; handleCreate strips it before writing.
+  const createFields = [
+    { key: 'Program Type',              label: 'Program Type', type: 'text', required: true, wide: true,
+      placeholder: 'e.g. Adventure Basics' },
+    { key: '__prefix',                  label: 'Code prefix (only for a brand-new program type)', type: 'text',
+      placeholder: 'e.g. AB' },
+    { key: 'Open Enrollment or Custom', label: 'Open Enrollment or Custom', type: 'select',
+      options: ENROLLMENT_OPTIONS, default: OPEN_ENROLLMENT, required: true },
+    { key: 'Program Start Date',        label: 'Start date', type: 'date' },
+    { key: 'Program End Date',          label: 'End date',   type: 'date' },
+    { key: 'Program Start Time',        label: 'Start time', type: 'text', placeholder: 'e.g. 9:00 AM' },
+    { key: 'Program End Time',          label: 'End time',   type: 'text', placeholder: 'e.g. 4:00 PM' },
+    { key: 'Hours',                     label: 'Hours',      type: 'text' },
+    { key: 'Lead Facilitator',          label: 'Lead facilitator', type: 'text' },
+    { key: 'Co Trainer 1',              label: 'Co-trainer 1', type: 'text' },
+    { key: 'Co Trainer 2',              label: 'Co-trainer 2', type: 'text' },
+    { key: 'Custom Site:',              label: 'Custom site',  type: 'text' },
+    { key: 'Tuition',                   label: 'Tuition', type: 'number', step: '0.01' },
+    { key: 'Food',                      label: 'Food',    type: 'number', step: '0.01' },
+    { key: 'Lodging',                   label: 'Lodging', type: 'number', step: '0.01' },
+    { key: "Facilitator's Notes",       label: "Facilitator's notes", type: 'textarea', wide: true },
+  ]
+
+  async function handleCreate(fieldData) {
+    const { __prefix, ...fields } = fieldData
+
+    // Take the number FIRST. If this fails the record is never created, which
+    // is the right way round — a program with no code is worse than no program.
+    const res = await fetch(`/api/program-code?db=${encodeURIComponent(getCurrentEnv().db)}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...(__prefix ? { prefix: __prefix } : { programType: fields['Program Type'] }),
+        // The sequence restarts each calendar year and is scoped to the
+        // PROGRAM's year, not today's — 37 programs starting in 2027 already
+        // exist, and one entered now belongs in the 2027 series.
+        startDate: fields['Program Start Date'] || '',
+      }),
+    })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok || !body.code) {
+      throw new Error(body.error === 'no prefix for that Program Type — supply one'
+        ? 'That Program Type is new, so there is no code prefix to follow. Enter one in "Code prefix".'
+        : (body.error || 'Could not assign a Program Code.'))
+    }
+
+    // Write the canonical spelling, so the five-variant mess stops growing.
+    const made = await createVibeRecord(LAYOUT, {
+      ...fields,
+      'Program Code': body.code,
+      'Open Enrollment or Custom': canonicalEnrollment(fields['Open Enrollment or Custom']),
+    })
+    const newId = made?.recordId
+    if (!newId) throw new Error('Could not create the record')
+    const rec = { recordId: newId, fieldData: made.fieldData, portalData: {} }
+    addCachedRecord(LAYOUT, CACHE_VERSION, rec)
+    handleSelect(rec)
+    onRecordSelect?.(rec.recordId, rec.fieldData?.['Program Type'])
+  }
+
   const f = selected?.fieldData ?? {}
-  const oeType = f['Open Enrollment or Custom']
+  const oeType = canonicalEnrollment(f['Open Enrollment or Custom'])
   const tuition = parseFloat(String(f['Tuition'] ?? '').replace(/[^0-9.]/g, '')) || 0
   const food    = parseFloat(String(f['Food']    ?? '').replace(/[^0-9.]/g, '')) || 0
   const lodging = parseFloat(String(f['Lodging'] ?? '').replace(/[^0-9.]/g, '')) || 0
@@ -109,6 +236,7 @@ export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {})
               <div className="oe-sidebar-module">OE Lookup</div>
               <div className="oe-sidebar-count">{loading ? 'Loading…' : `${total.toLocaleString()} programs`}</div>
             </div>
+            <button className="oe-new-btn" onClick={() => setShowNew(true)}>＋ New</button>
           </div>
           <ListToolbar c={controls} />
         </div>
@@ -122,7 +250,7 @@ export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {})
             <div key={r.recordId}
               className={`oe-list-item ${selected?.recordId === r.recordId ? 'active' : ''}`}
               onClick={() => { handleSelect(r); onRecordSelect?.(r.recordId, r.fieldData?.['Program Type']); }}>
-              <div className="oe-item-dot" style={{ background: TYPE_COLOR[r.fieldData?.['Open Enrollment or Custom']] ?? '#4a5568' }} />
+              <div className="oe-item-dot" style={{ background: typeColor(r.fieldData?.['Open Enrollment or Custom']) }} />
               <div className="oe-item-text">
                 <div className="oe-item-name">{r.fieldData?.['Program Type'] || '—'}</div>
                 <div className="oe-item-sub">{r.fieldData?.['Program Code']} · {fmtDate(r.fieldData?.['Program Start Date'])}</div>
@@ -151,7 +279,7 @@ export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {})
                   <div className="oe-meta-row">
                     <span className="oe-chip type">{val(f, 'Program Code')}</span>
                     {oeType && (
-                      <span className={`oe-chip ${oeType === 'Open Enrollment' ? 'oe' : 'custom'}`}>
+                      <span className={`oe-chip ${oeType === OPEN_ENROLLMENT ? 'oe' : 'custom'}`}>
                         {oeType}
                       </span>
                     )}
@@ -290,6 +418,20 @@ export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {})
           </>
         )}
       </main>
+
+      {showNew && (
+        <RecordFormModal
+          title="New OE program"
+          fields={createFields}
+          submitLabel="Create program"
+          onCreate={handleCreate}
+          onClose={() => setShowNew(false)}>
+          {values => (
+            <CodePreview programType={values['Program Type']} prefix={values.__prefix}
+              startDate={values['Program Start Date']} />
+          )}
+        </RecordFormModal>
+      )}
     </div>
   )
 }

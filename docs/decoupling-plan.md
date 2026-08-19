@@ -405,8 +405,58 @@ lists at runtime. These become Vibe-held vocabularies.
 
 **C4. FileMaker scripts.** Script triggers do not fire over the Data API, so any
 logic living in scripts has never run for a Vibe write and will not exist after
-cutover. **This cannot be inventoried from the codebase — it needs Ian.** It is
-the largest unknown in this plan.
+cutover.
+
+**Partly inventoried, 2026-08-19.** The earlier claim that this "cannot be
+inventoried from the codebase" was too pessimistic: the Data API exposes
+`GET /fmi/data/v2/databases/{db}/scripts`, which lists every script NAME (not
+its body). Production has **845 scripts**, 99 of which are separators and `New
+Script` placeholders.
+
+845 is a frightening number and a misleading one. The great majority are UI
+plumbing — navigation, window sizing, menu-item replacements, and six vendor
+"Addon" bundles (FCCalendar, Heatmap, BarcodeGenerator, ActivityTimeline,
+PhotoGallery, RichTextEditor). **All of that dies with the FileMaker UI and
+none of it matters to a cutover.** Two categories do matter.
+
+*1. Data maintenance — the silent-wrong-data risk.* 85 scripts are named as
+triggers. Most are input helpers on layouts Vibe replaces and die with them. The
+ones that maintain stored values:
+
+| Script | Status |
+|---|---|
+| `Estimates / ESTMT__Trigger__Sum_Line_Items` | **Already solved** — B1 computes totals on read |
+| `Invoices / INVO__Trigger__Sum_Line_Items` | Invoices are read-only in Vibe; totals come from the QBO mirror |
+| `Orders / ORDER__Trigger__Sum_Line_Items` | Orders module not in scope |
+| `Purchase Orders / PORDR__Trigger__Sum_Line_Items` | POs not in scope |
+| `Contacts / CNTCT__Trigger__OnRecordCommit__Refresh_Textual_Search` | Maintains a search field Vibe does not read — believed harmless, unconfirmed |
+| `Contacts / CNTCT__Trigger__OnObjectValidate__Set_Priority` | Sets a stored Priority — **ask Ian** |
+| `Items / ITEM__Trigger__OnObjectSave__Prevent_Subtotal_Data_Entry` | A guard, not a computation |
+| `Items / Build / BUILD__Trigger__Prevent_Bill_of_Materials_Data_Entry` | A guard — relevant to B2's BOM work |
+| `Recalculate Total Cost on Price Update`, `Refresh_Item_Cost_And_Price`, `Run Bulk Item Updates` | Product cost/price maintenance — **ask Ian** |
+| `RMI / RMI__Program_Note_Stamp`, `TRNPP__*_Note_Stamp`, `CCS__Note_Stamp` | Stamp note fields on entry — **ask Ian** |
+
+*2. External integrations — the real risk.* These have effects OUTSIDE FileMaker
+that simply stop happening for a Vibe write, with no error anywhere:
+
+| Script | Why it matters |
+|---|---|
+| `Global / snd_qbo_newContact` | Pushes a new contact to QuickBooks. **Vibe has been creating contacts since B4** — highest-priority question |
+| `Global / Send to Tray - FMP Receive` | The SKU counter. **Already handled** — Vibe assigns via `api/next-sku.js` |
+| `Global / Send to Tray - Distance to H5` (+ `- RCD`, `- Trainings`) | Computes a distance. Vibe writes both RCD and Trainings |
+| `Global / Notify CCS on New Training Record` | A notification that no longer fires |
+| `Global / INSP_send_reportReady_make` | Inspection report-ready webhook to Make |
+| `Global / Send to Make`, `Send to Connect`, `Send to Make - New Trello Card` | Unknown downstream automations |
+| `Scripts for Buttons / Workshop Confirmation Email Send` | Confirmation email to a registrant |
+| `Save RCD and Send to Studio` | Unknown downstream |
+
+**What is still genuinely unknown:** the script BODIES. The Data API gives names
+only, so this says what exists, not what it does or what it writes. That is the
+part that needs Ian — but it is now a dozen specific questions rather than an
+open-ended one.
+
+Reproduce with `scripts.mjs` (scratchpad, read-only; opens one Data API session
+and releases it).
 
 ---
 
@@ -478,13 +528,15 @@ This is the one capability to preserve, and it is mostly already right.
 
 **Still open**
 
-- **A tax rate.** Estimate tax is 0 on all 2,818 production estimates and no line
-  is taxable, so nothing is wrong today — but `Taxable` is a live checkbox and no
-  rate is stored anywhere in the file. B1 computes tax from taxable lines times a
-  rate, which is 0 until someone supplies one. **Needs Ian.**
-- **Scripts and integrations.** What runs inside FileMaker today, and does
-  anything other than Vibe read that database? Still the largest unknown — C4.
-  One instance is already retired: B1 removes the app's only script dependency.
+- ~~**A tax rate.**~~ **CLOSED (Andy, 2026-08-19): tax is not used.** Estimate tax
+  is 0 on all 2,818 production estimates, no line is taxable, and no rate is
+  stored anywhere in the file — because there is no rate to store. B1's
+  `totalsFor` keeps its `taxRate` parameter defaulting to 0, so a rate can be
+  supplied later without a rewrite, but nobody needs to supply one.
+- **Scripts and integrations.** *Partly answered 2026-08-19 — see C4 below.* The
+  script NAMES are now inventoried (845 of them, via the Data API's `/scripts`
+  endpoint). What the interesting ones actually DO still needs Ian, but the
+  question is no longer open-ended.
 - **Who still opens FMP Pro, and for what.** Sharper now than when written: every
   module already moved shows them values that stopped updating, and since A2 they
   also see records that Vibe considers deleted.
