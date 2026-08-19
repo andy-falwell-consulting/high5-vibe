@@ -5,7 +5,7 @@ import { readWorkshop, patchWorkshop } from './_oeTraining.js';
 import {
   TEMPLATES, isTemplateId, readTemplate, readTemplates, writeTemplate,
   pickEmail, render, templateVars, sendAsWorkshops, senderAddress, catalogueForCourse,
-  templateFiles, loadAttachments, checkDelegation,
+  templateFiles, loadAttachments, checkDelegation, replyToAddress,
 } from './_workshopEmail.js';
 
 // Workshop e-mails — preview, send, and template administration.
@@ -117,7 +117,7 @@ export default async function handler(req, res) {
     const attachments = await loadAttachments(db, version);
 
     const sent = await sendAsWorkshops({
-      to, replyTo: senderAddress(),
+      to, replyTo: replyToAddress(),
       subject: rendered.subject, body: rendered.body,
       attachments,
     });

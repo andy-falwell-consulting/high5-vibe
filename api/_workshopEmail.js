@@ -24,10 +24,32 @@ import { downloadFile } from './_backupDrive.js';
 const redis = Redis.fromEnv();
 const GMAIL_SEND = 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send';
 
-/** The mailbox the app sends as. Overridable so a preview deploy can be pointed
- *  at a test address rather than the real one. */
+// Two addresses, deliberately separate.
+//
+// IMPERSONATION requires a real Workspace USER — domain-wide delegation acts as
+// a person, and a group or forwarding alias has no mailbox to act as. That is
+// what `workshops@high5adventure.org` turned out not to be: delegation was
+// refused for it while the Drive scope worked fine elsewhere.
+//
+// The FROM address is a separate question. Gmail will send as any address
+// verified as a "Send mail as" alias on the impersonated account, so once
+// workshops@ is a verified alias on the sending user, WORKSHOP_MAIL_FROM can
+// point at it and customers see the right sender — no code change, no deploy.
+// Until then From falls back to the impersonated user, which is honest: better a
+// visibly internal sender than a spoofed one Gmail would refuse or mark.
+
+/** The Workspace USER whose mailbox is impersonated. Must be a real user. */
+export const senderUser = () =>
+  process.env.WORKSHOP_MAIL_USER || 'it@high5adventure.org';
+
+/** The address the message appears FROM. Defaults to the impersonated user;
+ *  set WORKSHOP_MAIL_FROM to a verified alias (e.g. workshops@) to change it. */
 export const senderAddress = () =>
-  process.env.WORKSHOP_MAIL_FROM || 'workshops@high5adventure.org';
+  process.env.WORKSHOP_MAIL_FROM || senderUser();
+
+/** Where replies should go. Falls back to From. */
+export const replyToAddress = () =>
+  process.env.WORKSHOP_MAIL_REPLY_TO || senderAddress();
 
 // The four versions, from the `Workshop Emails` value list on Workshops_New.
 // Ids are FileMaker's own strings so `email_version_sent` stays comparable
@@ -239,7 +261,8 @@ function buildMime({ from, to, replyTo, subject, body, attachments }) {
  *  Reads the mailbox's own profile, which is the cheapest call that requires the
  *  impersonation to have actually worked. */
 export async function checkDelegation() {
-  const from = senderAddress();
+  const from = senderUser();          // the mailbox being impersonated
+  const showsAs = senderAddress();    // what recipients would see
   const account = process.env.GDRIVE_SA_EMAIL || null;
 
   // Does delegation work for this SUBJECT at all, on a scope already known to
@@ -265,7 +288,7 @@ export async function checkDelegation() {
     token = await getServiceAccountToken({ scope: GMAIL_SEND_SCOPE, subject: from, force: true });
   } catch (e) {
     return {
-      ok: false, stage: 'token', from, scope: GMAIL_SEND_SCOPE,
+      ok: false, stage: 'token', impersonating: from, showsAs, scope: GMAIL_SEND_SCOPE,
       serviceAccount: account,
       delegationWorksForThisMailbox: driveForSubject === 'ok',
       driveProbe: driveForSubject,
@@ -290,16 +313,21 @@ export async function checkDelegation() {
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     return {
-      ok: false, stage: 'mailbox', from, error: body.error?.message || `HTTP ${res.status}`,
+      ok: false, stage: 'mailbox', impersonating: from, showsAs,
+      serviceAccount: account, error: body.error?.message || `HTTP ${res.status}`,
       hint: res.status === 400 || res.status === 404
         ? `${from} may not be a real Workspace mailbox — a group alias or forwarding address cannot be impersonated and has no Sent folder.`
         : 'The grant looks present but Gmail refused the impersonation.',
     };
   }
   return {
-    ok: true, from, serviceAccount: account, mailbox: body.emailAddress,
+    ok: true, impersonating: from, showsAs, serviceAccount: account,
+    mailbox: body.emailAddress,
     messagesTotal: body.messagesTotal ?? null,
-    note: 'Delegation works — Vibe can send as this mailbox.',
+    aliasNeeded: showsAs !== from,
+    note: showsAs === from
+      ? `Delegation works — Vibe can send as ${from}.`
+      : `Delegation works for ${from}. Sending as ${showsAs} additionally requires it to be a verified "Send mail as" alias on that account.`,
   };
 }
 
@@ -308,7 +336,12 @@ export async function checkDelegation() {
  *  a generic "send failed". */
 export async function sendAsWorkshops({ to, replyTo, subject, body, attachments }) {
   const from = senderAddress();
-  const token = await getServiceAccountToken({ scope: GMAIL_SEND_SCOPE, subject: from });
+  const user = senderUser();
+  // Impersonate the USER, then set From to the sending address. When the two
+  // differ, Gmail requires From to be a verified alias on that user and refuses
+  // otherwise — which is the correct behaviour: it is the check that stops this
+  // becoming a way to send as anyone.
+  const token = await getServiceAccountToken({ scope: GMAIL_SEND_SCOPE, subject: user });
   const raw = buildMime({ from, to, replyTo, subject, body, attachments });
   const res = await fetch(GMAIL_SEND, {
     method: 'POST',
@@ -317,8 +350,10 @@ export async function sendAsWorkshops({ to, replyTo, subject, body, attachments 
   });
   const j = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(j.error?.message
-      || `Gmail rejected the send (HTTP ${res.status}). If this is a 403, the service account is probably not yet granted ${GMAIL_SEND_SCOPE} for ${from} in Workspace admin.`);
+    const msg = j.error?.message || `HTTP ${res.status}`;
+    throw new Error(from !== user && /alias|from|denied|invalid/i.test(msg)
+      ? `${msg} — sending as ${from} while impersonating ${user} requires ${from} to be a verified "Send mail as" alias on that account.`
+      : `${msg} — if this is a 403, ${GMAIL_SEND_SCOPE} is probably not granted to the service account for ${user}.`);
   }
-  return { sent: true, messageId: j.id, threadId: j.threadId, from, to };
+  return { sent: true, messageId: j.id, threadId: j.threadId, from, sentBy: user, to };
 }
