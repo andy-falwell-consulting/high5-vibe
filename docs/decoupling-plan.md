@@ -50,7 +50,7 @@ more instructive one.
 | **A4** delete the write token | **one thing away** — only the legacy Contacts module still writes |
 | **B1** estimate line items | **done** — migrated, wired, FileMaker module deleted |
 | **B2** bill of materials | **done** (2026-08-19) — tail migrated, 10 runaway parents left behind. See b2-bom-scope.md |
-| **B3** OE training / certifications | untouched |
+| **B3** OE training | **scoped; blocked on a FileMaker layout** — and it gates A4 |
 | **B4** retire legacy Contacts | untouched, but now decided |
 | **B5** search + agent | **done** — both repointed at Vibe's contact model |
 | **C1** derived fields | **audited; resolver and both write paths shipped**; existing records not backfilled |
@@ -251,8 +251,24 @@ about an hour of continuous load.
 aggregate calcs — exactly as `est_li_vibe_2` provided for B1. With that, B2 is
 the same routine job B1 was.
 
-**B3. OE training and certifications.** No module and no data source today.
-These two are the only reason the old Contacts page still exists.
+**B3. OE training** — **scoped 2026-08-19, blocked on a layout. See
+[b3-oe-training-scope.md](b3-oe-training-scope.md).** Certifications are out of
+scope (Andy, 2026-08-19).
+
+This is now the blocker for A4, via a short chain: only the legacy Contacts
+module still writes to FileMaker, B4 wants it retired rather than moved, and it
+cannot be retired while it is the only home for OE training.
+
+The data is small — ~5% of contacts, roughly 780 contacts and ~2,600 rows — but
+there is **no readable layout on the WKSRG table**. `Script_Use__Orders` exists
+and reports 17 rows while exposing zero fields, which is the same state the
+contact-method tables were in before fields were added to them. Needs a layout
+carrying `_kpt__Workshop_ID`, **`_kft__Contact_ID`**, Course Number/Name and the
+start/end dates and times — and only those, since B2 showed an aggregate
+calculation on a layout makes paging 18x slower.
+
+It is NOT the OE Lookup module: `OELookup_New` is a catalogue of programmes with
+no contact link of any kind.
 
 **B4. Retire the old Contacts module** once B3 lands.
 
