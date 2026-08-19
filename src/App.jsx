@@ -12,6 +12,7 @@ import TrainingsWorkspace from './components/TrainingsWorkspace'
 import EOL from './components/EOL'
 import TandD from './components/TandD'
 import OELookup from './components/OELookup'
+import OETrainings from './components/OETrainings'
 import ProjectsWorkspace from './components/ProjectsWorkspace'
 import Estimates from './components/Estimates'
 import Transactions from './components/Transactions'
@@ -46,6 +47,10 @@ const MODULES = [
   { id: 'eol', label: 'Edge of Leadership', icon: '◆', group: 'Records' },
   { id: 'tnd', label: 'Team Development', icon: '✦', group: 'Records' },
   { id: 'oe-lookup', label: 'OE Lookup', icon: '◎', group: 'Records' },
+  // The roster side of OE Lookup — one row per person per session. Sits next to
+  // it deliberately: OE Lookup is where the offering is created, OE Trainings is
+  // where you manage who is on it.
+  { id: 'oe-trainings', label: 'OE Trainings', icon: '◆', group: 'Records' },
   { id: 'products', label: 'Products & Services', icon: '◫', group: 'Records' },
   { id: 'transactions', label: 'Transactions', icon: '⇄', group: 'Records' },
   { id: 'projects', label: 'CCS', icon: '◈', group: 'Projects' },
@@ -323,6 +328,7 @@ export default function App() {
         {visited.has('eol') && <div style={{ display: activeModule === 'eol' ? 'contents' : 'none' }}><EOL navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('eol')} /></div>}
         {visited.has('tnd') && <div style={{ display: activeModule === 'tnd' ? 'contents' : 'none' }}><TandD navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('tnd')} /></div>}
         {visited.has('oe-lookup') && <div style={{ display: activeModule === 'oe-lookup' ? 'contents' : 'none' }}><OELookup navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('oe-lookup')} /></div>}
+        {visited.has('oe-trainings') && <div style={{ display: activeModule === 'oe-trainings' ? 'contents' : 'none' }}><OETrainings navTarget={navTarget} onClearNav={clearNavTarget} onNavigateTo={navigateTo} onRecordSelect={makeRecordSelectHandler('oe-trainings')} /></div>}
         {visited.has('products') && <div style={{ display: activeModule === 'products' ? 'contents' : 'none' }}><ProductsAndServicesV2 navTarget={navTarget} onClearNav={clearNavTarget} onRecordSelect={makeRecordSelectHandler('products')} /></div>}
         {visited.has('transactions') && <div style={{ display: activeModule === 'transactions' ? 'contents' : 'none' }}><Transactions onRecordSelect={makeRecordSelectHandler('transactions')} /></div>}
         {visited.has('projects') && <div style={{ display: activeModule === 'projects' ? 'contents' : 'none' }}><ProjectsWorkspace navTarget={navTarget} onClearNav={clearNavTarget} onNavigateApp={navigateTo} onRecordSelect={makeRecordSelectHandler('projects')} /></div>}

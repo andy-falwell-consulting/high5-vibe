@@ -14,7 +14,7 @@
 // FileMaker at view time.
 import { getGoogleSession } from './_googleSession.js';
 import { ALLOWED_DBS } from './_fmp.js';
-import { readWorkshops, sortWorkshops } from './_oeTraining.js';
+import { readWorkshops, readCourse, listCourses, sortWorkshops } from './_oeTraining.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'GET only' });
@@ -24,9 +24,24 @@ export default async function handler(req, res) {
   if (!ALLOWED_DBS.has(db)) return res.status(400).json({ error: 'db not allowed' });
 
   const contactId = String(req.query?.contactId || '').trim();
-  if (!contactId) return res.status(400).json({ error: 'contactId required' });
+  const course = String(req.query?.course || '').trim();
 
   try {
+    // The session roster — what the OE Trainings module reads.
+    if (course) {
+      const workshops = sortWorkshops(await readCourse(db, course));
+      res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=120');
+      return res.status(200).json({ course, workshops, count: workshops.length });
+    }
+    // Every session with a roster size, for the sidebar. Ids only — the rows
+    // themselves are not read, so this stays cheap as the table grows.
+    if (req.query?.courses === '1') {
+      const courses = await listCourses(db);
+      res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=120');
+      return res.status(200).json({ courses, count: courses.length });
+    }
+    if (!contactId) return res.status(400).json({ error: 'contactId, course, or courses=1 required' });
+
     const workshops = sortWorkshops(await readWorkshops(db, contactId));
     res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=120');
     return res.status(200).json({ contactId, workshops, count: workshops.length });

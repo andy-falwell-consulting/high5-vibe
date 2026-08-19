@@ -1,0 +1,95 @@
+/* OE Trainings — session list + roster. Dark base, light overrides at the end. */
+
+.oet-container { display: flex; flex: 1; min-height: 0; overflow: hidden; background: #0f1117; color: #e2e8f0; }
+
+.oet-sidebar { background: #13151c; border-right: 1px solid #1e2130; display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }
+.oet-sidebar-header { padding: 16px 16px 10px; border-bottom: 1px solid #1e2130; flex-shrink: 0; }
+.oet-sidebar-module { font-size: 15px; font-weight: 700; color: #fff; }
+.oet-sidebar-count { font-size: 12px; color: #94a3b8; margin-bottom: 8px; }
+
+.oet-loading { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.oet-skeleton { height: 42px; border-radius: 6px; background: linear-gradient(90deg, #1a1d27 25%, #22263200 37%, #1a1d27 63%); background-size: 400% 100%; animation: oet-sk 1.4s ease infinite; }
+@keyframes oet-sk { 0% { background-position: 100% 50% } 100% { background-position: 0 50% } }
+
+.oet-item { display: flex; align-items: center; gap: 10px; padding: 9px 14px; cursor: pointer; border-left: 3px solid transparent; }
+.oet-item:hover { background: #171a23; }
+.oet-item.active { background: #1a1d27; border-left-color: #e8322a; }
+.oet-item-main { min-width: 0; flex: 1; }
+.oet-item-name { font-size: 13px; font-weight: 600; color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.oet-item-sub { font-size: 11px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.oet-unlisted { color: #fcd34d; }
+.oet-count { font-size: 11px; font-weight: 600; color: #cbd5e1; background: #1e2130; padding: 2px 8px; border-radius: 999px; flex-shrink: 0; }
+
+.oet-resize-handle { width: 4px; background: #1e2130; cursor: col-resize; flex-shrink: 0; transition: background 0.15s; }
+.oet-resize-handle:hover { background: #e8322a; }
+
+.oet-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+.oet-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #64748b; gap: 8px; }
+.oet-empty-icon { font-size: 34px; opacity: 0.5; }
+
+.oet-topbar { padding: 18px 22px 14px; border-bottom: 1px solid #1e2130; flex-shrink: 0; }
+.oet-title { margin: 0 0 8px; font-size: 22px; font-weight: 700; color: #fff; }
+.oet-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.oet-chip { font-size: 11px; padding: 2px 9px; border-radius: 999px; background: #1e2130; color: #cbd5e1; }
+.oet-chip.code { background: #1e3a5f; color: #93c5fd; font-weight: 600; }
+.oet-chip.warn { background: #422006; color: #fcd34d; }
+
+.oet-link { background: none; border: none; color: #60a5fa; cursor: pointer; font-size: inherit; padding: 0; text-align: left; }
+.oet-link:hover { text-decoration: underline; }
+
+.oet-error { margin: 14px 22px; padding: 10px 12px; border-radius: 6px; background: #450a0a; color: #fca5a5; font-size: 13px; }
+.oet-loading-body { padding: 22px; color: #94a3b8; }
+
+.oet-content { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; padding: 18px 22px 28px; }
+
+.oet-stats { display: flex; gap: 10px; flex-wrap: wrap; flex-shrink: 0; }
+.oet-stat { background: #13151c; border: 1px solid #1e2130; border-radius: 8px; padding: 10px 16px; min-width: 110px; }
+.oet-stat span { display: block; font-size: 18px; font-weight: 700; color: #fff; }
+.oet-stat label { display: block; font-size: 11px; color: #94a3b8; margin-top: 2px; }
+.oet-stat.owing span { color: #f87171; }
+.oet-stat.warn { border-color: #b45309; }
+.oet-stat.warn span { color: #fcd34d; }
+
+.oet-table-wrap { flex-shrink: 0; overflow-x: auto; border: 1px solid #1e2130; border-radius: 8px; }
+.oet-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.oet-table th { text-align: left; padding: 9px 12px; background: #13151c; color: #94a3b8; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid #1e2130; white-space: nowrap; }
+.oet-table td { padding: 9px 12px; border-bottom: 1px solid #1a1d27; color: #cbd5e1; }
+.oet-table tr:last-child td { border-bottom: none; }
+.oet-table .num { text-align: right; white-space: nowrap; }
+.oet-table td.owing { color: #f87171; font-weight: 600; }
+.oet-none { text-align: center; color: #64748b; padding: 20px; }
+.oet-unassigned { color: #fcd34d; font-style: italic; }
+
+.oet-flags { display: flex; gap: 6px; flex-wrap: wrap; }
+.oet-flag { font-size: 10px; padding: 1px 6px; border-radius: 999px; background: #1a1d27; color: #64748b; white-space: nowrap; }
+.oet-flag.on { background: #064e3b; color: #6ee7b7; }
+
+/* ── Light theme ─────────────────────────────────────────────────────────── */
+[data-theme="light"] .oet-container { background: #f8fafc; color: #0f172a; }
+[data-theme="light"] .oet-sidebar { background: #fff; border-right-color: #e2e8f0; }
+[data-theme="light"] .oet-sidebar-header { border-bottom-color: #e2e8f0; }
+[data-theme="light"] .oet-sidebar-module { color: #0f172a; }
+[data-theme="light"] .oet-sidebar-count,
+[data-theme="light"] .oet-item-sub { color: #64748b; }
+[data-theme="light"] .oet-item:hover { background: #f1f5f9; }
+[data-theme="light"] .oet-item.active { background: #f1f5f9; }
+[data-theme="light"] .oet-item-name { color: #0f172a; }
+[data-theme="light"] .oet-count { background: #e2e8f0; color: #334155; }
+[data-theme="light"] .oet-resize-handle { background: #e2e8f0; }
+[data-theme="light"] .oet-topbar { border-bottom-color: #e2e8f0; }
+[data-theme="light"] .oet-title { color: #0f172a; }
+[data-theme="light"] .oet-chip { background: #e2e8f0; color: #334155; }
+[data-theme="light"] .oet-chip.code { background: #dbeafe; color: #1d4ed8; }
+[data-theme="light"] .oet-chip.warn { background: #fef3c7; color: #92400e; }
+[data-theme="light"] .oet-stat { background: #fff; border-color: #e2e8f0; }
+[data-theme="light"] .oet-stat span { color: #0f172a; }
+[data-theme="light"] .oet-stat label { color: #64748b; }
+[data-theme="light"] .oet-stat.owing span { color: #dc2626; }
+[data-theme="light"] .oet-table-wrap { border-color: #e2e8f0; }
+[data-theme="light"] .oet-table th { background: #f1f5f9; color: #475569; border-bottom-color: #e2e8f0; }
+[data-theme="light"] .oet-table td { color: #334155; border-bottom-color: #f1f5f9; }
+[data-theme="light"] .oet-table td.owing { color: #dc2626; }
+[data-theme="light"] .oet-flag { background: #f1f5f9; color: #94a3b8; }
+[data-theme="light"] .oet-flag.on { background: #d1fae5; color: #065f46; }
+[data-theme="light"] .oet-unlisted { color: #92400e; }
+[data-theme="light"] .oet-unassigned { color: #92400e; }
