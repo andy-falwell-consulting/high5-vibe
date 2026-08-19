@@ -1,6 +1,19 @@
 # B1 — moving estimate line items to Vibe
 
-**Scoped 2026-08-18**, measured against production, read-only. Nothing built.
+**Scoped 2026-08-18. DONE 2026-08-19.** Measured against production throughout.
+
+**Outcome:** production migrated — 10,858 lines across 2,778 estimates, zero
+orphans, matching the source layout exactly. `Estimates.jsx` reads and writes
+through Vibe, `src/api/estimateLines.js` is deleted, and the app no longer
+depends on any FileMaker script. Totals are computed, and where they disagree
+with FileMaker's cached figure the record says so.
+
+**The number worth knowing:** the cached totals were wrong on ~7% of estimates
+and almost always LOW. Over 600 sampled, 43 disagreed, 42 of them understated,
+by up to $1,050 and $7,446 across the sample — roughly $35,000 extrapolated
+across all 2,778. Confirmed this was pre-existing drift, not migration damage:
+for every mismatch FileMaker's own line Amounts sum to exactly what Vibe
+computes.
 
 The decoupling plan calls this the piece that "means Vibe computing the totals
 itself first," and treats that as the hard part. Measuring it changed the
@@ -118,9 +131,9 @@ silently doubles.
 
 ---
 
-## Proposed shape, once that is answered
+## The shape it took
 
-Replicate the inspection-lines pattern rather than inventing one:
+Replicated the inspection-lines pattern rather than inventing one:
 
 1. `api/_estimateLines.js` — the store, mirroring `api/_inspectionLines.js`.
 2. `api/estimate-lines-migrate.js` — paged read of the line-item layout, staged
@@ -129,8 +142,19 @@ Replicate the inspection-lines pattern rather than inventing one:
 3. `src/api/estimateLinesVibe.js` — replaces `src/api/estimateLines.js`;
    list/add/update/delete against Vibe, and **totals computed here** rather than
    requested from a FileMaker script.
-4. The three stored total fields become derived. They stay in the replica and
-   are simply no longer read — nothing writes them, so nothing can drift.
+4. The three stored total fields are no longer read for the displayed total.
+   They stay in the replica, and the record FLAGS any estimate where they
+   disagree with its lines rather than correcting it silently.
+
+Two things only building it revealed:
+
+- **`writeLines` must store `[]`, not delete the field.** Otherwise "every line
+  removed" is indistinguishable from "never migrated", and deleting the last
+  line makes all the old ones reappear from the portal.
+- **An un-migrated estimate needs seeding on first write.** `est_li_vibe_2`
+  exists only in Production, so every Dev estimate falls back to portal rows;
+  without seeding, editing one line there would leave Vibe holding only that
+  line and drop the rest.
 
 The `RECALC_SCRIPT` call disappears with them, which also removes the app's only
 dependency on a FileMaker script running — the Phase C4 problem, retired early
