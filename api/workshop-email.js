@@ -5,7 +5,7 @@ import { readWorkshop, patchWorkshop } from './_oeTraining.js';
 import {
   TEMPLATES, isTemplateId, readTemplate, readTemplates, writeTemplate,
   pickEmail, render, templateVars, sendAsWorkshops, senderAddress, catalogueForCourse,
-  templateFiles, loadAttachments,
+  templateFiles, loadAttachments, checkDelegation,
 } from './_workshopEmail.js';
 
 // Workshop e-mails — preview, send, and template administration.
@@ -44,6 +44,12 @@ export default async function handler(req, res) {
   if (!ALLOWED_DBS.has(db)) return res.status(400).json({ error: 'db not allowed' });
 
   try {
+    // ── Is the Workspace grant in place? Sends nothing. ────────────────────
+    if (req.query?.check === '1') {
+      if (!(await isAdminEmail(session.email))) return res.status(403).json({ error: 'admin only' });
+      return res.status(200).json(await checkDelegation());
+    }
+
     // ── Templates ──────────────────────────────────────────────────────────
     if (req.query?.templates === '1') {
       if (req.method === 'GET') {

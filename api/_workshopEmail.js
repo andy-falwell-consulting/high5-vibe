@@ -227,6 +227,49 @@ function buildMime({ from, to, replyTo, subject, body, attachments }) {
   return Buffer.from(parts.join('\r\n'), 'utf-8').toString('base64url');
 }
 
+/** Prove the delegation works, WITHOUT sending anything.
+ *
+ *  Two failures are worth telling apart and a send would conflate them:
+ *   - the token request itself is refused (`unauthorized_client`) — the scope is
+ *     not granted to this service account in Workspace admin;
+ *   - the token mints but Gmail refuses the profile — the grant exists but the
+ *     address is not a mailbox this account can act as (a group alias rather
+ *     than a real user is the usual cause).
+ *
+ *  Reads the mailbox's own profile, which is the cheapest call that requires the
+ *  impersonation to have actually worked. */
+export async function checkDelegation() {
+  const from = senderAddress();
+  let token;
+  try {
+    token = await getServiceAccountToken({ scope: GMAIL_SEND_SCOPE, subject: from, force: true });
+  } catch (e) {
+    return {
+      ok: false, stage: 'token', from, scope: GMAIL_SEND_SCOPE,
+      error: String(e?.message || e),
+      hint: /unauthorized_client|invalid_grant/i.test(String(e?.message || e))
+        ? `Workspace admin has not granted ${GMAIL_SEND_SCOPE} to this service account's client ID, or the entry was saved without it. Remember the scope box REPLACES rather than appends — the Drive scope must still be listed alongside it.`
+        : 'The token request was rejected before Gmail was reached.',
+    };
+  }
+  const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile',
+    { headers: { Authorization: `Bearer ${token}` } });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    return {
+      ok: false, stage: 'mailbox', from, error: body.error?.message || `HTTP ${res.status}`,
+      hint: res.status === 400 || res.status === 404
+        ? `${from} may not be a real Workspace mailbox — a group alias or forwarding address cannot be impersonated and has no Sent folder.`
+        : 'The grant looks present but Gmail refused the impersonation.',
+    };
+  }
+  return {
+    ok: true, from, mailbox: body.emailAddress,
+    messagesTotal: body.messagesTotal ?? null,
+    note: 'Delegation works — Vibe can send as this mailbox.',
+  };
+}
+
 /** Send as the shared workshops mailbox. Throws with Google's own message —
  *  a failed delegation grant reports as a 403 here, and saying so plainly beats
  *  a generic "send failed". */
