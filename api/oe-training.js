@@ -1,0 +1,36 @@
+// One contact's OE training history — PHASE B3. READ ONLY.
+//
+//   GET /api/oe-training?db=…&contactId=82201
+//
+// There is no write path, and that is deliberate rather than unfinished:
+// nothing in the app has ever written workshop attendance. The legacy Contacts
+// module and Contacts v2 both only display it, so a write path would be surface
+// with no caller.
+//
+// What this replaces is worth stating: opening the OE Training tab used to cost
+// TWO live FileMaker round trips — a `findInLayout` on Contacts_New to turn a
+// contact id into a FileMaker recordId, then `getRecordWithPortals` for
+// `Portal__Orders`. It was the last work source on that page still reading
+// FileMaker at view time.
+import { getGoogleSession } from './_googleSession.js';
+import { ALLOWED_DBS } from './_fmp.js';
+import { readWorkshops, sortWorkshops } from './_oeTraining.js';
+
+export default async function handler(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'GET only' });
+  if (!(await getGoogleSession(req))) return res.status(401).json({ error: 'Not authenticated' });
+
+  const db = String(req.query?.db || '');
+  if (!ALLOWED_DBS.has(db)) return res.status(400).json({ error: 'db not allowed' });
+
+  const contactId = String(req.query?.contactId || '').trim();
+  if (!contactId) return res.status(400).json({ error: 'contactId required' });
+
+  try {
+    const workshops = sortWorkshops(await readWorkshops(db, contactId));
+    res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=120');
+    return res.status(200).json({ contactId, workshops, count: workshops.length });
+  } catch (e) {
+    return res.status(502).json({ error: String(e?.message || e).slice(0, 300) });
+  }
+}

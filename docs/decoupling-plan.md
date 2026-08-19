@@ -50,7 +50,7 @@ more instructive one.
 | **A4** delete the write token | **one thing away** — only the legacy Contacts module still writes |
 | **B1** estimate line items | **done** — migrated, wired, FileMaker module deleted |
 | **B2** bill of materials | **done** (2026-08-19) — tail migrated, 10 runaway parents left behind. See b2-bom-scope.md |
-| **B3** OE training / certifications | untouched |
+| **B3** OE training | **done** (2026-08-19) — 5,142 workshops across 2,689 contacts |
 | **B4** retire legacy Contacts | untouched, but now decided |
 | **B5** search + agent | **done** — both repointed at Vibe's contact model |
 | **C1** derived fields | **audited; resolver and both write paths shipped**; existing records not backfilled |
@@ -84,11 +84,11 @@ Child collections:
 | Estimate line items (`estmt_ESTLI`) | 10,858 | **Vibe** (2026-08-19) |
 | Bill of materials (`item_ITMLI`) | 10,116 migrated *(of 125,047)* | **Vibe** (2026-08-19) |
 | Contact relationships (`cntct_RLTN`) | 23,302 | FileMaker (superseded by Vibe affiliations) |
-| OE training (`cntct_WKSRG`) | — | FileMaker, no module |
-| Certifications (`cntct_CTFC`) | — | FileMaker, no module |
+| OE training (`Workshops_New`) | 5,142 | **Vibe** (2026-08-19) |
+| Certifications (`CTFC`) | 3 | FileMaker — out of scope (Andy, 2026-08-19) |
 
 Roughly: **6 of 8 layouts own their edits, 6 of 8 own creation, 8 of 8 own
-deletion; 5 of 8 child collections have moved.**
+deletion; 6 of 8 child collections have moved.**
 
 Deletion is the only column that is finished, and it finished in one change
 because every module deletes through one shared control.
@@ -251,8 +251,24 @@ about an hour of continuous load.
 aggregate calcs — exactly as `est_li_vibe_2` provided for B1. With that, B2 is
 the same routine job B1 was.
 
-**B3. OE training and certifications.** No module and no data source today.
-These two are the only reason the old Contacts page still exists.
+**B3. OE training** — **scoped 2026-08-19, blocked on a layout. See
+[b3-oe-training-scope.md](b3-oe-training-scope.md).** Certifications are out of
+scope (Andy, 2026-08-19).
+
+This is now the blocker for A4, via a short chain: only the legacy Contacts
+module still writes to FileMaker, B4 wants it retired rather than moved, and it
+cannot be retired while it is the only home for OE training.
+
+The data is small — ~5% of contacts, roughly 780 contacts and ~2,600 rows — but
+there is **no readable layout on the WKSRG table**. `Script_Use__Orders` exists
+and reports 17 rows while exposing zero fields, which is the same state the
+contact-method tables were in before fields were added to them. Needs a layout
+carrying `_kpt__Workshop_ID`, **`_kft__Contact_ID`**, Course Number/Name and the
+start/end dates and times — and only those, since B2 showed an aggregate
+calculation on a layout makes paging 18x slower.
+
+It is NOT the OE Lookup module: `OELookup_New` is a catalogue of programmes with
+no contact link of any kind.
 
 **B4. Retire the old Contacts module** once B3 lands.
 
