@@ -85,13 +85,21 @@ export async function readLines(db, estimateId) {
   return Array.isArray(arr) ? arr : [];
 }
 
+// An emptied estimate stores `[]` rather than deleting its field.
+//
+// Deleting would make "every line was removed" indistinguishable from "never
+// migrated", and the two must behave differently: an un-migrated estimate falls
+// back to FileMaker's portal rows, while an emptied one must show nothing. If
+// they were conflated, deleting the last line would make all the old lines
+// reappear. `linesExist` is what the read path asks.
 export async function writeLines(db, estimateId, lines) {
-  if (!lines.length) {
-    await redis.hdel(linesKey(db), String(estimateId));
-    return [];
-  }
   await redis.hset(linesKey(db), { [String(estimateId)]: JSON.stringify(lines) });
   return lines;
+}
+
+/** Whether this estimate has a Vibe record at all — migrated, or edited here. */
+export async function linesExist(db, estimateId) {
+  return (await redis.hexists(linesKey(db), String(estimateId))) === 1;
 }
 
 // Lines added in Vibe get a VE- id — a bare number came from FileMaker, anything

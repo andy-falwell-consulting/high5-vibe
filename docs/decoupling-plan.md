@@ -48,7 +48,7 @@ more instructive one.
 | **A2** deletion | **done** — tombstones, all 8 layouts, one change |
 | **A3** edit ownership | **done as far as it goes** — 6 of 8; the other two are decided against or need a feature built |
 | **A4** delete the write token | **blocked** — see the table in A4 |
-| **B1** estimate line items | **in progress** — store, endpoint, client and migration built; swap + migration remain |
+| **B1** estimate line items | **done** — migrated, wired, FileMaker module deleted |
 | **B2** bill of materials | untouched |
 | **B3** OE training / certifications | untouched |
 | **B4** retire legacy Contacts | untouched, but now decided |
@@ -81,14 +81,14 @@ Child collections:
 | Contact phones / emails / addresses | 36,663 | **Vibe** |
 | Inspection line items | 208,068 | **Vibe** |
 | Attachments (all modules) | — | **Vibe** (Drive + Redis) |
-| Estimate line items (`estmt_ESTLI`) | 10,858 | FileMaker — B1 in progress |
+| Estimate line items (`estmt_ESTLI`) | 10,858 | **Vibe** (2026-08-19) |
 | Bill of materials (`item_ITMLI`) | — | FileMaker |
 | Contact relationships (`cntct_RLTN`) | 23,302 | FileMaker (superseded by Vibe affiliations) |
 | OE training (`cntct_WKSRG`) | — | FileMaker, no module |
 | Certifications (`cntct_CTFC`) | — | FileMaker, no module |
 
 Roughly: **6 of 8 layouts own their edits, 5 of 8 own creation, 8 of 8 own
-deletion; 3 of 8 child collections have moved.**
+deletion; 4 of 8 child collections have moved.**
 
 Deletion is the only column that is finished, and it finished in one change
 because every module deletes through one shared control.
@@ -115,7 +115,7 @@ first three, on purpose:
   only a FileMaker script corrects them, which the app had to call after every
   line change. **That is no longer the blocker it reads as here:** measured
   2026-08-18, tax is 0 on all 2,818 estimates and no line is taxable, so the
-  totals are a sum. B1 is underway — see
+  totals are a sum. **B1 is done (2026-08-19)** — see
   [b1-estimate-lines-scope.md](b1-estimate-lines-scope.md).
 
 ---
@@ -197,7 +197,6 @@ FileMaker any more, but these still do, and each needs its own decision first:
 
 | Still writes to FileMaker | Why it hasn't moved |
 |---|---|
-| Estimate line items + totals (`api/estimateLines.js`) | B1, in progress — the Vibe store, endpoint and client exist; the swap and migration remain |
 | Bill of materials (`ProductsAndServicesV2.jsx`) | B2 |
 | Products & Services creation | entangled with SKU assignment and live Shopify/QBO pushes |
 | Estimates creation | not yet moved; no blocker known, just untouched |
@@ -211,7 +210,7 @@ should be removed with the placeholder modules rather than counted as writes.
 
 ## Phase B — Move the remaining child collections
 
-**B1. Estimate line items — scoped 2026-08-18, see
+**B1. Estimate line items — DONE 2026-08-19, see
 [b1-estimate-lines-scope.md](b1-estimate-lines-scope.md).** The trap is real and
 the fix stands, but two things measured against production change this entry:
 
@@ -408,6 +407,16 @@ This is the one capability to preserve, and it is mostly already right.
 - **Delete means hide in Vibe, leave FileMaker alone** (A2). People working in
   FileMaker Pro keep seeing records that are gone from Vibe; the deletion is
   recoverable by hand.
+
+**Settled 2026-08-19**
+
+- **QuickBooks and Shopify have ONE environment, shared by every FileMaker
+  database.** So `CreateInQBO` hardcoding `env="production"` and Shopify's single
+  `SHOPIFY_STORE` are correct, not gaps — a push from a Dev record reaching the
+  live QuickBooks or Shopify is intended. Recorded because it looks like a
+  cross-environment leak on inspection, and is not one. (The
+  `QBO_SYNC_ALLOW_PROD` guard on the *sync* jobs is a separate thing: it stops
+  bulk background syncs, not deliberate one-off pushes.)
 
 **Still open**
 

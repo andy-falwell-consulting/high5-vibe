@@ -146,3 +146,18 @@
 [data-theme="light"] .est-btn.discard { color: #94a3b8; border-color: #e2e8f0; }
 [data-theme="light"] .est-main { background: #f8fafc; }
 [data-theme="light"] .est-line-group + .est-line-group { border-top-color: #e2e8f0; }
+
+/* Shown when the line items disagree with FileMaker's stored total — see
+   Estimates.jsx. Deliberately quiet: it is information, not an error the
+   reader can act on, and it appears on roughly 7% of estimates. */
+.est-total-flag {
+  font-size: 11px;
+  color: #b45309;
+  background: #b4530915;
+  border: 1px solid #b4530933;
+  border-radius: 6px;
+  padding: 3px 8px;
+  white-space: nowrap;
+  cursor: help;
+}
+[data-theme="light"] .est-total-flag { color: #92400e; background: #fef3c7; border-color: #fcd34d; }

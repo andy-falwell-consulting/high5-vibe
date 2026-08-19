@@ -22,9 +22,32 @@
 // because the script did not fire. A computed total cannot drift.
 import { getGoogleSession } from './_googleSession.js';
 import { ALLOWED_DBS } from './_fmp.js';
+import { Redis } from '@upstash/redis';
 import {
-  readLines, writeLines, nextLineId, cleanLine, LINE_FIELDS, totalsFor, sortLines,
+  readLines, writeLines, nextLineId, cleanLine, LINE_FIELDS, totalsFor, sortLines, linesExist, linesKey,
 } from './_estimateLines.js';
+
+const redis = Redis.fromEnv();
+
+// Every estimate's computed total in one call — `GET ?db=…&totals=1`.
+//
+// The estimate LIST needs these. Without it the sidebar shows FileMaker's
+// cached figure while the open record shows the computed one, and the same
+// estimate reads as two different numbers on one screen. Fetching per estimate
+// would be 2,778 round trips; this is a single HGETALL, summed server-side, and
+// returns only the numbers — a few tens of KB rather than the megabytes of line
+// data it is derived from.
+async function allTotals(db) {
+  const raw = (await redis.hgetall(linesKey(db))) || {};
+  const out = {};
+  for (const [id, v] of Object.entries(raw)) {
+    try {
+      const lines = typeof v === 'string' ? JSON.parse(v) : v;
+      if (Array.isArray(lines) && lines.length) out[id] = totalsFor(lines).total;
+    } catch { /* an unparseable entry is skipped, not fatal to the whole list */ }
+  }
+  return out;
+}
 
 const respond = (res, estimateId, lines, extra = {}) =>
   res.status(200).json({ estimateId, lines: sortLines(lines), totals: totalsFor(lines), ...extra });
@@ -36,6 +59,11 @@ export default async function handler(req, res) {
   const db = String(req.query?.db || '');
   if (!ALLOWED_DBS.has(db)) return res.status(400).json({ error: 'db not allowed' });
 
+  if (req.method === 'GET' && req.query?.totals) {
+    res.setHeader('Cache-Control', 's-maxage=15, stale-while-revalidate=60');
+    return res.status(200).json({ totals: await allTotals(db) });
+  }
+
   const estimateId = String(req.query?.estimateId || '').trim();
   // Without this an estimate with no id would read and write a single shared
   // bucket keyed on '', quietly mixing line items between records.
@@ -44,7 +72,14 @@ export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
       const lines = await readLines(db, estimateId);
-      return respond(res, estimateId, lines, { count: lines.length });
+      // `migrated` distinguishes an estimate Vibe knows about — even one whose
+      // lines were all deleted — from one it has never seen. The client falls
+      // back to FileMaker's portal rows only for the latter, which is what
+      // keeps estimates readable in an environment the migration cannot reach.
+      return respond(res, estimateId, lines, {
+        count: lines.length,
+        migrated: await linesExist(db, estimateId),
+      });
     }
     if (req.method !== 'POST') return res.status(405).json({ error: 'GET or POST' });
 
