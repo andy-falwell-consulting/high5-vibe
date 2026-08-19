@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { getRecord, invalidateRecord, patchCachedRecord, containerImageUrl, createRecord } from '../api/filemaker';
-import { updateVibeRecord } from '../api/vibeRecords';
+import { getRecord, invalidateRecord, patchCachedRecord, containerImageUrl, addCachedRecord } from '../api/filemaker';
+import { updateVibeRecord, createVibeRecord } from '../api/vibeRecords';
 import { getCurrentEnv } from '../config/fmpEnvironments';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
 import BomPickerModal from './BomPickerModal';
@@ -367,11 +367,24 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
   const handleCreate = async ({ fields, pushShopify, shopifyStatus, pushQBO }) => {
     // SKUs are always assigned by the app from the Tray counter (single source
     // of truth) — users can't choose one. FMP-direct adds use the same counter
-    // via the FMP script trigger.
+    // via the FMP script trigger, so this stays correct however the record is
+    // created; the counter has never had anything to do with FileMaker.
     fields = { ...fields, SKU: await fetchNextSku() };
-    const res = await createRecord(LAYOUT, fields);
-    if (res.messages?.[0]?.code !== '0') throw new Error(res.messages?.[0]?.message || 'FMP create failed');
-    const newRecordId = res.response?.recordId;
+
+    // Born in Vibe. This was the last creation path on FileMaker, and the
+    // "entangled with SKU assignment and live Shopify/QBO pushes" note in the
+    // decoupling plan overstated it: the SKU comes from Tray, `pushToShopify`
+    // takes a recordId and never reads it, and `pushToQBO` is not given one at
+    // all. Neither push cares where the record lives.
+    const made = await createVibeRecord(LAYOUT, fields);
+    const newRecordId = made?.recordId;
+    if (!newRecordId) throw new Error('Could not create the product');
+
+    // The pushes stay AFTER creation deliberately. They could run first now
+    // that nothing needs the record id, but a push that succeeded against a
+    // creation that then failed would leave a product in Shopify or QuickBooks
+    // with nothing here pointing at it. This order fails the safer way: a local
+    // record with no external id, which the sync buttons can retry.
     const updates = {};
     if (pushShopify) {
       const { shopifyId, variantId } = await pushToShopify({ ...fields, status: shopifyStatus }, newRecordId);
@@ -383,16 +396,15 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
       const { qboId } = await pushToQBO(fields, null, fields.QuickBooks_Account_Income || '155');
       if (qboId) updates._kat__Item_ID_QuickBooks = qboId;
     }
-    // The record itself is still created via FileMaker (see the comment on
-    // handleSave), but writing the Shopify/QBO ids back onto it afterward is
-    // an EDIT, not part of creation — so it goes to Vibe like any other edit
-    // on this now Vibe-owned layout. getRecord reads FileMaker directly and
-    // won't see that overlay, so `updates` is merged in by hand rather than
-    // trusting the read-back to already carry it.
     if (Object.keys(updates).length) await updateVibeRecord(LAYOUT, newRecordId, updates);
-    const detail = await getRecord(LAYOUT, newRecordId);
-    const newRecord = detail.response?.data?.[0];
-    if (newRecord) setSelected({ ...newRecord, fieldData: { ...newRecord.fieldData, ...updates } });
+
+    // No read-back: createVibeRecord returns the stored record, and the minted
+    // `V-` id is already this table's own `_kpt__Item_ID`. Seeding the list
+    // cache is new — the FileMaker path never did it, so a newly created
+    // product did not appear in the list until the next refresh.
+    const record = { recordId: newRecordId, fieldData: { ...made.fieldData, ...updates }, portalData: {} };
+    addCachedRecord(LAYOUT, CACHE_VERSION, record);
+    setSelected(record);
   };
 
   const handleImageUpload = async (e) => {

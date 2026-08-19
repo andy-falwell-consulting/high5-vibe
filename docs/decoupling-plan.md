@@ -47,7 +47,7 @@ more instructive one.
 | **A1** record creation | **done** — 4 layouts moved via one shared component |
 | **A2** deletion | **done** — tombstones, all 8 layouts, one change |
 | **A3** edit ownership | **done as far as it goes** — 6 of 8; the other two are decided against or need a feature built |
-| **A4** delete the write token | **blocked** — see the table in A4 |
+| **A4** delete the write token | **one thing away** — only the legacy Contacts module still writes |
 | **B1** estimate line items | **done** — migrated, wired, FileMaker module deleted |
 | **B2** bill of materials | **done** (2026-08-19) — tail migrated, 10 runaway parents left behind. See b2-bom-scope.md |
 | **B3** OE training / certifications | untouched |
@@ -70,7 +70,7 @@ Eight layouts are replicated (`api/_replica.js`).
 | `trainings_New` | 2,478 | **Vibe** (2026-08-18) | — *(no create path exists)* | **Vibe** (2026-08-18) |
 | `Contacts_New` | 15,582 | FileMaker | **Vibe** (`V-` ids) | **Vibe** (tombstone) |
 | `Estimates_New` | 2,817 | **Vibe** (2026-08-18) | **Vibe** (2026-08-18) | **Vibe** (2026-08-18) |
-| `Products & Services_New` | 1,267 | **Vibe** (2026-08-18) | FileMaker | **Vibe** (2026-08-18) |
+| `Products & Services_New` | 1,267 | **Vibe** (2026-08-18) | **Vibe** (2026-08-19) | **Vibe** (2026-08-18) |
 | `OELookup_New` | 1,247 | FileMaker | FileMaker | **Vibe** (2026-08-18) |
 | `RMI_New` | 117 | **Vibe** (2026-08-18) | **Vibe** (2026-08-18) | **Vibe** (2026-08-18) |
 
@@ -87,7 +87,7 @@ Child collections:
 | OE training (`cntct_WKSRG`) | — | FileMaker, no module |
 | Certifications (`cntct_CTFC`) | — | FileMaker, no module |
 
-Roughly: **6 of 8 layouts own their edits, 5 of 8 own creation, 8 of 8 own
+Roughly: **6 of 8 layouts own their edits, 6 of 8 own creation, 8 of 8 own
 deletion; 5 of 8 child collections have moved.**
 
 Deletion is the only column that is finished, and it finished in one change
@@ -102,13 +102,13 @@ Services, is deliberate — see below.
 Products & Services' and Estimates' moves were both scoped narrower than the
 first three, on purpose:
 
-- **Products & Services**: field edits (including the Shopify/QuickBooks id
-  write-backs after a sync push, which are just field writes) went to Vibe,
-  but its Bill-of-Materials portal writes and record creation are
-  deliberately still FileMaker — BOM is its own migration (B2 below), and
-  creation is entangled with SKU assignment plus live Shopify/QBO pushes,
-  which deserves dedicated attention rather than being carried along
-  incidentally.
+- **Products & Services**: fully Vibe as of 2026-08-19 — field edits, the
+  Bill-of-Materials (B2) and creation. The creation note here used to say it was
+  "entangled with SKU assignment plus live Shopify/QBO pushes"; reading the code
+  showed that overstated it. The SKU comes from the Tray counter and never had
+  anything to do with FileMaker, `pushToShopify` takes a `recordId` and never
+  reads it, and `pushToQBO` is not given one. Neither push cares where the
+  record lives.
 - **Estimates**: top-level record field edits (Title, Status, Class, the
   QBO-push id write-back) went to Vibe. Line items and the stored totals did
   not — the totals reject direct writes (`201 Field cannot be modified`) and
@@ -192,12 +192,11 @@ table.
 through. Removing it makes "we still write to FileMaker" *impossible* rather
 than merely untrue, and retires the per-user-FMP-account failure class.
 
-**Not yet reachable.** As of 2026-08-18 no write to a Vibe-owned layout goes to
-FileMaker any more, but these still do, and each needs its own decision first:
+**One thing away.** As of 2026-08-19 the ONLY remaining FileMaker write in the
+app is the legacy Contacts module:
 
 | Still writes to FileMaker | Why it hasn't moved |
 |---|---|
-| Products & Services creation | entangled with SKU assignment and live Shopify/QBO pushes |
 | Legacy Contacts module — edits, creation, portals, `Contact_rltn` | B4 wants the module retired instead |
 
 `TandD.jsx` and `EOL.jsx` also still call `updateRecord`, but both set
@@ -479,9 +478,11 @@ Two of those assumptions did not survive contact with the data:
   `estimate_li_vibe` being the wrong table before 1,267 product records were
   written into the estimate-lines store.
 
-**Where the remaining work sits:** A is done except A4, which is now gated on
-just TWO things — Products & Services creation (entangled with SKU assignment
-and live Shopify/QBO pushes) and the legacy Contacts module (B4 wants it retired
-rather than moved). B1, B2 and B5 are done; B3/B4 are untouched. C1 has shipped its resolver and both write paths; C2/C3/C4 are
+**Where the remaining work sits:** A is done except A4, and A4 is now gated on
+exactly ONE thing — the legacy Contacts module, which B4 wants retired rather
+than moved. B1, B2 and B5 are done; B3 (OE training and certifications, the only
+reason that module still exists) is the real prerequisite. `TandD.jsx` and
+`EOL.jsx` still call `updateRecord`, but both are `RECORDS_LOCKED` and
+unreachable — they should go with the placeholder modules. C1 has shipped its resolver and both write paths; C2/C3/C4 are
 untouched, and C4 remains the largest unknown because it cannot be inventoried
 from the codebase.
