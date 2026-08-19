@@ -74,13 +74,20 @@ function VocabTab() {
         today; seeding copies them into Vibe, after which Vibe is the source and they
         keep working once FileMaker is retired.
       </p>
+      <p className="admin-note admin-note--warn">
+        <strong>Seeding replaces your edits to any list FileMaker also has.</strong> That is
+        deliberate while FileMaker is still the system of record — but it means an edit made
+        here to, say, <code>Lead Builder</code> is undone by the next seed. Until cutover,
+        change those in FileMaker. Lists that exist only in Vibe are never touched by a seed.
+      </p>
 
       <div className="admin-vocab-bar">
         <select value={layout} onChange={e => setLayout(e.target.value)} disabled={!!busy}>
           {VOCAB_LAYOUTS.map(l => <option key={l.layout} value={l.layout}>{l.label}</option>)}
         </select>
         <button className="admin-btn" disabled={!!busy}
-          onClick={() => run('seed', () => seedValueLists(layout))}>
+          onClick={() => run('seed', () => seedValueLists(layout))}
+          title="FileMaker wins for any list it also has — your edits to those are replaced.">
           {busy === 'seed' ? 'Seeding…' : 'Seed from FileMaker'}
         </button>
         <button className="admin-btn" disabled={!!busy}

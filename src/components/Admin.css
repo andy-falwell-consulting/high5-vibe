@@ -297,3 +297,5 @@
 [data-theme="light"] .admin-btn--ghost { border-color: #e2e8f0; color: #334155; }
 [data-theme="light"] .admin-vocab-src--vibe { background: #d1fae5; color: #065f46; }
 [data-theme="light"] .admin-vocab-src--filemaker { background: #fef3c7; color: #92400e; }
+.admin-note--warn { border-left: 3px solid #b45309; padding-left: 10px; color: #fcd34d; }
+[data-theme="light"] .admin-note--warn { border-left-color: #f59e0b; color: #92400e; }
