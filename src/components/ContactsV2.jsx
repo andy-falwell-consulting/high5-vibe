@@ -16,7 +16,7 @@ import {
   addMethod, updateMethod, removeMethod, deleteContact,
   reorderOrgPeople, reorderMethods, contactDistance,
 } from '../api/vibeContacts';
-import { findInLayout, getRecordWithPortals } from '../api/filemaker';
+import { getCurrentEnv } from '../config/fmpEnvironments';
 import './ContactsV2.css';
 
 // Contacts, on Vibe's own model — organizations, people and affiliations as
@@ -162,24 +162,36 @@ function WorkTable({ src, rows, onOpen }) {
   );
 }
 
-// OE Training (WKSRG) rows — read-only, no Belay module to open, same as on
-// the legacy Contacts module (Contacts.jsx). `state` is the effect-tracked
-// { id, rows } | null from the oeTraining fetch above.
+// OE Training — the workshops a contact has attended. Read-only: nothing in the
+// app has ever written these.
+//
+// Reads VIBE as of B3. It used to be the last work source on this page still
+// hitting FileMaker at view time, and it cost TWO round trips to open — a find
+// to turn the contact id into a FileMaker recordId, then the record's portal.
+//
+// The fee column is new, and is there because the migration surfaced it:
+// `Workshops_New` carries the money as well as the course, and it was only ever
+// invisible because the portal on the old page did not select those fields.
 function OeTrainingTable({ state, openId }) {
   if (!state || state.id !== openId) return <p className="c2-none">Loading…</p>;
   if (!state.rows.length) return <p className="c2-none">Nothing recorded.</p>;
+  const money = v => (v ? `$${Number(v).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '');
   return (
     <div className="c2-table-scroll">
       <table className="c2-table">
-        <thead><tr><th>Course #</th><th>Course Name</th><th>Organization</th><th>Start</th><th>End</th></tr></thead>
+        <thead><tr>
+          <th>Course #</th><th>Course Name</th><th>Organization</th>
+          <th>Start</th><th>End</th><th className="num">Fee</th>
+        </tr></thead>
         <tbody>
-          {state.rows.map((r, i) => (
-            <tr key={i}>
-              <td className="mono">{r['cntct_WKSRG::Course Number']}</td>
-              <td>{r['cntct_WKSRG::Course Name']}</td>
-              <td>{r['cntct_WKSRG::zz__Display_Organization__ct']}</td>
-              <td>{r['cntct_WKSRG::Start Date']}</td>
-              <td>{r['cntct_WKSRG::End Date']}</td>
+          {state.rows.map(r => (
+            <tr key={r.id}>
+              <td className="mono">{r.courseNumber || '—'}</td>
+              <td>{r.courseName || '—'}</td>
+              <td>{r.organization || '—'}</td>
+              <td>{r.startDate || '—'}</td>
+              <td>{r.endDate || '—'}</td>
+              <td className="num">{money(r.feeTotal) || '—'}</td>
             </tr>
           ))}
         </tbody>
@@ -782,21 +794,22 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
   }, [openId]);
   const dist = distance?.id === openId ? distance : null;
 
-  // OE Training rows, fetched only once the tab is actually opened — unlike
-  // every other work source these come straight from FileMaker's own
-  // Portal__Orders on Contacts_New, so opening it costs a live round trip: a
-  // find by _kpt__Contact_ID (Vibe's contact id IS this field, verbatim) to
-  // get the FileMaker recordId, then that record's portal data.
+  // OE Training rows, from Vibe (B3), still fetched lazily on first visit to
+  // the tab. This replaced two live FileMaker round trips — a find to turn the
+  // contact id into a FileMaker recordId, then that record's Portal__Orders —
+  // with a single read of a store keyed on the contact id directly.
   useEffect(() => {
     if (tab !== 'oe_training' || !openId) return undefined;
     if (oeTraining?.id === openId) return undefined;
     let alive = true;
     (async () => {
       try {
-        const found = await findInLayout('Contacts_New', [{ _kpt__Contact_ID: `==${openId}` }], { limit: 1 });
-        const rec = found?.response?.data?.[0];
-        const full = rec ? await getRecordWithPortals('Contacts_New', rec.recordId, { 'Portal__Orders': 200 }) : null;
-        const rows = full?.response?.data?.[0]?.portalData?.['Portal__Orders'] || [];
+        const db = getCurrentEnv().db;
+        const res = await fetch(
+          `/api/oe-training?db=${encodeURIComponent(db)}&contactId=${encodeURIComponent(openId)}`,
+          { credentials: 'include' });
+        const body = await res.json().catch(() => ({}));
+        const rows = body.workshops || [];
         if (alive) setOeTraining({ id: openId, rows });
       } catch {
         if (alive) setOeTraining({ id: openId, rows: [] });
