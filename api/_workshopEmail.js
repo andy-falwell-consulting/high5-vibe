@@ -283,6 +283,24 @@ export async function checkDelegation() {
     driveForSubject = String(e?.message || e).slice(0, 200);
   }
 
+  // And does delegation work AT ALL? Drive demonstrably works in this app, but
+  // that proves nothing about DELEGATION: if GDRIVE_SA_SUBJECT is unset the
+  // service account acts as ITSELF and reaches the files because the folder is
+  // shared with it directly — no impersonation anywhere in the picture.
+  //
+  // That distinction decides the fix. A configured subject that works means
+  // delegation exists and only this mailbox is the problem. No configured
+  // subject means delegation was never set up at all, and the Drive success
+  // everyone is reasoning from is evidence of something else entirely.
+  const configuredSubject = process.env.GDRIVE_SA_SUBJECT || null;
+  let driveNoSubject = null;
+  try {
+    await getServiceAccountToken({ scope: DRIVE_SCOPE, subject: undefined, force: true });
+    driveNoSubject = 'ok';
+  } catch (e) {
+    driveNoSubject = String(e?.message || e).slice(0, 160);
+  }
+
   let token;
   try {
     token = await getServiceAccountToken({ scope: GMAIL_SEND_SCOPE, subject: from, force: true });
@@ -290,11 +308,15 @@ export async function checkDelegation() {
     return {
       ok: false, stage: 'token', impersonating: from, showsAs, scope: GMAIL_SEND_SCOPE,
       serviceAccount: account,
+      configuredDriveSubject: configuredSubject,
       delegationWorksForThisMailbox: driveForSubject === 'ok',
       driveProbe: driveForSubject,
+      driveAsItself: driveNoSubject,
       diagnosis: driveForSubject === 'ok'
-        ? 'Delegation IS working for this mailbox on the Drive scope, so the client id is right and workshops@ can be impersonated. The ONLY thing missing is the gmail.send scope on that same entry.'
-        : 'Delegation fails for this mailbox on the Drive scope too, so this is not a missing-scope problem. Either the client id on the entry is wrong, or workshops@ cannot be impersonated (a group alias rather than a real mailbox).',
+        ? `Delegation works for ${from} on Drive, so the client id is right and this mailbox can be impersonated. The only thing missing is the gmail.send scope on that entry.`
+        : !configuredSubject
+          ? 'DELEGATION IS PROBABLY NOT SET UP AT ALL. GDRIVE_SA_SUBJECT is unset, so Drive works by the folder being SHARED with the service account, not by impersonating anyone. Nothing in this app has ever exercised domain-wide delegation, so there is no existing entry to add a scope to — one has to be created for this client id, with the gmail.send scope, before any mailbox can be impersonated.'
+          : `Delegation is configured for ${configuredSubject} but fails for ${from}. Either ${from} is not a real Workspace user, or the entry does not cover it.`,
       error: String(e?.message || e),
       // Match Google's PROSE, not just the error code. The body of this
       // rejection reads "Client is unauthorized to retrieve access tokens using
