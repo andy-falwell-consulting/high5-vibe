@@ -247,8 +247,15 @@ export async function checkDelegation() {
     return {
       ok: false, stage: 'token', from, scope: GMAIL_SEND_SCOPE,
       error: String(e?.message || e),
-      hint: /unauthorized_client|invalid_grant/i.test(String(e?.message || e))
-        ? `Workspace admin has not granted ${GMAIL_SEND_SCOPE} to this service account's client ID, or the entry was saved without it. Remember the scope box REPLACES rather than appends — the Drive scope must still be listed alongside it.`
+      // Match Google's PROSE, not just the error code. The body of this
+      // rejection reads "Client is unauthorized to retrieve access tokens using
+      // this method, or client not authorized for any of the scopes requested."
+      // — which contains neither `unauthorized_client` nor `invalid_grant`, so
+      // matching on the codes alone printed the useless generic hint at exactly
+      // the moment the specific one was needed.
+      hint: /unauthorized_client|invalid_grant|unauthorized to retrieve access tokens|not authorized for any of the scopes/i
+        .test(String(e?.message || e))
+        ? `Workspace admin has not granted ${GMAIL_SEND_SCOPE} to this service account's CLIENT ID (the ~21-digit Unique ID, not the e-mail). Check the scope is listed exactly, with no trailing slash, and that the entry was saved — propagation can take up to ~15 minutes. The scope box REPLACES rather than appends, so the Drive scope must still be listed alongside it.`
         : 'The token request was rejected before Gmail was reached.',
     };
   }
