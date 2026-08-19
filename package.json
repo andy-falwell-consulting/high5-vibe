@@ -1,7 +1,7 @@
 {
   "name": "belay",
   "private": true,
-  "version": "1.0.404",
+  "version": "1.0.405",
   "type": "module",
   "scripts": {
     "dev": "vite",
