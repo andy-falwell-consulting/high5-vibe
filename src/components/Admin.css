@@ -299,3 +299,10 @@
 [data-theme="light"] .admin-vocab-src--filemaker { background: #fef3c7; color: #92400e; }
 .admin-note--warn { border-left: 3px solid #b45309; padding-left: 10px; color: #fcd34d; }
 [data-theme="light"] .admin-note--warn { border-left-color: #f59e0b; color: #92400e; }
+.admin-token { background: #1e2130; padding: 1px 5px; border-radius: 3px; font-size: 11px; margin-right: 4px; display: inline-block; }
+.admin-missing { color: #fcd34d; }
+.admin-tpl-body { white-space: pre-wrap; margin-top: 6px; color: #94a3b8; font-size: 12px; line-height: 1.6; }
+input.admin-vocab-edit { margin-bottom: 8px; }
+[data-theme="light"] .admin-token { background: #e2e8f0; }
+[data-theme="light"] .admin-missing { color: #92400e; }
+[data-theme="light"] .admin-tpl-body { color: #64748b; }

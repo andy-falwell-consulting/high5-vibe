@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import ShopifyConnect from './ShopifyConnect';
 import { getVibeValueLists, seedValueLists, setValueList, compareValueLists } from '../api/valueLists';
+import { getTemplates, saveTemplate, TEMPLATE_VERSIONS } from '../api/workshopEmail';
 import QboConnect from './QboConnect';
 import './Admin.css';
 
@@ -10,7 +11,119 @@ const TABS = [
   { id: 'fmp', label: 'FMP' },
   { id: 'backup', label: 'Backup' },
   { id: 'vocab', label: 'Vocabularies' },
+  { id: 'wsemail', label: 'Workshop e-mails' },
 ];
+
+// The tokens a workshop e-mail body may use. Listed in the UI because a
+// template is written by staff, not by a developer, and an unknown token is
+// left in the message verbatim rather than silently blanked — so knowing the
+// list is the difference between a working merge and "{{frist_name}}" reaching
+// a customer.
+const EMAIL_TOKENS = [
+  'first_name', 'full_name', 'organization', 'course_name', 'course_number',
+  'start_date', 'end_date', 'start_time', 'location', 'instructor', 'hours',
+  'fee_total', 'deposit_due', 'balance_due', 'recipient_email',
+];
+
+// PHASE: workshop e-mail. These four templates used to live inside a Tray
+// workflow, which meant nobody at High 5 could read or change them without
+// going into Tray. They are Vibe's now.
+function WorkshopEmailTab() {
+  const [data, setData] = useState(null);
+  const [editing, setEditing] = useState(null);   // { id, subject, body }
+  const [busy, setBusy] = useState(null);
+  const [error, setError] = useState(null);
+
+  const load = useCallback(async () => {
+    try { setData(await getTemplates()); setError(null); }
+    catch (e) { setError(e.message); }
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try { const d = await getTemplates(); if (alive) { setData(d); setError(null); } }
+      catch (e) { if (alive) setError(e.message); }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  async function save() {
+    setBusy(editing.id); setError(null);
+    try {
+      await saveTemplate(editing.id, { subject: editing.subject, body: editing.body, attachments: editing.attachments || [] });
+      setEditing(null);
+      await load();
+    } catch (e) { setError(e.message); }
+    finally { setBusy(null); }
+  }
+
+  const templates = data?.templates || {};
+
+  return (
+    <section className="admin-section">
+      <h2 className="admin-section-title">Workshop e-mails</h2>
+      <p className="admin-note">
+        The four messages staff can send to a registrant from the OE Trainings page.
+        Sent as <strong>{data?.from || 'workshops@high5adventure.org'}</strong>, so replies come
+        back to that mailbox and a copy lands in its Sent folder.
+      </p>
+      <p className="admin-note">
+        Tokens: {EMAIL_TOKENS.map(t => <code key={t} className="admin-token">{`{{${t}}}`}</code>)}
+        {' '}— anything unrecognised is left in the message as written, so check spelling.
+      </p>
+
+      {error && <p className="admin-error">{error}</p>}
+      {!data ? <p>Loading…</p> : (
+        <div className="admin-vocab-lists">
+          {TEMPLATE_VERSIONS.map(v => {
+            const tpl = templates[v.id];
+            const isEditing = editing?.id === v.id;
+            return (
+              <div key={v.id} className="admin-vocab-list">
+                <div className="admin-vocab-head">
+                  <code>{v.label}</code>
+                  {tpl ? <span className="admin-vocab-count">saved</span>
+                       : <span className="admin-vocab-count admin-missing">not written</span>}
+                  {isEditing ? (
+                    <>
+                      <button className="admin-btn" disabled={busy === v.id} onClick={save}>
+                        {busy === v.id ? 'Saving…' : 'Save'}
+                      </button>
+                      <button className="admin-btn admin-btn--ghost" onClick={() => setEditing(null)}>Cancel</button>
+                    </>
+                  ) : (
+                    <button className="admin-btn admin-btn--ghost"
+                      onClick={() => setEditing({ id: v.id, subject: tpl?.subject || '', body: tpl?.body || '', attachments: tpl?.attachments || [] })}>
+                      {tpl ? 'Edit' : 'Write'}
+                    </button>
+                  )}
+                </div>
+                {isEditing ? (
+                  <>
+                    <input className="admin-vocab-edit" placeholder="Subject"
+                      value={editing.subject} onChange={e => setEditing({ ...editing, subject: e.target.value })} />
+                    <textarea className="admin-vocab-edit" rows={12} placeholder="Message body"
+                      value={editing.body} onChange={e => setEditing({ ...editing, body: e.target.value })} />
+                  </>
+                ) : tpl ? (
+                  <div className="admin-vocab-values">
+                    <strong>{tpl.subject || '(no subject)'}</strong>
+                    <div className="admin-tpl-body">{tpl.body.slice(0, 240)}{tpl.body.length > 240 ? '…' : ''}</div>
+                  </div>
+                ) : (
+                  <div className="admin-vocab-values admin-missing">
+                    Nothing here yet — this template still only exists inside the old Tray workflow.
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
 
 // The layouts whose value lists drive dropdowns in the app. Adding one here is
 // all it takes to bring its lists under Vibe — the store is keyed by layout
@@ -748,6 +861,7 @@ export default function Admin() {
       {tab === 'fmp' && <FmpTab />}
       {tab === 'backup' && <><SaTestSection /><BackupTab /><RestoreSection /></>}
       {tab === 'vocab' && <VocabTab />}
+      {tab === 'wsemail' && <WorkshopEmailTab />}
     </main>
   );
 }

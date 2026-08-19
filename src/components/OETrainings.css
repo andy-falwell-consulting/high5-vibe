@@ -93,3 +93,11 @@
 [data-theme="light"] .oet-flag.on { background: #d1fae5; color: #065f46; }
 [data-theme="light"] .oet-unlisted { color: #92400e; }
 [data-theme="light"] .oet-unassigned { color: #92400e; }
+
+.oet-actions { white-space: nowrap; text-align: right; }
+.oet-email-btn { background: #1e2130; border: none; color: #93c5fd; border-radius: 5px; padding: 3px 9px; font-size: 12px; cursor: pointer; }
+.oet-email-btn:hover { background: #2a2f42; color: #dbeafe; }
+.oet-no-action { color: #475569; }
+[data-theme="light"] .oet-email-btn { background: #e2e8f0; color: #1d4ed8; }
+[data-theme="light"] .oet-email-btn:hover { background: #cbd5e1; }
+[data-theme="light"] .oet-no-action { color: #cbd5e1; }
