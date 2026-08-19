@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { getRecord, updatePortalRow, deletePortalRow, invalidateRecord, patchCachedRecord, containerImageUrl, createRecord } from '../api/filemaker';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { getRecord, invalidateRecord, patchCachedRecord, containerImageUrl, createRecord } from '../api/filemaker';
 import { updateVibeRecord } from '../api/vibeRecords';
 import { getCurrentEnv } from '../config/fmpEnvironments';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
@@ -9,6 +9,7 @@ import ImageLightbox from './ImageLightbox';
 import { pushToShopify, pushToQBO } from '../api/integrations';
 import RichTextEditor, { sanitizeHtml } from './RichTextEditor';
 import { useAllRecords } from '../hooks/useAllRecords';
+import { listBom, addBomLines, updateBomLine, removeBomLine } from '../api/bomLinesVibe';
 import { CATEGORIES, TYPES, VENDORS, QBO_INCOME, QBO_CLASS } from '../config/productOptions';
 import { BRAND } from '../config/brandColors';
 import './ProductsAndServicesV2.css';
@@ -162,6 +163,29 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
     }),
   });
   const [selected, setSelected] = useState(null);
+
+  // This product's bill of materials, from Vibe (PHASE B2). Keyed on the
+  // product's own `_kpt__Item_ID`, which is what the Vibe store keys on.
+  //
+  // `migrated: false` falls back to the FileMaker portal, and that is not a
+  // rare edge: the tail-only migration deliberately skipped ten runaway parents
+  // (114,150 of the table's 125,047 rows), and 758 more products had only BOM
+  // rows naming no component. Those all still read from FileMaker.
+  const [vibeBom, setVibeBom] = useState({ lines: [], migrated: false, id: null });
+  const parentItemId = String(selected?.fieldData?._kpt__Item_ID || '').trim();
+
+  const refreshBom = useCallback(async () => {
+    if (!parentItemId) return;
+    const got = await listBom(parentItemId);
+    setVibeBom({ ...got, id: parentItemId });
+  }, [parentItemId]);
+
+  useEffect(() => {
+    if (!parentItemId) return undefined;
+    let alive = true;
+    listBom(parentItemId).then(got => { if (alive) setVibeBom({ ...got, id: parentItemId }); });
+    return () => { alive = false; };
+  }, [parentItemId]);
   const [filterVendor, setFilterVendor] = useState('');
   const [filterType, setFilterType]     = useState('');
   const [filterCategory, setFilterCat]  = useState('');
@@ -418,25 +442,28 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
   // linking parent assembly ↔ component via their foreign keys (writing the
   // component through the portal relationship fails — a new line has no related
   // item yet); qty/remove act on an existing portal row by its recordId.
+  // Commit the queued ops to VIBE (PHASE B2). Was three FileMaker portal
+  // writes — createRecord on the line table, updatePortalRow, deletePortalRow.
+  //
+  // A product the migration never reached is seeded from FileMaker before the
+  // first write — done SERVER-side, because the portal rows here carry the
+  // component's name and price but not its item id, which is the one field a
+  // Vibe line needs. The server refuses to seed a runaway parent rather than
+  // importing 29,124 components because someone changed a quantity.
   const applyBomOps = async (recordId, parentItemId, ops) => {
+    if (!parentItemId) throw new Error('Missing item ID for this product.');
+
     for (const op of ops) {
-      let result;
       if (op.type === 'add') {
-        if (!parentItemId || !op.componentItemId) throw new Error('Missing item ID for a component.');
-        result = await createRecord('Item_ITMLI_billOfMaterials', {
-          '_kft__Item_ID__parent': parentItemId,
-          '_kft__Item_ID__assemblyLine': op.componentItemId,
-          'Quantity': op.quantity,
-        });
+        if (!op.componentItemId) throw new Error('Missing item ID for a component.');
+        await addBomLines(parentItemId, [{ componentItemId: op.componentItemId, quantity: op.quantity }]);
       } else if (op.type === 'qty') {
-        result = await updatePortalRow(LAYOUT, recordId, 'Portal__Bill_of_Materials 4', op.lineRecordId, {
-          'item_ITMLI__billOfMaterials::Quantity': op.quantity,
-        });
+        await updateBomLine(parentItemId, op.lineRecordId, { quantity: op.quantity });
       } else if (op.type === 'remove') {
-        result = await deletePortalRow(LAYOUT, recordId, 'item_ITMLI__billOfMaterials', op.lineRecordId);
+        await removeBomLine(parentItemId, op.lineRecordId);
       }
-      if (result && result.messages?.[0]?.code !== '0') throw new Error(result.messages?.[0]?.message || 'BOM save failed');
     }
+    await refreshBom();
   };
 
   // Stage a component add from the picker; the real line is created on Save.
@@ -496,7 +523,36 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
   const cost = Number(fval('Cost')) || 0;
   // BOM rows shown = saved server lines with staged ops applied (qty edits, removals)
   // plus not-yet-saved additions, so the table and the price reflect pending edits.
-  const serverBom = portalData?.['Portal__Bill_of_Materials 4'] || [];
+  // Vibe's components when it has them, FileMaker's portal otherwise.
+  //
+  // A Vibe line stores only { id, componentItemId, quantity } — the component's
+  // name and price are read from the products cache here, live. That is what the
+  // portal's related fields did, and it means a component's price change shows
+  // up immediately instead of being frozen at add-time.
+  const productByItemId = useMemo(
+    () => new Map(records.map(r => [String(r.fieldData?._kpt__Item_ID ?? ''), r.fieldData || {}])),
+    [records],
+  );
+  const bomReady = vibeBom.id === parentItemId;
+  const serverBom = (bomReady && vibeBom.migrated)
+    ? vibeBom.lines.map(l => {
+        const c = productByItemId.get(String(l.componentItemId)) || {};
+        const unit = Number(c.Unit_Price) || 0;
+        const q = Number(l.quantity) || 0;
+        return {
+          recordId: l.id,
+          _componentItemId: String(l.componentItemId),
+          'item_itmli_ITEM__billOfMaterials::Name': c.Name || `(item ${l.componentItemId})`,
+          'item_itmli_ITEM__billOfMaterials::Cost': Number(c.Cost) || 0,
+          'item_itmli_ITEM__billOfMaterials::Unit_Price': unit,
+          'item_ITMLI__billOfMaterials::Quantity': q,
+          // Vibe keeps no stored total, so there is nothing for the live figure
+          // to drift FROM — the drift flag exists to catch FileMaker's frozen
+          // snapshot, and would otherwise light up on every migrated line.
+          'item_ITMLI__billOfMaterials::Total': unit * q,
+        };
+      })
+    : (portalData?.['Portal__Bill_of_Materials 4'] || []);
   const bomRemoved = new Set(bomOps.filter(o => o.type === 'remove').map(o => o.lineRecordId));
   const bomQtyOps = new Map(bomOps.filter(o => o.type === 'qty').map(o => [o.lineRecordId, o.quantity]));
   // Each line's total is computed LIVE = qty × the component's current unit price
