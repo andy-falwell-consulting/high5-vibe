@@ -26,6 +26,11 @@ const PAGE = 500;
 
 const stageKey = db => `vibe:${db}:oetrn:staging`;
 const reportKey = db => `vibe:${db}:oetrn:report`;
+// The finish step is resumable, so its per-pass counts have to accumulate
+// somewhere or the final report describes only the LAST pass. The first run of
+// this migration reported 289 contacts / 403 workshops against 2,689 actually
+// stored, which is exactly that mistake.
+const progressKey = db => `vibe:${db}:oetrn:finish`;
 
 const parse = v => { try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return null; } };
 
@@ -45,6 +50,7 @@ export default async function handler(req, res) {
   try {
     if (req.query?.step === 'finish') {
       let cursor = String(req.query?.cursor ?? '0');
+      const progress = (await redis.get(progressKey(db))) || { contacts: 0, workshops: 0 };
       let contacts = 0, workshops = 0, fields = 0;
       const startedAt = Date.now();
       do {
@@ -60,13 +66,15 @@ export default async function handler(req, res) {
         cursor = String(next);
       } while (cursor && cursor !== '0' && fields < 800 && Date.now() - startedAt < 120000);
 
+      const totals = { contacts: progress.contacts + contacts, workshops: progress.workshops + workshops };
       if (cursor && cursor !== '0') {
-        return res.status(200).json({ step: 'finish', done: false, cursor, contacts, workshops });
+        await redis.set(progressKey(db), totals);
+        return res.status(200).json({ step: 'finish', done: false, cursor, ...totals });
       }
-      await redis.del(stageKey(db));
+      await redis.del(stageKey(db), progressKey(db));
       const report = {
         db, at: new Date().toISOString(), by: session.email,
-        contacts, workshops, stored: await redis.hlen(oeKey(db)),
+        ...totals, stored: await redis.hlen(oeKey(db)),
       };
       await redis.set(reportKey(db), report);
       return res.status(200).json({ step: 'finish', done: true, ...report });
