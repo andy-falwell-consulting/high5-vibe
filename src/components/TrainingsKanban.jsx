@@ -681,11 +681,23 @@ export default function TrainingsKanban({ navTarget, onNavigateTo, onClearNav })
         </div>
         <button className="tkb-add-btn" onClick={() => setShowAdd(true)} title="Add trainings to the board">＋ Add trainings</button>
       </div>
-      {/* An empty board used to render as sixteen empty lanes with the only way
-          to fill it hidden two clicks deep in a panel. Offer it here instead. */}
-      {!loading && !fetching && totalActive === 0 && strandedCount === 0 && upcoming.length > 0 && (
+      {/* Offered whenever there is an upcoming training NOT yet on the board —
+          not only when the board is empty.
+
+          Gating this on `totalActive === 0` was wrong, and wrong in the way
+          that matters: two cards had been placed by hand, so the board was not
+          empty, so the prompt never rendered and the only route to the seed was
+          back to being two clicks deep in a panel. A board with two cards on it
+          and a dozen upcoming trainings missing is exactly when this should
+          speak up. It hides itself when there is nothing left to add, which is
+          the condition that actually means "done". */}
+      {!loading && !fetching && upcoming.length > 0 && (
         <div className="tkb-seed-prompt">
-          <span>Nothing on the board yet. {upcoming.length} trainings start today or later.</span>
+          <span>
+            {totalActive === 0
+              ? `Nothing on the board yet — ${upcoming.length} ${upcoming.length === 1 ? 'training starts' : 'trainings start'} today or later.`
+              : `${upcoming.length} upcoming ${upcoming.length === 1 ? 'training is' : 'trainings are'} not on the board.`}
+          </span>
           <button className="tkb-seed-prompt-btn" disabled={seedingAll}
             onClick={async () => {
               setSeedingAll(true); setSeedAllError(null)
@@ -693,7 +705,7 @@ export default function TrainingsKanban({ navTarget, onNavigateTo, onClearNav })
               catch (e) { setSeedAllError(e?.message || 'Could not add them') }
               finally { setSeedingAll(false) }
             }}>
-            {seedingAll ? 'Adding…' : `Add all ${upcoming.length} to the board`}
+            {seedingAll ? 'Adding…' : `Add ${upcoming.length === 1 ? 'it' : `all ${upcoming.length}`} to the board`}
           </button>
           {seedAllError && <span className="tkb-seed-prompt-err">{seedAllError}</span>}
         </div>
