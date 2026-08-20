@@ -1,6 +1,6 @@
 /* global __APP_VERSION__ */
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { FMP_ENVIRONMENTS, getCurrentEnv, setCurrentEnvId } from '../config/fmpEnvironments'
+import { getCurrentEnv } from '../config/fmpEnvironments'
 import { getFmpUserName, ensureFmpUserSession } from '../api/filemaker'
 import high5Logo from '../assets/high5-logo.png'
 
@@ -8,7 +8,6 @@ const MIN_WIDTH = 48
 const COLLAPSED_WIDTH = 56
 const DEFAULT_WIDTH = 196
 
-const ENV_DOT = { development: '#22c55e', staging: '#f59e0b', production: '#ef4444' }
 
 export default function NavRail({ modules, activeId, onSelect, theme, onToggleTheme, onOpenPalette, user, onLogout, badges = {} }) {
   const [width, setWidth] = useState(DEFAULT_WIDTH)
@@ -39,8 +38,6 @@ export default function NavRail({ modules, activeId, onSelect, theme, onToggleTh
   const showLabels = !collapsed && width > 90
 
   const env = getCurrentEnv()
-  const envDot = ENV_DOT[env.id] || '#64748b'
-  const isProd = env.id === 'production'
 
   // Derive display name and initials from Google user or env fallback
   const displayName = user?.name || env.user || 'user'
@@ -90,11 +87,6 @@ export default function NavRail({ modules, activeId, onSelect, theme, onToggleTh
     if (!byGroup[g]) { byGroup[g] = []; order.push(g) }
     byGroup[g].push(m)
   })
-
-  function changeEnv(e) {
-    setCurrentEnvId(e.target.value)
-    window.location.reload()
-  }
 
   async function connectFmp() {
     setFmpBusy(true); setFmpError(null)
@@ -228,18 +220,12 @@ export default function NavRail({ modules, activeId, onSelect, theme, onToggleTh
 
         {/* ── Footer: environment · user · theme ── */}
         <div style={{ borderTop: `1px solid ${c.footerBorder}`, padding: showLabels ? 10 : '10px 0', display: 'flex', flexDirection: 'column', gap: 8, alignItems: showLabels ? 'stretch' : 'center' }}>
-          {showLabels ? (
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8, background: c.footerBtn, border: `1px solid ${isProd ? '#ef444466' : c.footerBorder}`, borderRadius: 8, padding: '6px 9px' }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: envDot, flexShrink: 0 }} />
-              <select value={env.id} onChange={changeEnv}
-                style={{ flex: 1, appearance: 'none', background: 'transparent', border: 'none', outline: 'none', cursor: 'pointer', fontSize: 15, fontWeight: 500, color: c.textActive, fontFamily: 'inherit' }}>
-                {FMP_ENVIRONMENTS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}
-              </select>
-              <span style={{ color: c.mutedLabel, fontSize: 14, pointerEvents: 'none' }}>⌄</span>
-            </div>
-          ) : (
-            <span title={env.label} style={{ width: 9, height: 9, borderRadius: '50%', background: envDot }} />
-          )}
+          {/* The environment picker used to sit here. It is gone: every
+              environment but production is now unreachable from the UI, and a
+              control with one option is just a label. `?env=<id>` still works
+              for the rare case someone needs Dev or Staging before cutover —
+              see src/config/fmpEnvironments.js. The coloured status dot went
+              with it, since it existed to tell you which one you had picked. */}
 
           {showLabels ? (
             <div style={{ position: 'relative' }} ref={userMenuRef}>
