@@ -54,3 +54,17 @@ export const saveTemplate = (id, { subject, body, attachments }) =>
 // Drive under the folder IT owns, so an attachment stays openable by a person
 // with a browser even if this app disappears.
 export const templateAttachments = makeVibeAttachments('wsemail');
+
+/** Send a test to any address.
+ *
+ *  With a `version` the real template is rendered against sample details — never
+ *  a real registration, so checking your formatting cannot put a customer's name
+ *  and fees into a message addressed to somebody else. Without one, a bare
+ *  diagnostic that works before any template exists.
+ */
+export const sendTestEmail = (to, version) =>
+  fetch(`${base()}&test=1`, {
+    method: 'POST', credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ to, ...(version ? { version } : {}) }),
+  }).then(json);

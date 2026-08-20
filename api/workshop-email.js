@@ -8,6 +8,7 @@ import {
   templateFiles, loadAttachments, checkDelegation, replyToAddress, sendTestMessage,
   templateIsSendable,
 } from './_workshopEmail.js';
+import { renderEmailHtml } from './_mdEmail.js';
 
 // Workshop e-mails — preview, send, and template administration.
 //
@@ -59,8 +60,37 @@ export default async function handler(req, res) {
     if (req.query?.test === '1') {
       if (req.method !== 'POST') return res.status(405).json({ error: 'POST' });
       if (!(await isAdminEmail(session.email))) return res.status(403).json({ error: 'admin only' });
-      const sent = await sendTestMessage(session.email);
-      return res.status(200).json({ ...sent, note: `Test message sent to ${session.email}.` });
+
+      // Defaults to the caller's own address, so the easy path is still the safe
+      // one, but any address can be given — testing formatting against a
+      // colleague or a webmail account is the normal case.
+      const to = String(req.body?.to || session.email || '').trim();
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) {
+        return res.status(400).json({ error: 'A valid e-mail address is required.' });
+      }
+
+      const version = String(req.body?.version || '').trim();
+      let template = null, attachments = [];
+      if (version) {
+        if (!isTemplateId(version)) return res.status(400).json({ error: 'unknown e-mail version' });
+        template = await readTemplate(db, version);
+        if (!templateIsSendable(template)) {
+          return res.status(400).json({
+            error: `The "${version}" template is empty or unwritten — nothing was sent.`,
+          });
+        }
+        attachments = await loadAttachments(db, version);
+      }
+
+      const sent = await sendTestMessage(to, { version, db, template, attachments });
+      return res.status(200).json({
+        ...sent,
+        version: version || null,
+        attachmentsSent: attachments.map(a => a.filename),
+        note: version
+          ? `Test of the ${version} template sent to ${to}, with sample details in place of a real registration.`
+          : `Diagnostic test message sent to ${to}.`,
+      });
     }
 
     // ── Clear the e-mail history on ONE registration ───────────────────────
@@ -140,9 +170,13 @@ export default async function handler(req, res) {
     // file store — not a list of ids kept on the template, which could drift
     // from the files actually there.
     const files = tpl ? await templateFiles(db, version) : [];
+    const renderedBody = tpl ? render(tpl.body, vars) : '';
     const rendered = tpl ? {
       subject: render(tpl.subject, vars),
-      body: render(tpl.body, vars),
+      body: renderedBody,
+      // The actual HTML that would be delivered, merge fields resolved. The
+      // preview shows what arrives, not an approximation of it.
+      html: renderEmailHtml(renderedBody, { footer: 'High 5 Adventure Learning Center · workshops@high5adventure.org' }),
       attachments: files.map(f => ({ fileId: f.fileId, name: f.name, size: f.size, mime: f.mime })),
     } : null;
 

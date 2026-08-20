@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import ShopifyConnect from './ShopifyConnect';
 import { getVibeValueLists, seedValueLists, setValueList, compareValueLists } from '../api/valueLists';
-import { getTemplates, saveTemplate, TEMPLATE_VERSIONS, templateAttachments } from '../api/workshopEmail';
+import { getTemplates, saveTemplate, TEMPLATE_VERSIONS, templateAttachments, sendTestEmail } from '../api/workshopEmail';
 import { getAgentConfig, saveAgentConfig } from '../api/agentConfig';
+import MarkdownEditor from './MarkdownEditor';
 import QboConnect from './QboConnect';
 import './Admin.css';
 
@@ -240,6 +241,64 @@ function TemplateAttachments({ templateId }) {
   );
 }
 
+// Send a test to any address.
+//
+// Defaults to nothing so the address is a deliberate act rather than a leftover.
+// A test renders the real template against SAMPLE details — never a live
+// registration — so checking formatting cannot put a customer's name and fees
+// into a message addressed to somebody else.
+function TestSend({ templates, from }) {
+  const [to, setTo] = useState('');
+  const [version, setVersion] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+
+  const usable = TEMPLATE_VERSIONS.filter(v => {
+    const t = templates?.[v.id];
+    return t && (String(t.subject || '').trim() || String(t.body || '').trim());
+  });
+  const valid = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to.trim());
+
+  async function go() {
+    setBusy(true); setError(null); setResult(null);
+    try { setResult(await sendTestEmail(to.trim(), version || undefined)); }
+    catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div className="admin-testsend">
+      <div className="admin-testsend-head">Send a test</div>
+      <div className="admin-testsend-row">
+        <input type="email" placeholder="address to send to" value={to} disabled={busy}
+          onChange={e => setTo(e.target.value)} />
+        <select value={version} disabled={busy} onChange={e => setVersion(e.target.value)}>
+          <option value="">Diagnostic message (no template)</option>
+          {usable.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
+        </select>
+        <button className="admin-btn" disabled={busy || !valid} onClick={go}>
+          {busy ? 'Sending…' : 'Send test'}
+        </button>
+      </div>
+      <p className="admin-note">
+        Sends a <strong>real e-mail</strong> from {from || 'the workshops mailbox'} to the address
+        above. With a template chosen it renders that template with sample details — Sam Example,
+        Adventure Basics, $835 — so a test can never carry a real registrant&apos;s information.
+        The subject is prefixed <code>[TEST]</code>.
+        {usable.length === 0 && ' No template has been written yet, so only the diagnostic message is available.'}
+      </p>
+      {error && <p className="admin-error">{error}</p>}
+      {result && (
+        <p className="admin-testsend-ok">
+          ✓ {result.note}
+          {result.attachmentsSent?.length ? ` Attachments: ${result.attachmentsSent.join(', ')}.` : ''}
+        </p>
+      )}
+    </div>
+  );
+}
+
 // PHASE: workshop e-mail. These four templates used to live inside a Tray
 // workflow, which meant nobody at High 5 could read or change them without
 // going into Tray. They are Vibe's now.
@@ -284,11 +343,14 @@ function WorkshopEmailTab() {
         back to that mailbox and a copy lands in its Sent folder.
       </p>
       <p className="admin-note">
-        Tokens: {EMAIL_TOKENS.map(t => <code key={t} className="admin-token">{`{{${t}}}`}</code>)}
-        {' '}— anything unrecognised is left in the message as written, so check spelling.
+        Bodies are written in <strong>Markdown</strong> and delivered as HTML, with a plain-text
+        copy alongside for clients that prefer it — both from the same source, so they cannot
+        say different things. Merge tokens insert from the toolbar; anything unrecognised is
+        left in the message exactly as written, so check spelling.
       </p>
 
       {error && <p className="admin-error">{error}</p>}
+      <TestSend templates={templates} from={data?.from} />
       {!data ? <p>Loading…</p> : (
         <div className="admin-vocab-lists">
           {TEMPLATE_VERSIONS.map(v => {
@@ -325,8 +387,12 @@ function WorkshopEmailTab() {
                   <>
                     <input className="admin-vocab-edit" placeholder="Subject"
                       value={editing.subject} onChange={e => setEditing({ ...editing, subject: e.target.value })} />
-                    <textarea className="admin-vocab-edit" rows={12} placeholder="Message body"
-                      value={editing.body} onChange={e => setEditing({ ...editing, body: e.target.value })} />
+                    <MarkdownEditor
+                      value={editing.body}
+                      onChange={body => setEditing({ ...editing, body })}
+                      disabled={busy === v.id}
+                      tokens={EMAIL_TOKENS}
+                      placeholder={'Written in Markdown and sent as HTML.\n\n## Welcome\n\nHi {{first_name}}, you are booked on **{{course_name}}**.'} />
                   </>
                 ) : tpl ? (
                   <div className="admin-vocab-values">

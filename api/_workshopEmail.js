@@ -3,6 +3,7 @@ import { getServiceAccountToken, GMAIL_SEND_SCOPE, DRIVE_SCOPE } from './_gsa.js
 import { scanReplica } from './_replica.js';
 import { courseKey } from './_oeTraining.js';
 import { listForParent, getFile, driveToken } from './_vibeFiles.js';
+import { renderEmailHtml, renderEmailText } from './_mdEmail.js';
 import { downloadFile } from './_backupDrive.js';
 
 // Workshop e-mails, sent by Vibe.
@@ -174,12 +175,26 @@ export function render(text, vars) {
 
 /** The substitutions a workshop e-mail can use. Every one comes from Vibe —
  *  nothing here reads FileMaker. */
+// Every merge value is tidied on the way in.
+//
+// The data carries stray whitespace that has nothing to do with e-mail: the OE
+// Lookup catalogue stores one course as " Level 2 Challenge Course Certification
+// Exam" with a leading space, which turned "High 5 Confirmation: {{course_name}}"
+// into a subject with a double space. Trainer names hold doubles too ("Andrew
+// Wood"). Fixing it here rather than in each template means no author has to
+// know which values are dirty, and none of them can be caught out by one that
+// becomes dirty later.
+//
+// Every field below is a single-line value — a name, a date, a money figure — so
+// collapsing internal runs is safe. Nothing here carries deliberate formatting.
+const tidy = v => String(v ?? '').replace(/\s+/g, ' ').trim();
+
 export function templateVars({ workshop, catalogue, recipient }) {
   const w = workshop || {}, c = catalogue || {};
   const money = v => Number(v || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
   const fee = Number(w.tuitionFee || 0) + Number(w.foodFee || 0)
     + Number(w.lodgingFee || 0) + Number(w.extraLodgingFee || 0);
-  return {
+  const vars = {
     first_name: String(w.contactName || '').trim().split(/\s+/)[0] || '',
     full_name: w.contactName || '',
     organization: w.organization || '',
@@ -196,6 +211,8 @@ export function templateVars({ workshop, catalogue, recipient }) {
     balance_due: money(Math.round((fee - Number(w.depositReceived || 0)) * 100) / 100),
     recipient_email: recipient?.address || '',
   };
+  for (const k of Object.keys(vars)) vars[k] = tidy(vars[k]);
+  return vars;
 }
 
 // ── Attachments ─────────────────────────────────────────────────────────────
@@ -243,29 +260,75 @@ const encodeHeader = s => (/^[\x20-\x7E]*$/.test(String(s ?? '')) ? String(s ?? 
   : `=?UTF-8?B?${Buffer.from(String(s), 'utf-8').toString('base64')}?=`);
 const wrap76 = s => String(s).replace(/(.{1,76})/g, '$1\r\n').trim();
 
-function buildMime({ from, to, replyTo, subject, body, attachments }) {
+const boundary = tag => `${tag}_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+
+/** Build the message.
+ *
+ *  ALWAYS multipart/alternative: a text/plain part alongside the HTML. Sending
+ *  HTML alone is what makes a message look like bulk mail to a spam filter and
+ *  unreadable to anyone whose client prefers text. Both parts come from the same
+ *  Markdown source, so they cannot say different things.
+ *
+ *  With attachments the alternative is nested inside a multipart/mixed, which is
+ *  the order clients expect: mixed holds the body and the files, and the body is
+ *  itself a choice of two renderings.
+ */
+function buildMime({ from, to, replyTo, subject, text, html, attachments }) {
   const headers = [
     `From: ${from}`, `To: ${to}`,
-    replyTo ? `Reply-To: ${replyTo}` : null,
+    replyTo && replyTo !== from ? `Reply-To: ${replyTo}` : null,
     `Subject: ${encodeHeader(subject)}`,
     'MIME-Version: 1.0',
   ].filter(Boolean);
-  const textPart = ['Content-Type: text/plain; charset="UTF-8"', 'Content-Transfer-Encoding: 8bit', '', String(body ?? '')].join('\r\n');
+
+  const alt = boundary('alt');
+  const bodyParts = [
+    `--${alt}`,
+    'Content-Type: text/plain; charset="UTF-8"',
+    'Content-Transfer-Encoding: 8bit',
+    '',
+    String(text ?? ''),
+    '',
+    `--${alt}`,
+    'Content-Type: text/html; charset="UTF-8"',
+    'Content-Transfer-Encoding: 8bit',
+    '',
+    String(html ?? ''),
+    '',
+    `--${alt}--`,
+  ];
+
   if (!attachments?.length) {
-    return Buffer.from([...headers, textPart].join('\r\n'), 'utf-8').toString('base64url');
+    return Buffer.from([
+      ...headers,
+      `Content-Type: multipart/alternative; boundary="${alt}"`,
+      '',
+      ...bodyParts,
+    ].join('\r\n'), 'utf-8').toString('base64url');
   }
-  const b = 'mix_' + Math.random().toString(36).slice(2);
-  const parts = [[...headers, `Content-Type: multipart/mixed; boundary="${b}"`, '', `--${b}`, textPart].join('\r\n')];
+
+  const mix = boundary('mix');
+  const parts = [
+    [
+      ...headers,
+      `Content-Type: multipart/mixed; boundary="${mix}"`,
+      '',
+      `--${mix}`,
+      `Content-Type: multipart/alternative; boundary="${alt}"`,
+      '',
+      ...bodyParts,
+    ].join('\r\n'),
+  ];
   for (const a of attachments) {
     parts.push([
-      `--${b}`,
+      `--${mix}`,
       `Content-Type: ${a.mimeType || 'application/octet-stream'}; name="${a.filename}"`,
       `Content-Disposition: attachment; filename="${a.filename}"`,
       'Content-Transfer-Encoding: base64', '',
       wrap76(String(a.base64 || '')),
     ].join('\r\n'));
   }
-  parts.push(`--${b}--`);
+  parts.push(`--${mix}--`);
   return Buffer.from(parts.join('\r\n'), 'utf-8').toString('base64url');
 }
 
@@ -383,24 +446,68 @@ export async function checkDelegation({ as } = {}) {
   };
 }
 
-/** Send a fixed test message to one address, bypassing templates entirely.
+// Stand-in values for a test send.
+//
+// A test renders the REAL template but never a real registration. Using a live
+// one would put an actual customer's name, organization and fees into a message
+// addressed to whoever is testing — a small privacy leak that would happen every
+// time someone checked their formatting, which is often.
+//
+// Obviously fake on purpose: nobody should mistake a test for the real thing.
+export const SAMPLE_VARS = {
+  first_name: 'Sam',
+  full_name: 'Sam Example',
+  organization: 'Example Organization',
+  course_name: 'Adventure Basics Level 1 Training',
+  course_number: 'AB-2026-1',
+  start_date: '04/20/2026',
+  end_date: '04/24/2026',
+  start_time: '09:00:00',
+  location: 'High 5 Adventure Learning Center',
+  instructor: 'Phil Brown',
+  hours: '40',
+  fee_total: '$835.00',
+  deposit_due: '$417.50',
+  balance_due: '$0.00',
+  recipient_email: 'sam@example.com',
+};
+
+/** Send a test to an arbitrary address.
  *
  *  The only thing that proves delivery end to end — a minted token proves the
- *  grant, not that a message arrives. Deliberately does NOT render a template or
- *  touch a registration: this is for confirming the pipe, and it should be
- *  impossible to aim it at a customer by accident. The caller supplies its own
- *  address and nothing else. */
-export async function sendTestMessage(to) {
+ *  grant, not that a message arrives, and the two got conflated once already.
+ *
+ *  With a `version` it renders that template against SAMPLE_VARS, so what lands
+ *  in the inbox is the real subject, the real body, the real HTML and the real
+ *  attachments. Without one it sends a bare diagnostic, which is enough to check
+ *  the pipe before any template exists.
+ *
+ *  The subject is prefixed so a test is identifiable at a glance in a mailbox
+ *  that also receives the real thing. */
+export async function sendTestMessage(to, { version, db, template, attachments } = {}) {
   const stamp = new Date().toISOString();
+  if (version && template) {
+    return sendAsWorkshops({
+      to,
+      subject: `[TEST] ${render(template.subject, SAMPLE_VARS)}`,
+      body: [
+        render(template.body, SAMPLE_VARS),
+        '',
+        '---',
+        `_Test of the ${version} template, sent from Vibe at ${stamp}. Sample details — no real registration was used._`,
+      ].join('\n'),
+      attachments: attachments || [],
+    });
+  }
   return sendAsWorkshops({
     to,
     subject: `Vibe test message — ${stamp}`,
     body: [
       'This is a test from Vibe, confirming that workshop e-mail delivery works.',
       '',
-      `Sent as: ${senderAddress()}`,
-      `Impersonating: ${senderUser()}`,
-      `At: ${stamp}`,
+      `- Sent as: ${senderAddress()}`,
+      `- Impersonating: ${senderUser()}`,
+      `- At: ${stamp}`,
       '',
       'No registrant was involved and no template was used.',
     ].join('\n'),
@@ -411,6 +518,10 @@ export async function sendTestMessage(to) {
  *  a failed delegation grant reports as a 403 here, and saying so plainly beats
  *  a generic "send failed". */
 export async function sendAsWorkshops({ to, replyTo, subject, body, attachments }) {
+  // `body` is Markdown. Both renderings come from it, so the text and HTML
+  // parts can never drift apart.
+  const html = renderEmailHtml(body, { footer: 'High 5 Adventure Learning Center · workshops@high5adventure.org' });
+  const text = renderEmailText(body);
   const from = senderAddress();
   const user = senderUser();
   // Impersonate the USER, then set From to the sending address. When the two
@@ -418,7 +529,7 @@ export async function sendAsWorkshops({ to, replyTo, subject, body, attachments 
   // otherwise — which is the correct behaviour: it is the check that stops this
   // becoming a way to send as anyone.
   const token = await getServiceAccountToken({ scope: GMAIL_SEND_SCOPE, subject: user });
-  const raw = buildMime({ from, to, replyTo, subject, body, attachments });
+  const raw = buildMime({ from, to, replyTo, subject, text, html, attachments });
   const res = await fetch(GMAIL_SEND, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
