@@ -16,22 +16,22 @@ import { bustCache, patchCachedRecord } from '../api/filemaker'
 import { updateVibeRecord } from '../api/vibeRecords'
 import { getCurrentEnv } from '../config/fmpEnvironments'
 import { TRAININGS_LAYOUT as LAYOUT, TRAININGS_CACHE_VERSION as CACHE_VERSION, TRAINER_SLOTS } from '../config/trainingsCache'
-import { ACTIVE_STAGES, PIPELINE_STAGES, PIPELINE_SHORT, statusColor } from '../config/trainingStatus'
+import { BOARD_COLUMNS, BOARD_SHORT, statusColor } from '../config/trainingStatus'
 import { useOpsLeads } from '../hooks/useOpsLeads';
 import { useTrainingsKanbanBoard } from '../hooks/useTrainingsKanbanBoard'
 import { useTrainingsKanbanOrder } from '../hooks/useTrainingsKanbanOrder'
 import './TrainingsKanban.css'
 
-// Board columns = the in-flight pipeline stages (Final Invoiced / Completed /
-// No Go / etc. are valid statuses but not columns — a card set to one leaves
-// the board, same rule CCS's board uses). Headers use the SHORT stage labels
-// the hero pipeline dots already use.
-const COLUMNS = ACTIVE_STAGES.map(id => ({
+// Board columns = ONE LANE PER STATUS, in dropdown order. See BOARD_COLUMNS in
+// config/trainingStatus.js for why this is no longer the seven pipeline stages
+// only. Headers use the short labels the hero pipeline dots already use, so a
+// stage reads the same in both places.
+const COLUMNS = BOARD_COLUMNS.map(id => ({
   id,
-  label: PIPELINE_SHORT[PIPELINE_STAGES.indexOf(id)] ?? id,
+  label: BOARD_SHORT[id] ?? id,
   color: statusColor(id),
 }))
-const ACTIVE_STATUSES = new Set(ACTIVE_STAGES)
+const BOARD_STATUSES = new Set(BOARD_COLUMNS)
 
 // Trainings has no legacy-field aliasing the way CCS's mergedStatus does —
 // Status is the one field, read straight.
@@ -311,21 +311,12 @@ function KanbanColumn({ column, records, saving, onOpen, collapsed, onToggleColl
 // Searchable picker to add active-status trainings onto the board. Candidates
 // are active-stage records not already on the board; clicking one adds it (it
 // then drops out of the list). Stays open for bulk adding.
-function AddToBoardPanel({ candidates, onAdd, onClose, onSeedUpcoming }) {
+function AddToBoardPanel({ candidates, upcoming, onAdd, onClose, onSeedUpcoming }) {
   const [q, setQ] = useState('')
   const [added, setAdded] = useState(() => new Set())
   const [seeding, setSeeding] = useState(false)
   const [seedResult, setSeedResult] = useState(null)
 
-  // Everything starting today or later, from the candidates already computed —
-  // so "upcoming" means the same thing here as the list below shows, and a
-  // record excluded from the picker cannot arrive on the board by another door.
-  const upcoming = candidates.filter(r => {
-    const d = parseFmDate(r.fieldData['Start Date'])
-    if (!d) return false
-    const today = new Date(); today.setHours(0, 0, 0, 0)
-    return d >= today.getTime()
-  })
   const needle = q.trim().toLowerCase()
   const list = candidates
     .filter(r => !added.has(String(r.recordId)))
@@ -524,10 +515,18 @@ export default function TrainingsKanban({ navTarget, onNavigateTo, onClearNav })
   // CCSKanban.jsx's comment for the three-bugs history of the alternative.
   const kanbanRecords = displayRecords
 
-  // Board membership is curated by the team (a shared Redis set), AND the
-  // card's status must be an active stage — so a training the team added
-  // drops off once it's Final Invoiced / No Go.
-  const active = kanbanRecords.filter(r => board.ids.has(String(r.recordId)) && ACTIVE_STATUSES.has(getStatus(r)))
+  // Board membership is a shared Redis set curated by the team. Every status
+  // now has a lane, so membership alone decides what shows — a card no longer
+  // drops off the board the moment it reaches Final Invoiced or No Go.
+  const onBoard = kanbanRecords.filter(r => board.ids.has(String(r.recordId)))
+  const active = onBoard.filter(r => BOARD_STATUSES.has(getStatus(r)))
+
+  // The remainder: on the board, but carrying a status no lane matches —
+  // blank, or one of the four spliced values documented in trainingStatus.js
+  // ("ComplFinal Invoicedeted" and friends). There is deliberately no lane for
+  // these, because they are not statuses anyone chose. Counted and stated
+  // rather than silently dropped, which is the failure this board just had.
+  const strandedCount = onBoard.length - active.length
 
   const byColumn = {}
   for (const col of COLUMNS) byColumn[col.id] = []
@@ -575,11 +574,11 @@ export default function TrainingsKanban({ navTarget, onNavigateTo, onClearNav })
     // Card move / reorder. `over.id` is either a column (dropped on empty
     // space) or another card (dropped directly on it), which is how a
     // same-lane reorder is told apart from a cross-lane status change.
-    const overIsColumn = String(over.id).startsWith('col::') || ACTIVE_STATUSES.has(String(over.id))
+    const overIsColumn = String(over.id).startsWith('col::') || BOARD_STATUSES.has(String(over.id))
     const targetColumn = overIsColumn
       ? (String(over.id).startsWith('col::') ? String(over.id).slice(5) : String(over.id))
       : cardColumnOf[over.id]
-    if (!targetColumn || !ACTIVE_STATUSES.has(targetColumn)) return
+    if (!targetColumn || !BOARD_STATUSES.has(targetColumn)) return
 
     const record = kanbanRecords.find(r => r.recordId === active.id)
     if (!record) return
@@ -619,8 +618,24 @@ export default function TrainingsKanban({ navTarget, onNavigateTo, onClearNav })
     }
   }, [kanbanRecords, byColumn, cardColumnOf, order])
 
+  const [seedingAll, setSeedingAll] = useState(false)
+  const [seedAllError, setSeedAllError] = useState(null)
+
   const totalActive = active.length
   const searchMatchCount = search ? active.filter(r => matchesSearch(r, search)).length : totalActive
+
+  // Everything not yet on the board. Every status is eligible now, so this is
+  // simply "not already a card" — the active-stage filter that used to be here
+  // is why pressing "add all upcoming" appeared to do nothing: with roughly 35
+  // records in flight table-wide, the candidate set was near-empty and the
+  // button did not even render.
+  const candidates = displayRecords.filter(r => !board.ids.has(String(r.recordId)))
+  const upcoming = candidates.filter(r => {
+    const d = parseFmDate(r.fieldData['Start Date'])
+    if (!d) return false
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    return d >= today.getTime()
+  })
 
   return (
     <div className="tkb-root">
@@ -640,7 +655,12 @@ export default function TrainingsKanban({ navTarget, onNavigateTo, onClearNav })
         {fetching && !refreshing && <span className="tkb-loading">Loading…</span>}
         {!loading && (
           <span className="tkb-count">
-            {search ? `${searchMatchCount} of ` : ''}{totalActive} active
+            {search ? `${searchMatchCount} of ` : ''}{totalActive} on board
+          </span>
+        )}
+        {strandedCount > 0 && (
+          <span className="tkb-stranded" title="These carry a status that is not one of the sixteen options — blank, or a value typed into the middle of another. Fix the status on the record and the card appears.">
+            {strandedCount} with no status
           </span>
         )}
         <div className="tkb-search-wrap">
@@ -661,6 +681,23 @@ export default function TrainingsKanban({ navTarget, onNavigateTo, onClearNav })
         </div>
         <button className="tkb-add-btn" onClick={() => setShowAdd(true)} title="Add trainings to the board">＋ Add trainings</button>
       </div>
+      {/* An empty board used to render as sixteen empty lanes with the only way
+          to fill it hidden two clicks deep in a panel. Offer it here instead. */}
+      {!loading && !fetching && totalActive === 0 && strandedCount === 0 && upcoming.length > 0 && (
+        <div className="tkb-seed-prompt">
+          <span>Nothing on the board yet. {upcoming.length} trainings start today or later.</span>
+          <button className="tkb-seed-prompt-btn" disabled={seedingAll}
+            onClick={async () => {
+              setSeedingAll(true); setSeedAllError(null)
+              try { await board.seed(upcoming.map(r => String(r.recordId))) }
+              catch (e) { setSeedAllError(e?.message || 'Could not add them') }
+              finally { setSeedingAll(false) }
+            }}>
+            {seedingAll ? 'Adding…' : `Add all ${upcoming.length} to the board`}
+          </button>
+          {seedAllError && <span className="tkb-seed-prompt-err">{seedAllError}</span>}
+        </div>
+      )}
       {saveError && (
         <div className="tkb-save-error" role="alert">
           <span className="tkb-save-error-ic">⚠</span>
@@ -671,7 +708,8 @@ export default function TrainingsKanban({ navTarget, onNavigateTo, onClearNav })
       {showAdd && (
         <AddToBoardPanel
           onSeedUpcoming={list => board.seed(list.map(r => String(r.recordId)))}
-          candidates={displayRecords.filter(r => ACTIVE_STATUSES.has(getStatus(r)) && !board.ids.has(String(r.recordId)))}
+          candidates={candidates}
+          upcoming={upcoming}
           onAdd={r => board.toggle(r.recordId, true)}
           onClose={() => setShowAdd(false)}
         />
