@@ -63,6 +63,48 @@ export default async function handler(req, res) {
       return res.status(200).json({ ...sent, note: `Test message sent to ${session.email}.` });
     }
 
+    // ── Clear the e-mail history on ONE registration ───────────────────────
+    //
+    // Exists because a blank e-mail was sent in error on 2026-08-19 and left a
+    // registration claiming a confirmation had gone out. That history is worse
+    // than no history: the next person to look would believe the registrant had
+    // been contacted properly.
+    //
+    // Clears ONLY the four e-mail-tracking fields. Everything else on the row —
+    // fees, dates, the contact, the course — is untouched, and there is
+    // deliberately no general-purpose edit here.
+    if (req.query?.clear === 'email') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'POST' });
+      if (!(await isAdminEmail(session.email))) return res.status(403).json({ error: 'admin only' });
+      const id = String(req.query?.workshopId || '').trim();
+      if (!id) return res.status(400).json({ error: 'workshopId required' });
+      const before = await readWorkshop(db, id);
+      if (!before) return res.status(404).json({ error: 'no such registration' });
+      // undefined rather than '' — JSON.stringify drops undefined keys, so the
+      // fields go away entirely rather than becoming empty strings that still
+      // read as "something was recorded here".
+      const after = await patchWorkshop(db, id, {
+        confirmationSent: undefined, emailVersionSent: undefined,
+        lastEmailTo: undefined, lastEmailBy: undefined,
+      });
+      return res.status(200).json({
+        cleared: id,
+        was: {
+          confirmationSent: before.confirmationSent ?? null,
+          emailVersionSent: before.emailVersionSent ?? null,
+          lastEmailTo: before.lastEmailTo ?? null,
+          lastEmailBy: before.lastEmailBy ?? null,
+        },
+        now: {
+          confirmationSent: after.confirmationSent ?? null,
+          emailVersionSent: after.emailVersionSent ?? null,
+          lastEmailTo: after.lastEmailTo ?? null,
+          lastEmailBy: after.lastEmailBy ?? null,
+        },
+        untouched: { fee: after.feeTotal ?? null, course: after.courseNumber, contact: after.contactName },
+      });
+    }
+
     // ── Templates ──────────────────────────────────────────────────────────
     if (req.query?.templates === '1') {
       if (req.method === 'GET') {
