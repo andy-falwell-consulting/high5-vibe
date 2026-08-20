@@ -30,8 +30,18 @@ import './light-theme.css'
 import './components/CommandPalette.css'
 
 const MODULES = [
+  // Ordered ALPHABETICALLY WITHIN EACH GROUP. There is no meaningful precedence
+  // between a contact and an inspection, and a hand-ordered list only ever tells
+  // you what someone added last — so the rule is the one a reader can predict.
   { id: 'home', label: 'Home', icon: '⌂', group: 'Overview' },
   { id: 'reminders', label: 'Reminders', icon: '⏰', group: 'Overview' },
+
+  // CCS used to sit alone under a 'Projects' heading. A group of one is not a
+  // grouping — it just put a heavily-used module furthest from the top — so it
+  // joins the rest. Its module ID stays 'projects': that string is in every
+  // #projects/... URL, in RECORD_SOURCES, and in the recordType of every
+  // reminder ever made against a project.
+  { id: 'projects', label: 'CCS', icon: '◈', group: 'Records' },
   // Labelled just 'Contacts' since v1.0.427 — the legacy module it was
   // distinguished from was deleted in B4/A4. The module ID stays 'contacts-v2'
   // on purpose: it is embedded in every #contacts-v2/... URL and in the
@@ -40,20 +50,21 @@ const MODULES = [
   // is deferred to the Phase D cutover, when the legacy 'contacts' recordId
   // translation goes away and #contacts/<id> stops being ambiguous.
   { id: 'contacts-v2', label: 'Contacts', icon: '◎', group: 'Records' },
-  { id: 'estimates',   label: 'Estimates',   icon: '◧', group: 'Records' },
-  { id: 'inspections', label: 'Inspections', icon: '⚑', group: 'Records' },
-  { id: 'rmi',         label: 'Risk Management', icon: '⚠', group: 'Records' },
-  { id: 'trainings', label: 'Trainings', icon: '◳', group: 'Records' },
   { id: 'eol', label: 'Edge of Leadership', icon: '◆', group: 'Records' },
-  { id: 'tnd', label: 'Team Development', icon: '✦', group: 'Records' },
+  { id: 'estimates', label: 'Estimates', icon: '◧', group: 'Records' },
+  { id: 'inspections', label: 'Inspections', icon: '⚑', group: 'Records' },
   { id: 'oe-lookup', label: 'OE Lookup', icon: '◎', group: 'Records' },
-  // The roster side of OE Lookup — one row per person per session. Sits next to
-  // it deliberately: OE Lookup is where the offering is created, OE Trainings is
-  // where you manage who is on it.
+  // The roster side of OE Lookup — one row per person per session. Alphabetical
+  // order happens to keep the pair adjacent, which is where they belong: OE
+  // Lookup is where the offering is created, OE Trainings is where you manage
+  // who is on it.
   { id: 'oe-trainings', label: 'OE Trainings', icon: '◆', group: 'Records' },
   { id: 'products', label: 'Products & Services', icon: '◫', group: 'Records' },
+  { id: 'rmi', label: 'Risk Management', icon: '⚠', group: 'Records' },
+  { id: 'tnd', label: 'Team Development', icon: '✦', group: 'Records' },
+  { id: 'trainings', label: 'Trainings', icon: '◳', group: 'Records' },
   { id: 'transactions', label: 'Transactions', icon: '⇄', group: 'Records' },
-  { id: 'projects', label: 'CCS', icon: '◈', group: 'Projects' },
+
   { id: 'admin', label: 'Admin', icon: '⚙', group: 'System' },
   { id: 'help', label: 'Help', icon: '?', group: 'System' },
 ]

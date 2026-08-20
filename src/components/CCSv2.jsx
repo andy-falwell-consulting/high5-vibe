@@ -20,6 +20,7 @@ import { downloadWorkOrder } from '../api/ccsWorkOrder';
 import { contactDetails } from '../api/contactLookup';
 import './CCSv2.css';
 import DeleteRecordButton from './DeleteRecordButton';
+import ReminderModal from './ReminderModal';
 
 const LAYOUT = RCD_LAYOUT;
 const CCS_ATT_API = { list: listCcsAttachments, upload: uploadCcsAttachment, remove: deleteCcsAttachment, freshUrl: ccsAttachmentUrl };
@@ -292,6 +293,8 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
   const opsLead = useOpsLeads(getCurrentEnv().db);
 
   const [selected, setSelected] = useState(null);
+  const [remindOpen, setRemindOpen] = useState(false);
+
   const naFlags = useNaFlags(selected?.recordId);
   const [navWidth, setNavWidth] = useState(300);
   const [edits, setEdits]       = useState({});
@@ -676,6 +679,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
                 })()}
                 <button className="cv2-ghost-btn" onClick={() => onNavigateTo?.('ccs-kanban', selected.recordId)}>Board →</button>
                 <span className="cv2-crumb-id">#{f._kpt__RCD_ID || selected.recordId}</span>
+                <button className="cv2-ghost-btn" onClick={() => setRemindOpen(true)}>⏰ Remind</button>
                 <DeleteRecordButton
                   layout={LAYOUT} cacheVersion={RCD_CACHE_VERSION}
                   recordId={selected.recordId}
@@ -1113,6 +1117,21 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
           </>
         )}
       </main>
+
+      {remindOpen && selected && (
+        <ReminderModal
+          initial={{
+            // 'projects' is CCS's module id and is already a registered record
+            // source (RCD_New), so a reminder made here deep-links back to the
+            // project rather than dead-ending.
+            recordType: 'projects',
+            recordId: String(selected.recordId),
+            recordLabel: org || 'project',
+            title: `Follow up on ${org || 'project'}`,
+          }}
+          onClose={() => setRemindOpen(false)}
+          onSaved={() => setRemindOpen(false)} />
+      )}
 
       {orgPicker && (
         <ContactPicker
