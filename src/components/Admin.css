@@ -351,3 +351,15 @@ input.admin-vocab-edit { margin-bottom: 8px; }
 [data-theme="light"] .admin-agent-tool code { color: #0f172a; }
 [data-theme="light"] .admin-agent-writes { background: #fef3c7; color: #92400e; }
 [data-theme="light"] .admin-agent-prompt { background: #f8fafc; border-color: #e2e8f0; color: #334155; }
+
+.admin-testsend { border: 1px solid #1e2130; border-radius: 8px; padding: 12px 14px; margin: 14px 0 20px; background: #13151c; }
+.admin-testsend-head { font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 9px; }
+.admin-testsend-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+.admin-testsend-row input { flex: 1 1 220px; background: #0f1117; color: #e2e8f0; border: 1px solid #1e2130; border-radius: 6px; padding: 7px 10px; font-size: 13px; }
+.admin-testsend-row select { background: #0f1117; color: #e2e8f0; border: 1px solid #1e2130; border-radius: 6px; padding: 7px 9px; font-size: 13px; }
+.admin-testsend-ok { color: #6ee7b7; font-size: 13px; margin: 6px 0 0; }
+[data-theme="light"] .admin-testsend { background: #fff; border-color: #e2e8f0; }
+[data-theme="light"] .admin-testsend-head { color: #0f172a; }
+[data-theme="light"] .admin-testsend-row input,
+[data-theme="light"] .admin-testsend-row select { background: #f8fafc; color: #0f172a; border-color: #e2e8f0; }
+[data-theme="light"] .admin-testsend-ok { color: #065f46; }

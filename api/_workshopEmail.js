@@ -430,24 +430,68 @@ export async function checkDelegation({ as } = {}) {
   };
 }
 
-/** Send a fixed test message to one address, bypassing templates entirely.
+// Stand-in values for a test send.
+//
+// A test renders the REAL template but never a real registration. Using a live
+// one would put an actual customer's name, organization and fees into a message
+// addressed to whoever is testing — a small privacy leak that would happen every
+// time someone checked their formatting, which is often.
+//
+// Obviously fake on purpose: nobody should mistake a test for the real thing.
+export const SAMPLE_VARS = {
+  first_name: 'Sam',
+  full_name: 'Sam Example',
+  organization: 'Example Organization',
+  course_name: 'Adventure Basics Level 1 Training',
+  course_number: 'AB-2026-1',
+  start_date: '04/20/2026',
+  end_date: '04/24/2026',
+  start_time: '09:00:00',
+  location: 'High 5 Adventure Learning Center',
+  instructor: 'Phil Brown',
+  hours: '40',
+  fee_total: '$835.00',
+  deposit_due: '$417.50',
+  balance_due: '$0.00',
+  recipient_email: 'sam@example.com',
+};
+
+/** Send a test to an arbitrary address.
  *
  *  The only thing that proves delivery end to end — a minted token proves the
- *  grant, not that a message arrives. Deliberately does NOT render a template or
- *  touch a registration: this is for confirming the pipe, and it should be
- *  impossible to aim it at a customer by accident. The caller supplies its own
- *  address and nothing else. */
-export async function sendTestMessage(to) {
+ *  grant, not that a message arrives, and the two got conflated once already.
+ *
+ *  With a `version` it renders that template against SAMPLE_VARS, so what lands
+ *  in the inbox is the real subject, the real body, the real HTML and the real
+ *  attachments. Without one it sends a bare diagnostic, which is enough to check
+ *  the pipe before any template exists.
+ *
+ *  The subject is prefixed so a test is identifiable at a glance in a mailbox
+ *  that also receives the real thing. */
+export async function sendTestMessage(to, { version, db, template, attachments } = {}) {
   const stamp = new Date().toISOString();
+  if (version && template) {
+    return sendAsWorkshops({
+      to,
+      subject: `[TEST] ${render(template.subject, SAMPLE_VARS)}`,
+      body: [
+        render(template.body, SAMPLE_VARS),
+        '',
+        '---',
+        `_Test of the ${version} template, sent from Vibe at ${stamp}. Sample details — no real registration was used._`,
+      ].join('\n'),
+      attachments: attachments || [],
+    });
+  }
   return sendAsWorkshops({
     to,
     subject: `Vibe test message — ${stamp}`,
     body: [
       'This is a test from Vibe, confirming that workshop e-mail delivery works.',
       '',
-      `Sent as: ${senderAddress()}`,
-      `Impersonating: ${senderUser()}`,
-      `At: ${stamp}`,
+      `- Sent as: ${senderAddress()}`,
+      `- Impersonating: ${senderUser()}`,
+      `- At: ${stamp}`,
       '',
       'No registrant was involved and no template was used.',
     ].join('\n'),
