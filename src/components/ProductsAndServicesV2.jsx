@@ -132,13 +132,17 @@ const money = v => `$${(Number(v) || 0).toLocaleString('en-US', { minimumFractio
 
 const AUTO_SYNC_FIELDS = new Set(['Name', 'Unit_Price', 'Description', 'SKU', 'QuickBooks_Account_Income']);
 
-// Draw the next SKU from the Tray workflow that owns the incrementing counter
-// (single source of truth — same counter the FMP script trigger uses). Belay
+// Draw the next SKU from VIBE'S OWN counter (api/_sku.js). It used to come from
+// a Tray workflow, which is no longer in the path. FileMaker's script trigger
+// still draws from Tray for products created there, and the two counters are
+// given ranges that cannot meet — see api/_sku.js. Vibe
 // creates products via the Data API, which doesn't fire FMP triggers, so we
-// fetch the SKU explicitly. SKUs are text — never coerce to a number. Throws on
-// failure so the caller blocks the save rather than create a SKU-less product.
+// fetch the SKU explicitly — now from Vibe's own counter rather than Tray's.
+// SKUs are text — never coerce to a number. Throws on failure so the caller
+// blocks the save rather than create a SKU-less product.
 async function fetchNextSku() {
-  const res = await fetch('/api/next-sku', { method: 'POST', credentials: 'include' });
+  const db = getCurrentEnv().db;
+  const res = await fetch(`/api/next-sku?db=${encodeURIComponent(db)}`, { method: 'POST', credentials: 'include' });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.sku) throw new Error(data.error || `Couldn't assign a SKU (HTTP ${res.status}). Product not created.`);
   return String(data.sku);
@@ -400,15 +404,15 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
   };
 
   const handleCreate = async ({ fields, pushShopify, shopifyStatus, pushQBO }) => {
-    // SKUs are always assigned by the app from the Tray counter (single source
-    // of truth) — users can't choose one. FMP-direct adds use the same counter
-    // via the FMP script trigger, so this stays correct however the record is
-    // created; the counter has never had anything to do with FileMaker.
+    // SKUs are always assigned by the app — users can't choose one. The counter
+    // is Vibe's now (api/_sku.js), issuing from 3000 up. A product created in
+    // FileMaker Pro still gets its SKU from Tray via the script trigger, below
+    // that floor, so the two ranges stay apart until cutover retires Tray.
     fields = { ...fields, SKU: await fetchNextSku() };
 
     // Born in Vibe. This was the last creation path on FileMaker, and the
     // "entangled with SKU assignment and live Shopify/QBO pushes" note in the
-    // decoupling plan overstated it: the SKU comes from Tray, `pushToShopify`
+    // decoupling plan overstated it: the SKU is Vibe's own, `pushToShopify`
     // takes a recordId and never reads it, and `pushToQBO` is not given one at
     // all. Neither push cares where the record lives.
     const made = await createVibeRecord(LAYOUT, fields);

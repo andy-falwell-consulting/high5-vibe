@@ -13,11 +13,12 @@ changed anything in any of the three systems.
 |---|---|
 | `Name`, `Description`, `Unit_Price`, `Type`, income account | **Vibe** |
 | `_kat__Item_ID_QuickBooks`, `_kat__Item_ID_Shopify`, `_kat__Item_Variant_Id` | **Vibe** (link ids) |
-| `SKU` | **Tray** — a counter neither Vibe nor FileMaker owns |
+| `SKU` | **Vibe** — its own counter since 2026-08-20 (was Tray) |
 | `shopify_description` | **Shopify** — `shopify-desc-sync.js` says so: *"Shopify is the source of truth — always overwrites"* |
 
-So one field flows the opposite way from every other, and one is owned by a
-third-party workflow. Neither is wrong, but neither is obvious from the code.
+So one field flows the opposite way from every other. That is not wrong, but it
+is not obvious from the code either. SKU used to be a second oddity — owned by a
+third-party workflow — and no longer is; see §6.
 
 **The join key is SKU**, which is a real business key present in all three
 systems (`SKU` / QBO `Item.Sku` / Shopify `variant.sku`). Stored link ids are
@@ -102,7 +103,7 @@ recorded on the record, and a failure is stated rather than flashed. See
 
 ---
 
-## 6. Plan — move SKU assignment into Vibe
+## 6. Move SKU assignment into Vibe — DONE 2026-08-20
 
 ### What the counter actually is
 
@@ -139,7 +140,34 @@ only remaining reason for the counter to be outside Vibe disappears with it.
 Leaving it where it is means Vibe cannot create a product if Tray is down, and a
 number nobody at High 5 can inspect governs a business key.
 
-### The plan
+### What was built
+
+`api/_sku.js` owns the counter; `api/next-sku.js` issues from it and no longer
+calls Tray. **Vibe's counter starts at 3000**, not at the measured maximum, and
+that difference is the whole point:
+
+> Seeding from observed data would have been wrong. The sequence is gappy right
+> at the top — 2497 → 2505, 2505 → 2508 — and those gaps are numbers Tray has
+> ALREADY ISSUED that never reached a saved product. Tray's true counter is
+> therefore above 2512, and Vibe cannot see how far above. The prerequisite
+> below was never satisfiable from this side, so the design stopped needing it:
+> give the two counters ranges that cannot meet instead of trying to line them
+> up.
+
+3000 leaves Tray 488 issues of headroom before it could reach Vibe's floor,
+which at any rate this catalogue has seen is years, and cutover retires Tray
+long before that. It also leaves a rule that stays readable in the data: **a
+numeric SKU at or above 3000 was issued by Vibe.** Numeric vendor codes (55504,
+145071, 320966, 852491) sit above 10000 and are clear either way.
+
+The one-time gap from 2512 to 3000 is cosmetic. Admin → Product drift shows the
+counter, read-only — GET consumes nothing, so looking cannot burn a number.
+
+**Still to do at cutover:** disable the FileMaker script trigger that draws from
+Tray, and retire the Tray workflow itself. Until then both counters run, safely
+apart.
+
+### The original plan, for the record
 
 1. **Seed a Redis counter from the measured maximum.** `vibe:{db}:seq:sku`, set
    to the highest counter-style value observed — 2512 today, re-measured at the
