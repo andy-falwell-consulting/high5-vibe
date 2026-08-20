@@ -1,0 +1,25 @@
+/* Field — label, control, hint, error.
+   The error message is bound to the input with aria-describedby in the markup; the
+   red border alone is not an accessible error signal, because colour cannot be the
+   only carrier of meaning. */
+
+.h5-field { display: flex; flex-direction: column; gap: var(--space-xs); }
+.h5-field__label {
+  font-family: var(--font-sans); font-size: var(--text-caption);
+  font-weight: var(--weight-semibold); color: var(--fg-secondary);
+}
+.h5-field__control {
+  box-sizing: border-box; width: 100%; padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--surface); color: var(--fg);
+  font-family: var(--font-sans); font-size: var(--text-body); line-height: var(--leading-snug);
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+.h5-field__control:hover:not(:disabled) { border-color: var(--border-interactive); }
+.h5-field__control:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; border-color: var(--border-interactive); }
+.h5-field__control:disabled { color: var(--fg-disabled); background: var(--surface-sunken); cursor: not-allowed; }
+.h5-field__control::placeholder { color: var(--fg-disabled); }
+.h5-field__hint  { font-size: var(--text-caption); color: var(--fg-secondary); }
+.h5-field__error { font-size: var(--text-caption); color: var(--error-fg); }
+.h5-field--invalid .h5-field__control { border-color: var(--error-border); }
+textarea.h5-field__control { resize: vertical; min-height: 84px; line-height: var(--leading-normal); }

@@ -1,0 +1,29 @@
+/* Tabs
+   Two forms. The underline form is one of the few sanctioned uses of the accent —
+   a 2px indicator is a non-text graphic, so WCAG 1.4.11's 3:1 applies rather than
+   the 4.5:1 text minimum, and the label beside it carries the state in weight too.
+
+   THE SEGMENTED FORM DIFFERS IN KIND BETWEEN THEMES, deliberately. Light raises a
+   white pill onto a grey track. Dark cannot: --surface, --card and the track are all
+   grey/1000, so a --card pill would be invisible against its own track. Dark makes
+   the indicator a light FILL and inverts the label with it. */
+
+.h5-tabs { display: flex; gap: var(--space-lg); border-bottom: 1px solid var(--border); }
+.h5-tab {
+  padding: var(--space-sm) 0; border: 0; background: none; cursor: pointer;
+  font-family: var(--font-sans); font-size: var(--text-body); font-weight: var(--weight-medium);
+  color: var(--fg-secondary); border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+.h5-tab:hover { color: var(--fg); }
+.h5-tab:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.h5-tab--active { color: var(--fg); font-weight: var(--weight-semibold); border-bottom-color: var(--brand); }
+
+.h5-segmented { display: inline-flex; padding: 3px; gap: 2px; background: var(--surface-sunken); border-radius: var(--radius-md); }
+.h5-segment {
+  padding: var(--space-xs) var(--space-md); border: 0; border-radius: var(--radius-sm);
+  background: transparent; color: var(--fg-secondary); cursor: pointer;
+  font-family: var(--font-sans); font-size: var(--text-caption); font-weight: var(--weight-medium);
+}
+.h5-segment:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.h5-segment--active { background: var(--surface-selected); color: var(--on-surface-selected); font-weight: var(--weight-semibold); box-shadow: var(--shadow-sm); }

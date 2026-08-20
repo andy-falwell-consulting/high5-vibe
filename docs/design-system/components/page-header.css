@@ -1,0 +1,7 @@
+/* Page header — the record title block above a detail pane. */
+
+.h5-page-header { padding: var(--space-xl) var(--space-2xl) var(--space-lg); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.h5-page-header__row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-lg); }
+.h5-page-header__title { font-family: var(--font-title); font-size: var(--text-h1); font-weight: var(--weight-bold); line-height: var(--leading-tight); color: var(--fg); margin: 0 0 var(--space-sm); }
+.h5-page-header__meta { display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap; }
+.h5-page-header__actions { display: flex; align-items: center; gap: var(--space-sm); flex-shrink: 0; }

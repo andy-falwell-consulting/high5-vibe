@@ -1,0 +1,78 @@
+{
+  "$schema_note": "The High 5 brand facts, transcribed from the official style sheet. THIS FILE IS THE SOURCE OF TRUTH and is the only place a brand value is stated verbatim. palette.json is DERIVED from it by tokens/derive_palette.py — do not hand-edit that file. Everything here carries a provenance field saying where it came from; anything without one is not a brand standard and does not belong in this file.",
+  "source": {
+    "name": "High 5 Adventure Learning Center — official style sheet",
+    "format": "PDF",
+    "received": "2026-07-20",
+    "transcribed": "2026-08-20",
+    "note": "The sheet publishes colour, logo rules and typefaces. It publishes NO spacing, radius, shadow, elevation, numeric type scale, z-index scale, or colour gradations. Everything of that kind in this system is a house convention and is labelled as one."
+  },
+
+  "colors": {
+    "$note": "Seven colours, exactly as the style sheet gives them. Six carry a Pantone reference; black does not. These are the anchors — every gradation in palette.json is derived from one of them, and each anchor appears unchanged at its own step.",
+    "red": {
+      "hex": "#ED1C24",
+      "pantone": "Pantone Red",
+      "role": "primary accent",
+      "provenance": "style sheet",
+      "note": "Sampled from the logo. The style sheet's phrase is \"always the stripe\" — it is the accent, not a fill and not a category colour."
+    },
+    "gold":    { "hex": "#ED8B00", "pantone": "PMS 144", "provenance": "style sheet" },
+    "blue":    { "hex": "#009CDE", "pantone": "PMS 2925", "provenance": "style sheet" },
+    "mustard": { "hex": "#DAAA00", "pantone": "PMS 110", "provenance": "style sheet" },
+    "khaki":   { "hex": "#C6B784", "pantone": "PMS 466", "provenance": "style sheet" },
+    "purple":  { "hex": "#92368D", "pantone": "PMS 513", "provenance": "style sheet" },
+    "black":   { "hex": "#000000", "provenance": "style sheet", "note": "The logo box. Also the anchor the neutral grey ramp is derived from." }
+  },
+
+  "derived_hues": {
+    "$note": "NOT in the style sheet. A UI needs neutrals for surfaces and text, and a success colour for state, and the brand publishes neither. Both are house conventions, declared here so nobody mistakes them for brand values.",
+    "grey": {
+      "derived_from": "black",
+      "reason": "Surfaces, borders and body text. Derived from the brand black rather than a generic grey so the neutral carries the same hue cast as the logo box.",
+      "convention": "house"
+    },
+    "green": {
+      "hex": "#22C55E",
+      "reason": "Success states. The brand has no green, and encoding success in one of the six brand hues would collide with category colour. Matches the value already in src/config/brandColors.js, which made the same call.",
+      "convention": "house"
+    }
+  },
+
+  "typography": {
+    "$note": "All four are commercial licensed faces. They CANNOT be bundled as webfonts without the licence files, so the tokens name them first and fall back. The fallback stacks are house conventions.",
+    "body":    { "family": "Myriad Pro",         "provenance": "style sheet" },
+    "titles":  { "family": "Berthold Imago",     "provenance": "style sheet" },
+    "quotes":  { "family": "Kremlin Pro",        "provenance": "style sheet" },
+    "numbers": { "family": "Bernhardt Standard", "provenance": "style sheet", "note": "Numbers only — the style sheet is explicit that this face is not for text." }
+  },
+
+  "logo": {
+    "$note": "Rules quoted or paraphrased from the style sheet. These are the constraints most easily broken by a well-meaning UI change, which is why they are machine-readable rather than prose only.",
+    "asset": "src/assets/high5-logo.png",
+    "dimensions": "516x918",
+    "rules": [
+      { "rule": "Logos should always be used intact", "provenance": "style sheet", "note": "Use the asset. Never recreate, crop, recolour or separate the mark from the band." },
+      { "rule": "Logo doesn't work on red background", "provenance": "style sheet", "note": "The app accent IS red, so the logo must sit on white or black — never on a brand-red fill." },
+      { "rule": "Placement upper-left", "provenance": "style sheet" },
+      { "rule": "The lower ADVENTURE LEARNING CENTER band is black-on-white", "provenance": "style sheet", "note": "Consequence for this app: on the dark theme the logo needs a white card behind it or that band's text disappears." }
+    ]
+  },
+
+  "accent_policy": {
+    "$note": "The red discipline. Modelled on how the source system treats its own accent, because the underlying problem is identical: a saturated red that fails text contrast at small sizes and gets reached for as a fill.",
+    "policy": "Red is reserved for accents and key highlights. Quality over quantity.",
+    "sanctioned": [
+      "The High 5 logo mark",
+      "The focus ring (--focus-ring)",
+      "The active tab / nav indicator",
+      "A destructive action's solid fill (--error-solid), where red carries meaning rather than decoration"
+    ],
+    "prohibited": [
+      "Red backgrounds behind UI text, other than the sanctioned destructive fill",
+      "The logo on any red surface",
+      "Red as a category colour — it is the accent, and a category palette containing it cannot also signal 'this one matters'",
+      "Red on text below 24px that is not a destructive label, where it fails WCAG AA"
+    ]
+  }
+}

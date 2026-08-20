@@ -1,0 +1,20 @@
+/* Card — the standard content container.
+   --card and --card-border rather than --surface/--border: in dark mode a card sits
+   ON --bg (grey/1100) and needs to be lighter than it, which --surface alone does not
+   guarantee once a sunken surface is also in play. */
+
+.h5-card {
+  background: var(--card); border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg); padding: var(--space-2xl);
+  box-shadow: var(--shadow-sm);
+}
+.h5-card--flush { padding: 0; overflow: hidden; }
+.h5-card--raised { box-shadow: var(--shadow-md); }
+.h5-card__head {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+.h5-card__title {
+  font-family: var(--font-title); font-size: var(--text-h3);
+  font-weight: var(--weight-semibold); color: var(--fg); margin: 0;
+}

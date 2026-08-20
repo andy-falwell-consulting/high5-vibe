@@ -1,0 +1,20 @@
+/* Chip (filter / toggle)
+   The selected state is declared AFTER hover, so hover cannot override it and no
+   specificity hack is needed. Selection is a neutral fill, not the accent: red is
+   reserved, and a board of six selected red chips says nothing about which matters. */
+
+.h5-chip {
+  display: inline-flex; align-items: center; gap: var(--space-xs); box-sizing: border-box;
+  padding: var(--space-sm) var(--space-lg);
+  border: 1px solid var(--border); border-radius: var(--radius-pill);
+  background: var(--surface); color: var(--fg);
+  font-family: var(--font-sans); font-size: var(--text-caption); font-weight: var(--weight-medium);
+  line-height: var(--leading-snug); cursor: pointer; white-space: nowrap;
+  transition: background var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard);
+}
+.h5-chip:hover { background: var(--surface-hover); }
+.h5-chip:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.h5-chip--selected { background: var(--fg); color: var(--fg-inverse); border-color: var(--fg); }
+.h5-chip--selected:hover { background: var(--fg-hover); }
+.h5-chip__count { font-size: var(--text-micro); opacity: 0.75; }
