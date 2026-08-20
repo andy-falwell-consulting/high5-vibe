@@ -1,3 +1,16 @@
+/* The High 5 design system — tokens first, then components.
+   See docs/design-system/README.md. Imported here so both are available app-wide;
+   nothing is obliged to use them, and a module that has not migrated is unaffected.
+
+   ONE TOKEN COLLIDES: --bg. The block below also defines it, and the design system
+   wins because it is imported first and the local :root re-declares it. That is
+   deliberate — the app's base background should come from the system — and it is the
+   only overlap. --border is declared below and used nowhere; --text, --text-h,
+   --accent and the rest are leftovers from the template this file started as and are
+   used only within this file. */
+@import url('../docs/design-system/tokens/tokens.css');
+@import url('../docs/design-system/components/_index.css');
+
 :root {
   /* High 5 brand palette — from the official style sheet. Red is sampled from
      the logo (Pantone Red); the rest are sRGB conversions of the PMS spot

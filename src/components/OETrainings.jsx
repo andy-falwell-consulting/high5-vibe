@@ -141,9 +141,9 @@ export default function OETrainings({ navTarget, onClearNav, onRecordSelect, onN
   const totals = rows ? rosterTotals(rows) : null
 
   return (
-    <div className="oet-container">
-      <aside className="oet-sidebar" style={{ width: sidebarWidth }}>
-        <div className="oet-sidebar-header">
+    <div className="h5-module oet-container">
+      <aside className="h5-sidebar" style={{ width: sidebarWidth }}>
+        <div className="h5-sidebar__head">
           <div>
             <div className="oet-sidebar-module">OE Trainings</div>
             <div className="oet-sidebar-count">
@@ -154,27 +154,27 @@ export default function OETrainings({ navTarget, onClearNav, onRecordSelect, onN
         </div>
 
         {courses === null ? (
-          <div className="oet-loading">{Array.from({ length: 12 }, (_, i) => <div key={i} className="oet-skeleton" />)}</div>
+          <div className="oet-loading">{Array.from({ length: 12 }, (_, i) => <div key={i} className="h5-skeleton h5-skeleton--row" />)}</div>
         ) : (
           // ListBody returns a bare ARRAY of items with no wrapper of its own,
           // so the scrolling container has to come from here. Without it the
           // sidebar's `overflow: hidden` simply clips everything past the fold
           // and there is no way to reach it — the exact trap CLAUDE.md warns
           // about, and the one this module walked straight into.
-          <div className="oet-list">
+          <div className="h5-sidebar__list h5-scroll">
             <ListBody c={controls} activeId={selected?.course} renderItem={r => {
             const f = r.fieldData
             return (
               <div key={r.recordId}
-                className={`oet-item ${selected?.course === f.course ? 'active' : ''}`}
+                className={`h5-list-item${selected?.course === f.course ? ' h5-list-item--active' : ''}`}
                 onClick={() => { openCourse(f.course); onRecordSelect?.(f.course, f.programType || f.course) }}>
-                <div className="oet-item-main">
-                  <div className="oet-item-name">{f.programType || <span className="oet-unlisted">{f.course}</span>}</div>
-                  <div className="oet-item-sub">
+                <div className="h5-list-item__body">
+                  <div className="h5-list-item__title">{f.programType || <span className="oet-unlisted">{f.course}</span>}</div>
+                  <div className="h5-list-item__sub">
                     {f.course}{f.startDate ? ` · ${fmtDate(f.startDate)}` : ''}{f.lead ? ` · ${f.lead}` : ''}
                   </div>
                 </div>
-                <span className="oet-count" title="registrants">{f.count}</span>
+                <span className="h5-list-item__count" title="registrants">{f.count}</span>
               </div>
             )
             }} />
@@ -182,39 +182,39 @@ export default function OETrainings({ navTarget, onClearNav, onRecordSelect, onN
         )}
       </aside>
 
-      <div className="oet-resize-handle" onMouseDown={onMouseDown} />
+      <div className="h5-resize" onMouseDown={onMouseDown} />
 
-      <main className="oet-main">
+      <main className="h5-detail">
         {!selected ? (
-          <div className="oet-empty"><div className="oet-empty-icon">◆</div><p>Select a session</p></div>
+          <div className="h5-empty"><div className="h5-empty__icon">◆</div><p className="h5-empty__title">Select a session</p><p className="h5-empty__body">Choose a course from the list to see who is on it.</p></div>
         ) : (
           <>
-            <div className="oet-topbar">
+            <div className="h5-page-header">
               <div>
-                <h1 className="oet-title">{cat?.['Program Type'] || selected.course}</h1>
-                <div className="oet-meta">
-                  <span className="oet-chip code">{selected.course}</span>
+                <h1 className="h5-page-header__title">{cat?.['Program Type'] || selected.course}</h1>
+                <div className="h5-page-header__meta">
+                  <span className="h5-badge h5-badge--blue">{selected.course}</span>
                   {cat?.['Program Start Date'] && (
-                    <span className="oet-chip">{fmtDate(cat['Program Start Date'])} – {fmtDate(cat['Program End Date'])}</span>
+                    <span className="h5-badge">{fmtDate(cat['Program Start Date'])} – {fmtDate(cat['Program End Date'])}</span>
                   )}
-                  {cat?.['Lead Facilitator'] && <span className="oet-chip">{cat['Lead Facilitator']}</span>}
-                  {!cat && <span className="oet-chip warn">Not in the OE Lookup catalogue</span>}
+                  {cat?.['Lead Facilitator'] && <span className="h5-badge">{cat['Lead Facilitator']}</span>}
+                  {!cat && <span className="h5-badge h5-badge--warning">Not in the OE Lookup catalogue</span>}
                   {hit?.recordId && (
-                    <button className="oet-link" onClick={() => onNavigateTo?.('oe-lookup', hit.recordId)}>
+                    <button className="oet-link h5-btn h5-btn--ghost h5-btn--sm" onClick={() => onNavigateTo?.('oe-lookup', hit.recordId)}>
                       View offering →
                     </button>
                   )}
-                  <button className="oet-link" onClick={() => setRemindOpen(true)}>⏰ Remind</button>
+                  <button className="oet-link h5-btn h5-btn--ghost h5-btn--sm" onClick={() => setRemindOpen(true)}>⏰ Remind</button>
                 </div>
               </div>
             </div>
 
-            {error && <div className="oet-error">{error}</div>}
+            {error && <div className="h5-callout h5-callout--error" style={{ margin: 'var(--space-lg) var(--space-2xl)' }}><span className="h5-callout__icon">×</span><div className="h5-callout__body">{error}</div></div>}
 
             {rows === null || rosterBusy ? (
-              <div className="oet-loading-body">Loading roster…</div>
+              <div className="oet-loading-body h5-caption">Loading roster…</div>
             ) : (
-              <div className="oet-content">
+              <div className="h5-detail__body h5-scroll">
                 <div className="oet-stats">
                   <div className="oet-stat"><span>{totals.registrants}</span><label>Registrants</label></div>
                   <div className="oet-stat"><span>{money(totals.fees)}</span><label>Fees</label></div>
@@ -229,27 +229,27 @@ export default function OETrainings({ navTarget, onClearNav, onRecordSelect, onN
                   )}
                 </div>
 
-                <div className="oet-table-wrap">
-                  <table className="oet-table">
+                <div className="h5-table-wrap">
+                  <table className="h5-table">
                     <thead>
                       <tr>
                         <th>Registrant</th><th>Organization</th>
-                        <th className="num">Fee</th><th className="num">Deposit due</th>
-                        <th className="num">Received</th><th className="num">Balance</th>
+                        <th className="h5-table__num">Fee</th><th className="h5-table__num">Deposit due</th>
+                        <th className="h5-table__num">Received</th><th className="h5-table__num">Balance</th>
                         <th>Paperwork</th>
                         <th></th>
                       </tr>
                     </thead>
                     <tbody>
                       {rows.length === 0 ? (
-                        <tr><td colSpan={8} className="oet-none">No registrations recorded.</td></tr>
+                        <tr><td colSpan={8} className="oet-none h5-caption">No registrations recorded.</td></tr>
                       ) : rows.map(w => {
                         const bal = balanceDue(w)
                         return (
                           <tr key={w.id}>
                             <td>
                               {w.contactId ? (
-                                <button className="oet-link" onClick={() => onNavigateTo?.('contacts-v2', w.contactId)}>
+                                <button className="oet-link h5-btn h5-btn--ghost h5-btn--sm" onClick={() => onNavigateTo?.('contacts-v2', w.contactId)}>
                                   {w.contactName || w.contactId}
                                 </button>
                               ) : (
@@ -257,10 +257,10 @@ export default function OETrainings({ navTarget, onClearNav, onRecordSelect, onN
                               )}
                             </td>
                             <td>{w.organization || '—'}</td>
-                            <td className="num">{money(feeTotal(w))}</td>
-                            <td className="num">{money(depositDue(w))}</td>
-                            <td className="num">{money(w.depositReceived)}</td>
-                            <td className={`num${bal > 0 ? ' owing' : ''}`}>{money(bal)}</td>
+                            <td className="h5-table__num">{money(feeTotal(w))}</td>
+                            <td className="h5-table__num">{money(depositDue(w))}</td>
+                            <td className="h5-table__num">{money(w.depositReceived)}</td>
+                            <td className={`h5-table__num${bal > 0 ? ' oet-owing' : ''}`}>{money(bal)}</td>
                             <td className="oet-flags">
                               <Flag on={!!w.confirmationSent}>confirm</Flag>
                               <Flag on={!!w.invoiceSent}>invoice</Flag>
@@ -268,7 +268,7 @@ export default function OETrainings({ navTarget, onClearNav, onRecordSelect, onN
                             </td>
                             <td className="oet-actions">
                               {w.contactId ? (
-                                <button className="oet-email-btn" onClick={() => setEmailing(w)}
+                                <button className="h5-btn h5-btn--secondary h5-btn--sm" onClick={() => setEmailing(w)}
                                   title={w.emailVersionSent ? `Last sent: ${w.emailVersionSent}` : 'Send a workshop e-mail'}>
                                   ✉ {w.confirmationSent ? 'Resend' : 'E-mail'}
                                 </button>
