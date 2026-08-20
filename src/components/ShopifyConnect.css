@@ -2,30 +2,24 @@
 .sc-row {
   display: flex; align-items: center; gap: 8px;
   padding: 6px 10px; border-radius: 8px;
-  background: #12151f; border: 1px solid #1e2130;
+  background: var(--card); border: 1px solid var(--border);
 }
-[data-theme="light"] .sc-row { background: #f8fafc; border-color: #e2e8f0; }
 .sc-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.sc-dot.on { background: #22c55e; box-shadow: 0 0 0 3px #22c55e22; }
-.sc-dot.off { background: #ef4444; box-shadow: 0 0 0 3px #ef444422; }
-.sc-dot.unknown { background: #94a3b8; }
-.sc-dot.loading { background: #94a3b8; animation: sc-pulse 1.2s infinite; }
+.sc-dot.on { background: var(--success-fg); box-shadow: 0 0 0 3px var(--success-bg); }
+.sc-dot.off { background: var(--error-solid); box-shadow: 0 0 0 3px var(--error-bg); }
+.sc-dot.unknown { background: var(--fg-secondary); }
+.sc-dot.loading { background: var(--fg-secondary); animation: sc-pulse 1.2s infinite; }
 @keyframes sc-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
 .sc-label {
-  flex: 1; min-width: 0; font-size: 13px; color: #9aa3b2;
+  flex: 1; min-width: 0; font-size: 13px; color: var(--fg-secondary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-[data-theme="light"] .sc-label { color: #5e6b7c; }
 .sc-btn {
-  flex-shrink: 0; border: 1px solid #e87722; background: transparent; color: #f0a061;
+  flex-shrink: 0; border: 1px solid var(--fg); background: transparent; color: var(--warning-fg);
   font-size: 13px; padding: 3px 10px; border-radius: 6px; cursor: pointer; font-family: inherit;
   transition: background 0.15s;
 }
-.sc-btn:hover { background: #e8772218; }
-[data-theme="light"] .sc-btn { color: #c2570f; }
-[data-theme="light"] .sc-btn:hover { background: #e8772212; }
+.sc-btn:hover { background: var(--surface-hover); }
 .sc-toast { margin-top: 6px; font-size: 13px; padding: 5px 10px; border-radius: 6px; }
-.sc-toast.ok { background: #22c55e1a; color: #4ade80; }
-.sc-toast.err { background: #ef44441a; color: #f87171; }
-[data-theme="light"] .sc-toast.ok { color: #16a34a; }
-[data-theme="light"] .sc-toast.err { color: #b91c1c; }
+.sc-toast.ok { background: var(--success-bg); color: var(--success-fg); }
+.sc-toast.err { background: var(--error-bg); color: var(--error-fg); }

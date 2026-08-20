@@ -8,6 +8,7 @@ import { useAllRecords } from '../hooks/useAllRecords'
 import ListToolbar, { useListControls, ListBody } from './ListControls'
 import './OELookup.css'
 import DeleteRecordButton from './DeleteRecordButton'
+import ReminderModal from './ReminderModal'
 
 const LAYOUT = 'OELookup_New'
 const CACHE_VERSION = 1
@@ -115,6 +116,7 @@ export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {})
   })
 
   const [selected, setSelected] = useState(null)
+  const [remindOpen, setRemindOpen] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [sidebarWidth, setSidebarWidth] = useState(300)
   const dragging = useRef(false)
@@ -279,6 +281,12 @@ export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {})
           <>
             {/* Top bar */}
             <div className="h5-page-header">
+              {/* __row is what makes this a ROW. .h5-page-header on its own is
+                  just a padded block, so an actions div inside it stacks under
+                  the title at full width instead of sitting top-right. Both OE
+                  pages were missing this wrapper, which is the whole difference
+                  from every other record page. */}
+              <div className="h5-page-header__row">
               <div className="oe-topbar-left">
                 <div>
                   <h1 className="h5-page-header__title">{val(f, 'Program Type')}</h1>
@@ -298,12 +306,14 @@ export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {})
                 </div>
               </div>
               <div className="h5-page-header__actions">
+                <button className="h5-btn h5-btn--quiet h5-btn--sm" onClick={() => setRemindOpen(true)}>⏰ Remind</button>
                 <DeleteRecordButton
                   layout={LAYOUT} cacheVersion={CACHE_VERSION}
                   recordId={selected.recordId}
                   name={val(f, 'Program Type')}
                   onDeleted={() => setSelected(null)}
                 />
+              </div>
               </div>
             </div>
 
@@ -424,6 +434,18 @@ export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {})
           </>
         )}
       </main>
+
+      {remindOpen && selected && (
+        <ReminderModal
+          initial={{
+            recordType: 'oe-lookup',
+            recordId: selected.recordId,
+            recordLabel: val(f, 'Program Type') || val(f, 'Program Code'),
+            title: `Follow up on ${val(f, 'Program Type') || val(f, 'Program Code')}`,
+          }}
+          onClose={() => setRemindOpen(false)}
+          onSaved={() => setRemindOpen(false)} />
+      )}
 
       {showNew && (
         <RecordFormModal

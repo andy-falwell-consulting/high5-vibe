@@ -27,6 +27,22 @@
 .h5-btn--ghost { background: transparent; color: var(--fg); }
 .h5-btn--ghost:hover:not(:disabled) { background: var(--surface-hover); }
 
+/* Quiet — the record-header action. Transparent like ghost, but BORDERED and in
+   secondary text, because these sit in a row of their own above a record
+   (Remind, Delete, Board →) and need to read as a set of equals without
+   competing with the record's title.
+
+   Added because the app had FIVE treatments for the same button: two module
+   classes with real styling, two with NO CSS AT ALL (est-ghost-btn and
+   insp-ghost-btn were never defined, so Remind rendered as a raw browser
+   button on Estimates and Inspections), and one styled as a link. A row of
+   sibling actions is a real, recurring shape, so it gets one name. */
+.h5-btn--quiet {
+  background: transparent; color: var(--fg-secondary);
+  border-color: var(--border); font-weight: var(--weight-medium);
+}
+.h5-btn--quiet:hover:not(:disabled) { background: var(--surface-hover); color: var(--fg); border-color: var(--border-interactive); }
+
 .h5-btn--danger { background: var(--error-solid); color: var(--on-error-solid); }
 .h5-btn--danger:hover:not(:disabled) { background: var(--error-solid-hover); }
 

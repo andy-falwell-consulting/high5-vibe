@@ -6,55 +6,48 @@
    palette and a layout root are different things and must stay different rules. */
 .cv2-root,
 .trn-canvas {
-  --cv2-bg: #0f1117;
-  --cv2-surface: #13151c;
-  --cv2-surface-2: #1a1d2e;
-  --cv2-border: #1e2130;
-  --cv2-border-2: #2a2f45;
-  --cv2-text: #e2e8f0;
-  --cv2-text-2: #94a3b8;
-  --cv2-text-3: #8b97aa;
-  --cv2-text-4: #79859a;
-  --cv2-ring-track: #262b3d;
-  --cv2-line: #2a2f45;
-  --cv2-accent: var(--h5-red);
+  /* The --cv2-* NAMES are kept because RecordLayout.jsx, CCSKanban.css,
+     Trainings.css and AttachmentsPanel all consume them; only their VALUES
+     change. Each is now an alias for a design token, so the whole shared
+     palette follows the theme on its own.
+
+     This has to be an alias per MEANING, not a blanket substitution. The
+     mechanical pass mapped every one of these to the same token family and the
+     CCS pane came out black in light mode — --cv2-bg is the page background,
+     which is --bg, not the text colour that shares its literal value in the
+     dark theme. The light-mode copy of this block (which had to name every
+     consumer selector, having once left the Trainings header on dark hexes) is
+     deleted: an alias needs no second copy. */
+  --cv2-bg: var(--bg);
+  --cv2-surface: var(--card);
+  --cv2-surface-2: var(--surface-sunken);
+  --cv2-border: var(--border);
+  --cv2-border-2: var(--border-interactive);
+  --cv2-text: var(--fg);
+  --cv2-text-2: var(--fg-secondary);
+  --cv2-text-3: var(--fg-secondary);
+  --cv2-text-4: var(--fg-secondary);
+  --cv2-ring-track: var(--surface-hover);
+  --cv2-line: var(--border);
+  --cv2-accent: var(--brand);
 }
 
 .cv2-root {
-  --cv2-bg: #0f1117;
-  --cv2-surface: #13151c;
-  --cv2-surface-2: #1a1d2e;
-  --cv2-border: #1e2130;
-  --cv2-border-2: #2a2f45;
-  --cv2-text: #e2e8f0;
-  --cv2-text-2: #94a3b8;
-  --cv2-text-3: #8b97aa;
-  --cv2-text-4: #79859a;
-  --cv2-ring-track: #262b3d;
-  --cv2-line: #2a2f45;
-  --cv2-accent: var(--h5-red);
 
   display: flex; flex: 1; min-height: 0; overflow: hidden;
   background: var(--cv2-bg); color: var(--cv2-text);
-  font-family: 'Source Sans 3', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--font-sans);
   font-size: 17px;
 }
 /* Light values for the shared palette. Must name every consumer that the base
    rule names — scoping this to .cv2-root alone left the Trainings header stuck
    on the dark hexes in light mode. */
-[data-theme="light"] .cv2-root,
-[data-theme="light"] .trn-canvas {
-  --cv2-bg: #f6f7f9; --cv2-surface: #ffffff; --cv2-surface-2: #f1f5f9;
-  --cv2-border: #e6e8ec; --cv2-border-2: #d8dce2;
-  --cv2-text: #0f172a; --cv2-text-2: #475569; --cv2-text-3: #4f5a69; --cv2-text-4: #5e6b7c;
-  --cv2-ring-track: #e6e8ec; --cv2-line: #e0e3e8;
-}
 
 /* ── Sidebar ───────────────────────────────────────────────────── */
 .cv2-nav { flex-shrink: 0; background: var(--cv2-surface); border-right: 1px solid var(--cv2-border); display: flex; flex-direction: column; overflow: hidden; }
 .cv2-nav-head { padding: 16px 14px 12px; border-bottom: 1px solid var(--cv2-border); display: flex; flex-direction: column; gap: 10px; }
 .cv2-nav-title { display: flex; align-items: center; gap: 10px; }
-.cv2-logo { width: 32px; height: 32px; border-radius: 7px; background: #111; color: var(--cv2-accent); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 17px; border: 1px solid #333; flex-shrink: 0; }
+.cv2-logo { width: 32px; height: 32px; border-radius: 7px; background: var(--h5-grey-1100); color: var(--cv2-accent); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 17px; border: 1px solid var(--h5-grey-900); flex-shrink: 0; }
 .cv2-nav-name { font-size: 17px; font-weight: 600; color: var(--cv2-text); }
 .cv2-nav-count { font-size: 14px; color: var(--cv2-text-3); }
 .cv2-search { width: 100%; box-sizing: border-box; padding: 8px 10px; background: var(--cv2-surface-2); border: 1px solid var(--cv2-border-2); border-radius: 8px; color: var(--cv2-text); font-size: 15px; outline: none; font-family: inherit; }
@@ -74,7 +67,7 @@
 .cv2-list-org { font-size: 15px; font-weight: 500; color: var(--cv2-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cv2-list-sub { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--cv2-text-3); margin-top: 1px; }
 .cv2-list-sub span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cv2-list-due { flex-shrink: 0; color: #b45309; background: #f59e0b22; border-radius: 10px; padding: 0 6px; font-weight: 600; }
+.cv2-list-due { flex-shrink: 0; color: var(--warning-fg); background: var(--warning-bg); border-radius: 10px; padding: 0 6px; font-weight: 600; }
 
 .cv2-resize { width: 4px; background: var(--cv2-border); cursor: col-resize; flex-shrink: 0; }
 .cv2-resize:hover { background: var(--cv2-accent); }
@@ -92,16 +85,30 @@
 .cv2-crumb-sep { color: var(--cv2-text-4); }
 .cv2-crumb-spacer { flex: 1; }
 .cv2-crumb-id { font-family: monospace; font-size: 14px; color: var(--cv2-text-4); }
-.cv2-ghost-btn { background: transparent; border: 1px solid var(--cv2-border-2); border-radius: 7px; color: var(--cv2-text-2); font-size: 14px; padding: 4px 10px; cursor: pointer; }
-.cv2-ghost-btn:hover { color: var(--cv2-text); border-color: var(--cv2-text-3); }
-.cv2-add-board { color: #d85a30; border-color: #d85a3055; }
-.cv2-add-board:hover { color: #d85a30; border-color: #d85a30; }
+/* Same shape and same rows as .h5-btn--quiet, so it is that button rather than
+   a fifth near-miss of it. Kept as a name because CCSv2 and Trainings use it in
+   several places; the values come from the system. */
+.cv2-ghost-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-sm);
+  box-sizing: border-box; padding: var(--space-xs) var(--space-md);
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: transparent; color: var(--fg-secondary);
+  font-family: var(--font-sans); font-size: var(--text-caption); font-weight: var(--weight-medium);
+  line-height: var(--leading-snug); cursor: pointer; white-space: nowrap;
+  transition: background var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard),
+              color var(--duration-fast) var(--ease-standard);
+}
+.cv2-ghost-btn:hover { background: var(--surface-hover); color: var(--fg); border-color: var(--border-interactive); }
+.cv2-ghost-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.cv2-add-board { color: var(--fg-secondary); border-color: var(--error-border); }
+.cv2-add-board:hover { color: var(--fg-secondary); border-color: var(--fg-secondary); }
 
 /* ── Hero ──────────────────────────────────────────────────────── */
 .cv2-hero { background: var(--cv2-surface); border: 1px solid var(--cv2-border); border-radius: 14px; padding: 18px 20px; }
 .cv2-hero-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .cv2-hero-type { font-size: 14px; color: var(--cv2-text-3); text-transform: uppercase; letter-spacing: 0.06em; }
-.cv2-hero-org { margin: 3px 0 4px; font-family: 'Oswald', sans-serif; font-size: 31px; font-weight: 600; color: var(--cv2-text); line-height: 1.15; }
+.cv2-hero-org { margin: 3px 0 4px; font-family: var(--font-title); font-size: 31px; font-weight: 600; color: var(--cv2-text); line-height: 1.15; }
 .cv2-hero-contact { font-size: 17px; color: var(--cv2-text-2); display: flex; align-items: center; gap: 6px; }
 /* Inline Assign/Change beside the org and contact in the hero. Quiet, and
    nudged down a touch so it sits on the text baseline rather than the cap. */
@@ -129,8 +136,8 @@
   cursor: pointer; text-align: left;
   border-bottom: 1px solid transparent; transition: color .12s, border-color .12s;
 }
-.cv2-hero-link:hover { color: var(--h5-red); border-bottom-color: var(--h5-red); }
-.cv2-hero-link:focus-visible { outline: 2px solid var(--h5-red); outline-offset: 2px; }
+.cv2-hero-link:hover { color: var(--brand); border-bottom-color: var(--brand); }
+.cv2-hero-link:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 
 .cv2-ic { color: var(--cv2-text-4); font-size: 15px; }
 .cv2-status { flex-shrink: 0; border: 1px solid; border-radius: 20px; padding: 5px 12px; font-size: 15px; font-weight: 600; outline: none; cursor: pointer; font-family: inherit; appearance: none; }
@@ -145,25 +152,25 @@
 .cv2-pipe-seg:first-child { flex: 0; }
 .cv2-pipe-line { flex: 1; height: 2px; }
 .cv2-pipe-dot { width: 11px; height: 11px; border-radius: 50%; background: transparent; border: 1.5px solid var(--cv2-line); box-sizing: border-box; cursor: pointer; padding: 0; flex-shrink: 0; }
-.cv2-pipe-dot.done { width: 12px; height: 12px; background: #d85a30; border-color: #d85a30; }
-.cv2-pipe-dot.cur { width: 15px; height: 15px; background: var(--cv2-surface); border: 3px solid #d85a30; }
-.cv2-pipe-dot:hover { border-color: #d85a30; }
+.cv2-pipe-dot.done { width: 12px; height: 12px; background: var(--fg-secondary); border-color: var(--fg-secondary); }
+.cv2-pipe-dot.cur { width: 15px; height: 15px; background: var(--cv2-surface); border: 3px solid var(--fg-secondary); }
+.cv2-pipe-dot:hover { border-color: var(--fg-secondary); }
 
 .cv2-quick { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--cv2-border); }
 .cv2-quick-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--cv2-border-2); background: transparent; color: var(--cv2-text-2); font-size: 15px; cursor: pointer; font-family: inherit; }
 .cv2-quick-btn:hover { border-color: var(--cv2-text-3); color: var(--cv2-text); }
-.cv2-quick-btn.on { background: #1d9e7518; border-color: #1d9e7555; color: #1d9e75; }
+.cv2-quick-btn.on { background: var(--success-bg); border-color: var(--success-border); color: var(--success-fg); }
 .cv2-quick-ic { font-size: 15px; width: 14px; text-align: center; }
 
 /* ── Next actions ──────────────────────────────────────────────── */
 .cv2-next { margin-top: 12px; border: 1px solid var(--cv2-border); border-radius: 12px; padding: 12px 16px; background: var(--cv2-surface); }
-.cv2-next.warn { border-color: #ba751755; background: #ba751712; }
-.cv2-next.crit { border-color: #e24b4a55; background: #e24b4a12; }
+.cv2-next.warn { border-color: var(--warning-border); background: var(--warning-bg); }
+.cv2-next.crit { border-color: var(--error-border); background: var(--error-bg); }
 .cv2-next-head { margin-bottom: 10px; }
 .cv2-next-title { font-size: 15px; font-weight: 600; color: var(--cv2-text); }
-.cv2-next.warn .cv2-next-title { color: #b45309; }
-.cv2-next.crit .cv2-next-title { color: #e24b4a; }
-.cv2-next-clear { font-size: 15px; color: #0f6e56; }
+.cv2-next.warn .cv2-next-title { color: var(--warning-fg); }
+.cv2-next.crit .cv2-next-title { color: var(--error-fg); }
+.cv2-next-clear { font-size: 15px; color: var(--success-fg); }
 .cv2-next-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .cv2-next-chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 11px 6px 9px; border-radius: 20px; border: 1px solid var(--cv2-border-2); background: var(--cv2-surface); color: var(--cv2-text); font-size: 15px; cursor: pointer; font-family: inherit; }
 .cv2-next-chip:hover { border-color: var(--cv2-accent); }
@@ -178,7 +185,7 @@
 .cv2-kpi-label { font-size: 14px; color: var(--cv2-text-2); }
 .cv2-kpi-num { font-size: 26px; font-weight: 600; color: var(--cv2-text); margin-top: 3px; font-variant-numeric: tabular-nums; }
 .cv2-kpi-sub { font-size: 14px; color: var(--cv2-text-3); }
-.cv2-kpi-sub.urg { color: #b45309; font-weight: 600; }
+.cv2-kpi-sub.urg { color: var(--warning-fg); font-weight: 600; }
 
 /* ── Body layout ───────────────────────────────────────────────────
    Contact + Financials sit in a full-width top row, then Project phases
@@ -222,12 +229,12 @@
 @media (max-width: 560px) { .cv2-checks { grid-template-columns: 1fr; } }
 .cv2-check { display: flex; align-items: center; gap: 9px; padding: 6px 7px; border-radius: 7px; cursor: pointer; background: transparent; border: none; width: 100%; text-align: left; font-family: inherit; }
 .cv2-check:hover { background: var(--cv2-surface-2); }
-.cv2-check-box { width: 18px; height: 18px; flex-shrink: 0; border-radius: 5px; border: 1.5px solid var(--cv2-border-2); box-sizing: border-box; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 15px; }
+.cv2-check-box { width: 18px; height: 18px; flex-shrink: 0; border-radius: 5px; border: 1.5px solid var(--cv2-border-2); box-sizing: border-box; display: flex; align-items: center; justify-content: center; color: var(--fg-inverse); font-size: 15px; }
 .cv2-check-label { font-size: 17px; color: var(--cv2-text); }
 .cv2-check.on .cv2-check-label { color: var(--cv2-text-2); text-decoration: line-through; }
-.cv2-advance { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; padding: 9px 11px; background: #1d9e7515; border-radius: 8px; font-size: 15px; color: #0f6e56; }
-.cv2-advance button { background: transparent; border: 1px solid #0f6e5566; color: #0f6e56; border-radius: 7px; padding: 5px 11px; font-size: 15px; cursor: pointer; font-family: inherit; }
-.cv2-advance button:hover { background: #0f6e5512; }
+.cv2-advance { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; padding: 9px 11px; background: var(--success-bg); border-radius: 8px; font-size: 15px; color: var(--success-fg); }
+.cv2-advance button { background: transparent; border: 1px solid var(--success-border); color: var(--success-fg); border-radius: 7px; padding: 5px 11px; font-size: 15px; cursor: pointer; font-family: inherit; }
+.cv2-advance button:hover { background: var(--success-bg); }
 
 /* "Job Prep - External" — checklist items grouped by category, each with its
    own notes field (mirrors the RCD_New FileMaker tab of the same name). */
@@ -261,21 +268,18 @@
 .cv2-inline-area-fixed::-webkit-scrollbar-thumb { background: var(--cv2-border-2); border-radius: 3px; }
 .cv2-stamp-btn {
   margin-left: 8px; font-size: 11px; padding: 1px 8px; border-radius: 4px;
-  background: #1a1d27; border: 1px solid var(--cv2-border); color: var(--cv2-muted);
+  background: var(--surface-hover); border: 1px solid var(--cv2-border); color: var(--cv2-muted);
   cursor: pointer; vertical-align: middle;
 }
-.cv2-stamp-btn:hover { border-color: #e87722; color: #e87722; }
-[data-theme="light"] .cv2-stamp-btn { background: #f1f5f9; border-color: #e2e8f0; color: #334155; }
+.cv2-stamp-btn:hover { border-color: var(--fg); color: var(--fg); }
 .cv2-inline-select { cursor: pointer; appearance: none; }
 .cv2-inline-date { color-scheme: dark; }
-[data-theme="light"] .cv2-inline-date { color-scheme: light; }
 /* color-scheme alone isn't reliable: Vite's CSS build (Lightning CSS)
    compiles it down to something keyed off the visitor's OS light/dark
    preference rather than this app's own [data-theme] toggle, so the icon
    can silently disappear depending on the visitor's OS setting — see the
    identical fix + explanation on .trn-inline-date in Trainings.css. */
 .cv2-inline-date::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
-[data-theme="light"] .cv2-inline-date::-webkit-calendar-picker-indicator { filter: none; }
 
 .cv2-detail-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; }
 /* A calculated field shown in the same grid as editable ones — same padding
@@ -289,12 +293,11 @@
 .cv2-wo-actions { display: flex; gap: 8px; margin-top: 8px; }
 .cv2-wo-btn {
   font-size: 13px; padding: 7px 12px; border-radius: 6px; font-family: inherit;
-  background: #1a1d27; border: 1px solid var(--cv2-border); color: var(--cv2-muted); cursor: pointer;
+  background: var(--surface-hover); border: 1px solid var(--cv2-border); color: var(--cv2-muted); cursor: pointer;
 }
-.cv2-wo-btn:hover:not(:disabled) { border-color: #e87722; color: #e87722; }
+.cv2-wo-btn:hover:not(:disabled) { border-color: var(--fg); color: var(--fg); }
 .cv2-wo-btn:disabled { opacity: 0.6; cursor: default; }
-[data-theme="light"] .cv2-wo-btn { background: #f1f5f9; border-color: #e2e8f0; color: #334155; }
-.cv2-wo-error { color: #ef4444; font-size: 12px; margin: 6px 0 0; }
+.cv2-wo-error { color: var(--error-solid); font-size: 12px; margin: 6px 0 0; }
 
 /* ── Team ──────────────────────────────────────────────────────── */
 /* Team sits under Contact in the 1/3 column now, so it is tighter than it was
@@ -303,7 +306,7 @@
 .cv2-team { display: flex; flex-direction: column; gap: 5px; }
 .cv2-team-row { display: flex; align-items: center; gap: 9px; }
 .cv2-avatar { width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; background: var(--cv2-surface-2); color: var(--cv2-text-2); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
-.cv2-avatar.lead { background: #d85a3022; color: #c2410c; }
+.cv2-avatar.lead { background: var(--error-bg); color: var(--error-fg); }
 .cv2-team-pick { flex: 1; min-width: 0; }
 .cv2-team-pick label { display: block; font-size: 12px; line-height: 1.3; color: var(--cv2-text-4); text-transform: uppercase; letter-spacing: 0.04em; }
 
@@ -327,7 +330,7 @@
 .cv2-contact { display: flex; flex-direction: column; gap: 9px; font-size: 17px; }
 .cv2-contact-row { display: flex; gap: 9px; color: var(--cv2-text); }
 .cv2-contact-row .cv2-ic { flex-shrink: 0; margin-top: 2px; }
-.cv2-contact-row a { color: #4a9eff; text-decoration: none; }
+.cv2-contact-row a { color: var(--info-fg); text-decoration: none; }
 .cv2-contact-row a:hover { text-decoration: underline; }
 .cv2-contact-meta { font-size: 14px; color: var(--cv2-text-3); padding-left: 18px; }
 
@@ -344,22 +347,20 @@
 .cv2-fin-empty { font-size: 15px; color: var(--cv2-text-4); font-style: italic; padding: 8px 4px; }
 
 /* ── Suggestion / meta ─────────────────────────────────────────── */
-.cv2-suggest { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 11px 16px; background: #22c55e15; border: 1px solid #22c55e44; border-radius: 10px; font-size: 17px; color: #16a34a; }
-.cv2-suggest button { background: transparent; border: 1px solid #16a34a66; color: #16a34a; border-radius: 7px; padding: 5px 12px; font-size: 15px; cursor: pointer; font-family: inherit; }
-.cv2-suggest button:hover { background: #16a34a12; }
+.cv2-suggest { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 11px 16px; background: var(--success-bg); border: 1px solid var(--success-border); border-radius: 10px; font-size: 17px; color: var(--success-fg); }
+.cv2-suggest button { background: transparent; border: 1px solid var(--success-border); color: var(--success-fg); border-radius: 7px; padding: 5px 12px; font-size: 15px; cursor: pointer; font-family: inherit; }
+.cv2-suggest button:hover { background: var(--success-bg); }
 .cv2-meta { margin-top: 16px; font-size: 13px; color: var(--cv2-text-4); font-family: monospace; }
 
 /* ── Save bar / toast ──────────────────────────────────────────── */
 .cv2-savebar { position: sticky; bottom: 0; display: flex; align-items: center; gap: 12px; margin: 0 16px 14px; padding: 11px 16px; background: var(--cv2-surface); border: 1px solid var(--cv2-border-2); border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,0.35); }
 .cv2-savebar-count { font-size: 15px; font-weight: 600; color: var(--cv2-text); }
-.cv2-savebar-err { font-size: 15px; color: #f87171; }
+.cv2-savebar-err { font-size: 15px; color: var(--error-fg); }
 .cv2-savebar-spacer { flex: 1; }
 .cv2-savebar-discard { background: transparent; border: 1px solid var(--cv2-border-2); color: var(--cv2-text-2); border-radius: 8px; padding: 6px 14px; font-size: 15px; cursor: pointer; font-family: inherit; }
-.cv2-savebar-save { background: #e87722; border: none; color: #fff; border-radius: 8px; padding: 6px 18px; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit; }
+.cv2-savebar-save { background: var(--fg); border: none; color: var(--fg-inverse); border-radius: 8px; padding: 6px 18px; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit; }
 .cv2-savebar-save:disabled { opacity: 0.5; cursor: default; }
-.cv2-toast { position: sticky; bottom: 14px; align-self: center; margin-bottom: 14px; padding: 8px 16px; background: #16a34a; color: #fff; border-radius: 20px; font-size: 15px; font-weight: 600; }
-[data-theme="light"] .cv2-savebar { box-shadow: 0 8px 28px rgba(0,0,0,0.12); }
-[data-theme="light"] .cv2-contact-row a { color: #2563eb; }
+.cv2-toast { position: sticky; bottom: 14px; align-self: center; margin-bottom: 14px; padding: 8px 16px; background: var(--success-fg); color: var(--fg-inverse); border-radius: 20px; font-size: 15px; font-weight: 600; }
 
 /* Contract & financials block */
 .cv2-fin-grid { display: flex; flex-direction: column; gap: 2px; }
@@ -377,9 +378,9 @@
 .cv2-fin-ref { display: inline-block; padding: 5px 8px; font-size: 17px; color: var(--cv2-text); }
 .cv2-fin-rcv { display: inline-flex; align-items: center; gap: 7px; padding: 5px 9px; border: 1px solid var(--cv2-border-2); border-radius: 7px; background: transparent; color: var(--cv2-text-2); font-size: 14px; font-family: inherit; cursor: pointer; transition: background 0.12s, border-color 0.12s, color 0.12s; }
 .cv2-fin-rcv:hover { background: var(--cv2-surface-2); }
-.cv2-fin-rcv-box { width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--cv2-border-2); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; line-height: 1; color: #fff; }
-.cv2-fin-rcv.on { color: var(--cv2-text); border-color: #16a34a; }
-.cv2-fin-rcv.on .cv2-fin-rcv-box { background: #16a34a; border-color: #16a34a; }
+.cv2-fin-rcv-box { width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--cv2-border-2); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; line-height: 1; color: var(--fg-inverse); }
+.cv2-fin-rcv.on { color: var(--cv2-text); border-color: var(--success-fg); }
+.cv2-fin-rcv.on .cv2-fin-rcv-box { background: var(--success-fg); border-color: var(--success-fg); }
 .cv2-fin-rcv-spacer { display: inline-block; }
 
 /* Invoices/Payments tabs folded into the Contract & Financials card. */
@@ -392,11 +393,11 @@
 .cv2-qboest-doc { font-family: ui-monospace, monospace; font-size: 15px; color: var(--cv2-text); min-width: 74px; }
 .cv2-qboest-total { margin-left: auto; font-size: 16px; color: var(--cv2-text); }
 .cv2-qboest-missing { font-size: 14px; color: var(--cv2-text-4); font-style: italic; }
-.cv2-qboest-status { font-size: 13px; font-weight: 600; padding: 2px 9px; border-radius: 999px; text-transform: capitalize; color: #64748b; background: #64748b1f; }
-.cv2-qboest-status.accepted { color: #16a34a; background: #16a34a1f; }
-.cv2-qboest-status.closed   { color: #2563eb; background: #2563eb1f; }
-.cv2-qboest-status.pending  { color: #b45309; background: #f59e0b22; }
-.cv2-qboest-status.rejected { color: #dc2626; background: #dc26261f; }
+.cv2-qboest-status { font-size: 13px; font-weight: 600; padding: 2px 9px; border-radius: 999px; text-transform: capitalize; color: var(--fg-secondary); background: var(--surface-hover); }
+.cv2-qboest-status.accepted { color: var(--success-fg); background: var(--success-bg); }
+.cv2-qboest-status.closed   { color: var(--link); background: var(--info-bg); }
+.cv2-qboest-status.pending  { color: var(--warning-fg); background: var(--warning-bg); }
+.cv2-qboest-status.rejected { color: var(--error-solid); background: var(--error-bg); }
 
 /* Board-membership toggle — active ("on board") state */
 .cv2-ghost-btn.cv2-on-board { color: var(--h5-blue); border-color: var(--h5-blue); }
@@ -410,7 +411,7 @@
   transition: all 0.12s;
 }
 .cv2-type-chip:hover:not(:disabled) { border-color: var(--h5-blue); color: var(--cv2-text); }
-.cv2-type-chip.on { background: var(--h5-blue); border-color: var(--h5-blue); color: #fff; }
+.cv2-type-chip.on { background: var(--h5-blue); border-color: var(--h5-blue); color: var(--fg-inverse); }
 .cv2-type-chip:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* N/A toggle — an item that doesn't apply to this project still counts
@@ -434,8 +435,8 @@
   margin-left: 8px; font-size: 12px; padding: 1px 7px; border-radius: 999px;
   background: var(--cv2-surface-2); color: var(--cv2-text-4); white-space: nowrap;
 }
-.cv2-fin-tag.due  { background: #854f0b1f; color: #a9690f; }
-.cv2-fin-tag.paid { background: #0f6e561f; color: #0f6e56; }
+.cv2-fin-tag.due  { background: var(--warning-bg); color: var(--warning-fg); }
+.cv2-fin-tag.paid { background: var(--success-bg); color: var(--success-fg); }
 .cv2-fin-src { margin-top: 8px; font-size: 12px; color: var(--cv2-text-4); text-align: right; }
 
 /* Clickable rows that open the record in QuickBooks Online. The hover has to
@@ -469,15 +470,15 @@
 /* A linked QuickBooks record that belongs to a different customer. Shown, but
    never counted — the row stays clickable so it can be checked in QBO. */
 .cv2-fin-suspect { opacity: 0.75; }
-.cv2-fin-suspect:hover { opacity: 1; box-shadow: inset 2px 0 0 #ba7517; }
+.cv2-fin-suspect:hover { opacity: 1; box-shadow: inset 2px 0 0 var(--warning-fg); }
 .cv2-fin-warn {
   margin-left: 8px; font-size: 12px; padding: 1px 7px; border-radius: 999px;
-  background: #ba75171f; color: #a9690f; white-space: nowrap;
+  background: var(--warning-bg); color: var(--warning-fg); white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis; max-width: 190px; display: inline-block; vertical-align: bottom;
 }
 .cv2-fin-mismatch {
   margin: -4px 0 14px; padding: 9px 12px; border-radius: 8px; font-size: 14px; line-height: 1.5;
-  background: #ba75170f; border: 1px solid #ba751733; color: #a9690f;
+  background: var(--warning-bg); border: 1px solid var(--warning-bg); color: var(--warning-fg);
 }
 
 /* Which number is which — the two phone rows are otherwise indistinguishable. */

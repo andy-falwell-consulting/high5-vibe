@@ -91,7 +91,7 @@ export default function ListToolbar({ c, unit = 'items' }) {
       {c.chips.length > 1 && (
         <div className="lc-chips">
           {c.chips.map(chip => (
-            <button key={chip.id} className={`lc-chip${c.chipId === chip.id ? ' active' : ''}`} onClick={() => c.setChipId(chip.id)}>
+            <button key={chip.id} className={`h5-chip${c.chipId === chip.id ? ' h5-chip--selected' : ''}`} onClick={() => c.setChipId(chip.id)}>
               {chip.color && <span className="lc-dot" style={{ background: chip.color }} />}
               {chip.label}
             </button>
@@ -101,7 +101,7 @@ export default function ListToolbar({ c, unit = 'items' }) {
 
       <div className="lc-row">
         <div className="lc-sort" ref={menuRef}>
-          <button className="lc-sort-btn" onClick={() => setMenuOpen(o => !o)}>
+          <button className="h5-btn h5-btn--secondary h5-btn--sm" onClick={() => setMenuOpen(o => !o)}>
             <span className="lc-sort-ic">⇅</span>{c.sort.label}
             <span className="lc-sort-dir">{c.order === 'asc' ? '↑' : '↓'}</span>
           </button>
@@ -206,7 +206,7 @@ export function ListBody({ c, renderItem, activeId }) {
   // matching neither).
   const items = c.sections
     ? c.sections.flatMap((sec, i) => [
-        <div className="lc-letter" key={`L:${i}:${sec.letter}`}>{sec.letter}</div>,
+        <div className="h5-list-letter" key={`L:${i}:${sec.letter}`}>{sec.letter}</div>,
         ...sec.items.map(renderItem),
       ])
     : c.processed.map(renderItem)

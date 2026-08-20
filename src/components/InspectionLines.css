@@ -1,31 +1,31 @@
 .insp-li-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.insp-li-count { font-size: 13px; color: #94a3b8; }
-.insp-li-warn { font-size: 13px; color: #f0a93b; background: #f0a93b1f; border-radius: 6px; padding: 2px 9px; }
+.insp-li-count { font-size: 13px; color: var(--fg-secondary); }
+.insp-li-warn { font-size: 13px; color: var(--warning-fg); background: var(--warning-bg); border-radius: 6px; padding: 2px 9px; }
 .insp-li-spacer { flex: 1; }
 .insp-li-add {
-  background: #1e2130; border: 1px solid #334155; color: #cbd5e1;
+  background: var(--surface-sunken); border: 1px solid var(--border); color: var(--fg);
   border-radius: 6px; font-size: 13px; padding: 5px 9px; cursor: pointer; font-family: inherit;
 }
-.insp-li-add:hover { border-color: #e87722; color: #e87722; }
+.insp-li-add:hover { border-color: var(--fg); color: var(--fg); }
 
 .insp-li-table td { vertical-align: top; }
 .insp-li-group td {
-  background: #161926; color: #94a3b8; font-size: 12px; font-weight: 600;
+  background: var(--surface-hover); color: var(--fg-secondary); font-size: 12px; font-weight: 600;
   letter-spacing: 0.05em; text-transform: uppercase; padding: 6px 12px;
 }
-.insp-li-group-n { margin-left: 8px; background: #1e2130; color: #94a3b8; border-radius: 999px; padding: 1px 7px; font-size: 11px; }
+.insp-li-group-n { margin-left: 8px; background: var(--surface-sunken); color: var(--fg-secondary); border-radius: 999px; padding: 1px 7px; font-size: 11px; }
 .insp-li-table tr:hover td { background: inherit; }
 
 .insp-li-row.deleted td { opacity: 0.45; }
 .insp-li-row.deleted .desc textarea { text-decoration: line-through; }
-.insp-li-row.is-new td { box-shadow: inset 2px 0 0 #1d9e75; }
+.insp-li-row.is-new td { box-shadow: inset 2px 0 0 var(--success-fg); }
 
 .insp-li-table select, .insp-li-table input.qty, .insp-li-table textarea {
-  background: #0f1117; border: 1px solid #2d3148; border-radius: 5px;
-  color: #e2e8f0; font-size: 14px; font-family: inherit; padding: 5px 7px; outline: none;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 5px;
+  color: var(--fg); font-size: 14px; font-family: inherit; padding: 5px 7px; outline: none;
   width: 100%; box-sizing: border-box;
 }
-.insp-li-table select:focus, .insp-li-table input.qty:focus, .insp-li-table textarea:focus { border-color: #3b82f6; }
+.insp-li-table select:focus, .insp-li-table input.qty:focus, .insp-li-table textarea:focus { border-color: var(--link); }
 .insp-li-table select:disabled, .insp-li-table input:disabled, .insp-li-table textarea:disabled { opacity: 0.6; }
 .insp-li-table textarea { resize: vertical; line-height: 1.45; min-height: 46px; }
 .insp-li-table td.grade { width: 88px; }
@@ -36,21 +36,14 @@
 
 .insp-li-carried {
   display: inline-block; margin-top: 4px; font-size: 11px;
-  color: #f0a93b; background: #f0a93b1f; border-radius: 5px; padding: 1px 7px;
+  color: var(--warning-fg); background: var(--warning-bg); border-radius: 5px; padding: 1px 7px;
 }
 .insp-li-del, .insp-li-undo {
   background: none; border: none; cursor: pointer; font-family: inherit;
-  color: #64748b; font-size: 14px; padding: 4px 6px; border-radius: 5px;
+  color: var(--fg-secondary); font-size: 14px; padding: 4px 6px; border-radius: 5px;
 }
-.insp-li-del:hover { color: #e24b4a; background: #e24b4a1a; }
-.insp-li-undo { font-size: 12px; color: #93c5fd; }
+.insp-li-del:hover { color: var(--error-fg); background: var(--error-bg); }
+.insp-li-undo { font-size: 12px; color: var(--link); }
 .insp-li-undo:hover { text-decoration: underline; }
 
 /* ── Light theme ─────────────────────────────────────────────────── */
-[data-theme="light"] .insp-li-add { background: #f1f5f9; border-color: #e2e8f0; color: #334155; }
-[data-theme="light"] .insp-li-group td { background: #f1f5f9; color: #5e6b7c; }
-[data-theme="light"] .insp-li-group-n { background: #e2e8f0; color: #5e6b7c; }
-[data-theme="light"] .insp-li-table select,
-[data-theme="light"] .insp-li-table input.qty,
-[data-theme="light"] .insp-li-table textarea { background: #ffffff; border-color: #e2e8f0; color: #0f172a; }
-[data-theme="light"] .insp-li-count { color: #64748b; }

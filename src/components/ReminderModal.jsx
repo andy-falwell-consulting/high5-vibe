@@ -78,13 +78,13 @@ export default function ReminderModal({ reminder, initial = {}, onClose, onSaved
   }
 
   return (
-    <div className="rmm-backdrop" onClick={e => e.target === e.currentTarget && status !== 'saving' && onClose()}>
-      <div className="rmm-panel">
-        <div className="rmm-header">
-          <h3>{editing ? 'Edit reminder' : 'New reminder'}</h3>
+    <div className="h5-scrim" onClick={e => e.target === e.currentTarget && status !== 'saving' && onClose()}>
+      <div className="h5-modal rmm-panel">
+        <div className="h5-modal__head">
+          <h3 className="h5-modal__title">{editing ? 'Edit reminder' : 'New reminder'}</h3>
           <button className="rmm-close" onClick={onClose} disabled={status === 'saving'}>✕</button>
         </div>
-        <div className="rmm-body">
+        <div className="h5-modal__body">
           <label className="rmm-field"><span>Title</span>
             <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Follow up with…" autoFocus />
           </label>
@@ -127,10 +127,10 @@ export default function ReminderModal({ reminder, initial = {}, onClose, onSaved
             <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} placeholder="Optional" />
           </label>
         </div>
-        <div className="rmm-footer">
+        <div className="h5-modal__foot">
           {status === 'error' && <span className="rmm-error">{error}</span>}
-          <button className="rmm-btn cancel" onClick={onClose} disabled={status === 'saving'}>Cancel</button>
-          <button className="rmm-btn save" onClick={save} disabled={status === 'saving'}>{status === 'saving' ? 'Saving…' : (editing ? 'Save' : 'Create')}</button>
+          <button className="h5-btn h5-btn--secondary h5-btn--sm" onClick={onClose} disabled={status === 'saving'}>Cancel</button>
+          <button className="h5-btn h5-btn--primary h5-btn--sm" onClick={save} disabled={status === 'saving'}>{status === 'saving' ? 'Saving…' : (editing ? 'Save' : 'Create')}</button>
         </div>
       </div>
       {pickerOpen && (

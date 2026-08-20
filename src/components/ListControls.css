@@ -1,90 +1,81 @@
-.lc-toolbar { display: flex; flex-direction: column; gap: 9px; }
+/* List controls — the sidebar toolbar in every module that has a list.
+   Chips, sort menu, count, type-to-filter bar, A–Z headers.
 
-/* ── Filter chips ── */
-.lc-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.lc-chip {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-size: 15px; padding: 3px 11px; border-radius: 20px;
-  border: 1px solid #2a2f45; background: transparent; color: #94a3b8;
-  cursor: pointer; font-family: inherit; transition: all 0.12s;
-}
-.lc-chip:hover { color: #e2e8f0; border-color: #3a4158; }
-.lc-chip.active { background: #e2e8f0; border-color: #e2e8f0; color: #0f1117; }
-.lc-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+   90 lines to 41, and 60 hardcoded hex values to zero. Chips, the sort button
+   and the A–Z headers now come from the design system
+   (docs/design-system/components/), so this file carries only what the system
+   has no component for: the sort dropdown, the filter bar, and the colour dot.
 
-/* ── Sort + count row ── */
-.lc-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+   The whole [data-theme="light"] block is GONE — 18 rules that restated every
+   colour a second time. The tokens resolve per theme, so one declaration now
+   covers both, and the two can no longer drift apart. */
+
+.lc-toolbar { display: flex; flex-direction: column; gap: var(--space-sm); }
+
+/* Chips are .h5-chip. Only the optional category dot is ours — the system's
+   chip has no swatch, and the colour is supplied per-chip from JS. */
+.lc-chips { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
+.lc-dot { width: 6px; height: 6px; border-radius: var(--radius-circle); flex-shrink: 0; }
+
+/* Sort + count row. The button is .h5-btn--secondary --sm; the arrow beside it
+   is the one place the accent earns its keep here — it is the single piece of
+   state in this row that changes on click. */
+.lc-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
 .lc-sort { position: relative; }
-.lc-sort-btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 15px; padding: 5px 10px; border-radius: 7px;
-  border: 1px solid #2a2f45; background: transparent; color: #cbd5e1;
-  cursor: pointer; font-family: inherit;
-}
-.lc-sort-btn:hover { border-color: #3a4158; }
-.lc-sort-ic { font-size: 15px; color: #8b97aa; }
-.lc-sort-dir { color: var(--h5-red); font-weight: 600; }
+.lc-sort-ic { color: var(--fg-secondary); }
+.lc-sort-dir { color: var(--brand); font-weight: var(--weight-semibold); }
 
+/* Sort dropdown. Kept local: the system has no menu component, and inventing
+   one for a single consumer would be guessing at the general case. */
 .lc-menu {
-  position: absolute; top: calc(100% + 4px); left: 0; z-index: 30;
-  min-width: 150px; background: #1e2130; border: 1px solid #2a2f45;
-  border-radius: 9px; padding: 4px; box-shadow: 0 12px 32px rgba(0,0,0,0.45);
+  position: absolute; top: calc(100% + var(--space-xs)); left: 0; z-index: var(--z-dropdown);
+  min-width: 150px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: var(--space-xs); box-shadow: var(--shadow-lg);
 }
 .lc-menu-item {
   display: flex; align-items: center; justify-content: space-between;
-  width: 100%; box-sizing: border-box; padding: 7px 9px; border-radius: 6px;
-  border: none; background: transparent; color: #cbd5e1; font-size: 15px;
-  cursor: pointer; text-align: left; font-family: inherit;
+  width: 100%; box-sizing: border-box; padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm); border: none; background: transparent;
+  color: var(--fg-secondary); font-family: var(--font-sans); font-size: var(--text-body);
+  cursor: pointer; text-align: left;
 }
-.lc-menu-item:hover { background: #262b3d; }
-.lc-menu-item.active { color: #fff; }
-.lc-menu-item span { color: var(--h5-red); }
-.lc-menu-sep { height: 1px; background: #2a2f45; margin: 4px 2px; }
+.lc-menu-item:hover { background: var(--surface-hover); }
+.lc-menu-item.active { color: var(--fg); font-weight: var(--weight-semibold); }
+.lc-menu-item span { color: var(--brand); }
+.lc-menu-sep { height: 1px; background: var(--border); margin: var(--space-xs) 2px; }
 
-.lc-right { display: flex; align-items: center; gap: 8px; }
-.lc-count { font-size: 14px; color: #79859a; font-variant-numeric: tabular-nums; }
+.lc-right { display: flex; align-items: center; gap: var(--space-sm); }
+.lc-count { font-size: var(--text-caption); color: var(--fg-secondary); font-variant-numeric: tabular-nums; }
+
+/* The filter toggle. Its active state WAS BROKEN: the rule read
+   `border-color: var(--h5-red)55` and `background: var(--h5-red)14`, which is
+   not valid CSS — a var() call and a bare `55` do not concatenate into an
+   8-digit hex. Both declarations were dropped by the parser, so pressing the
+   button changed only its glyph colour while the border stayed the resting
+   grey. It now uses real tokens and actually looks pressed. */
 .lc-filter-btn {
-  width: 28px; height: 26px; border-radius: 7px;
-  border: 1px solid #2a2f45; background: transparent; color: #8b97aa;
-  cursor: pointer; font-size: 19px; line-height: 1;
+  width: 28px; height: 26px; flex-shrink: 0;
+  border-radius: var(--radius-sm); border: 1px solid var(--border);
+  background: transparent; color: var(--fg-secondary);
+  cursor: pointer; font-size: var(--text-h3); line-height: 1;
 }
-.lc-filter-btn:hover { color: #e2e8f0; border-color: #3a4158; }
-.lc-filter-btn.active { color: var(--h5-red); border-color: var(--h5-red)55; background: var(--h5-red)14; }
+.lc-filter-btn:hover { color: var(--fg); border-color: var(--border-interactive); }
+.lc-filter-btn.active { color: var(--brand); border-color: var(--brand); background: var(--error-bg); }
+.lc-filter-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
-/* ── Type-to-filter bar ── */
+/* Type-to-filter bar. An input with a leading icon and a clear button, which is
+   a composed control rather than the system's bare .h5-field__control. */
 .lc-filter-bar {
-  display: flex; align-items: center; gap: 8px;
-  background: #1e2130; border: 1px solid #2a2f45; border-radius: 8px; padding: 6px 9px;
+  display: flex; align-items: center; gap: var(--space-sm);
+  background: var(--surface-sunken); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: var(--space-sm) var(--space-md);
 }
-.lc-filter-ic { color: #79859a; font-size: 18px; }
-.lc-filter-input { flex: 1; background: transparent; border: none; outline: none; color: #e2e8f0; font-size: 15px; font-family: inherit; }
-.lc-filter-input::placeholder { color: #79859a; }
-.lc-filter-x { background: none; border: none; color: #79859a; cursor: pointer; font-size: 15px; padding: 0 2px; }
-.lc-filter-x:hover { color: #e2e8f0; }
-
-/* ── A–Z section header ── */
-.lc-letter {
-  position: sticky; top: 0; z-index: 2;
-  padding: 5px 16px; font-size: 14px; font-weight: 600; color: #79859a;
-  background: #13151c; letter-spacing: 0.04em;
-  border-bottom: 1px solid #1a1d2e;
+.lc-filter-bar:focus-within { border-color: var(--border-interactive); }
+.lc-filter-ic { color: var(--fg-secondary); font-size: var(--text-h3); }
+.lc-filter-input {
+  flex: 1; min-width: 0; background: transparent; border: none; outline: none;
+  color: var(--fg); font-family: var(--font-sans); font-size: var(--text-body);
 }
-
-/* ── Light theme ── */
-[data-theme="light"] .lc-chip { border-color: #e2e8f0; color: #4f5a69; }
-[data-theme="light"] .lc-chip:hover { color: #0f172a; border-color: #cbd5e1; }
-[data-theme="light"] .lc-chip.active { background: #0f172a; border-color: #0f172a; color: #ffffff; }
-[data-theme="light"] .lc-sort-btn { border-color: #e2e8f0; color: #334155; }
-[data-theme="light"] .lc-sort-btn:hover { border-color: #cbd5e1; }
-[data-theme="light"] .lc-sort-ic { color: #5e6b7c; }
-[data-theme="light"] .lc-menu { background: #ffffff; border-color: #e2e8f0; box-shadow: 0 12px 32px rgba(15,23,42,0.14); }
-[data-theme="light"] .lc-menu-item { color: #334155; }
-[data-theme="light"] .lc-menu-item:hover { background: #f1f5f9; }
-[data-theme="light"] .lc-menu-item.active { color: #0f172a; }
-[data-theme="light"] .lc-menu-sep { background: #e2e8f0; }
-[data-theme="light"] .lc-count { color: #5e6b7c; }
-[data-theme="light"] .lc-filter-btn { border-color: #e2e8f0; color: #5e6b7c; }
-[data-theme="light"] .lc-filter-btn:hover { color: #0f172a; border-color: #cbd5e1; }
-[data-theme="light"] .lc-filter-bar { background: #f1f5f9; border-color: #e2e8f0; }
-[data-theme="light"] .lc-filter-input { color: #0f172a; }
-[data-theme="light"] .lc-letter { background: #ffffff; color: #5e6b7c; border-bottom-color: #f1f5f9; }
+.lc-filter-input::placeholder { color: var(--fg-disabled); }
+.lc-filter-x { background: none; border: none; color: var(--fg-secondary); cursor: pointer; font-size: var(--text-body); padding: 0 2px; }
+.lc-filter-x:hover { color: var(--fg); }

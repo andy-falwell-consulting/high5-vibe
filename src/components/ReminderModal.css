@@ -1,68 +1,58 @@
-.rmm-backdrop {
-  position: fixed; inset: 0; z-index: 1100;
-  background: rgba(0, 0, 0, 0.55);
-  display: flex; align-items: center; justify-content: center; padding: 24px;
-}
-.rmm-panel {
-  width: 100%; max-width: 480px; max-height: 90vh;
-  background: #13151c; border: 1px solid #1e2130; border-radius: 12px;
-  display: flex; flex-direction: column; overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-  color: #e2e8f0; font-family: system-ui, -apple-system, sans-serif;
-}
-.rmm-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid #1e2130; flex-shrink: 0; }
-.rmm-header h3 { margin: 0; font-size: 17px; font-weight: 700; color: #f1f5f9; }
-.rmm-sub { font-size: 13px; font-weight: 400; color: #64748b; }
-.rmm-close { background: none; border: none; color: #64748b; font-size: 20px; cursor: pointer; line-height: 1; }
-.rmm-close:hover:not(:disabled) { color: #e2e8f0; }
+/* Reminder modal — create/edit a reminder, opened from six modules.
+
+   68 lines to 34, and 51 hardcoded hex values to zero. The shell is the
+   system's (.h5-scrim / .h5-modal / __head / __body / __foot) and so are the
+   two footer buttons; the fields keep their own selectors because the markup
+   wraps each label and input in a single <label>, and re-shaping that is a
+   change to the component rather than to its styling.
+
+   Two colours were not brand colours at all and are now tokens:
+     focus border  #3b82f6  -> --focus-ring   (a stock Tailwind blue)
+     Save fill     --h5-red -> .h5-btn--primary
+
+   THE SAVE BUTTON IS NO LONGER RED, for the reason set out in
+   RecordSaveBar.css: red is reserved for the logo, the focus ring, the active
+   nav indicator and destructive fills, and white on the style-sheet red
+   measures 4.38:1 — below WCAG AA. Cancel/Save now read the same here as
+   everywhere else in the app. */
+
+.rmm-panel { width: min(480px, 100%); }
+.rmm-sub { font-size: var(--text-caption); font-weight: var(--weight-regular); color: var(--fg-secondary); }
+.rmm-close { background: none; border: none; color: var(--fg-secondary); font-size: var(--text-h2); cursor: pointer; line-height: 1; }
+.rmm-close:hover:not(:disabled) { color: var(--fg); }
 .rmm-close:disabled { opacity: 0.4; cursor: default; }
 
-.rmm-body { padding: 16px 18px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 12px; }
-.rmm-row { display: flex; gap: 12px; }
-.rmm-row .rmm-field { flex: 1; }
-.rmm-field { display: flex; flex-direction: column; gap: 5px; }
-.rmm-field > span { font-size: 12px; font-weight: 600; letter-spacing: 0.04em; color: #94a3b8; text-transform: uppercase; }
+.rmm-row { display: flex; gap: var(--space-md); }
+.rmm-row .rmm-field { flex: 1; min-width: 0; }
+.rmm-field { display: flex; flex-direction: column; gap: var(--space-xs); }
+.rmm-field > span { font-size: var(--text-caption); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-wide); color: var(--fg-secondary); text-transform: uppercase; }
 .rmm-field input, .rmm-field textarea, .rmm-field select {
   width: 100%; box-sizing: border-box;
-  background: #0f1117; border: 1px solid #2d3148; border-radius: 6px;
-  padding: 8px 10px; color: #e2e8f0; font-size: 15px; font-family: inherit; outline: none;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md); color: var(--fg);
+  font-family: var(--font-sans); font-size: var(--text-body); outline: none;
 }
-.rmm-field input:focus, .rmm-field textarea:focus, .rmm-field select:focus { border-color: #3b82f6; }
-.rmm-field textarea { resize: vertical; line-height: 1.5; }
-.rmm-field input[type="date"], .rmm-field input[type="time"] { color-scheme: dark; }
+.rmm-field input:focus, .rmm-field textarea:focus, .rmm-field select:focus { border-color: var(--focus-ring); }
+.rmm-field textarea { resize: vertical; line-height: var(--leading-normal); }
+/* Follows the theme instead of being pinned dark, which is what made the native
+   date/time pickers render as a dark widget on a white panel in light mode. */
+.rmm-field input[type="date"], .rmm-field input[type="time"] { color-scheme: light dark; }
 
-.rmm-link { display: flex; align-items: center; gap: 8px; background: #0f1117; border: 1px solid #2d3148; border-radius: 6px; padding: 7px 10px; }
-.rmm-link-tag { flex-shrink: 0; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
-.rmm-link-name { flex: 1; min-width: 0; font-size: 14px; color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rmm-link-change { flex-shrink: 0; background: none; border: none; color: #93c5fd; font-size: 13px; font-weight: 600; cursor: pointer; padding: 2px 4px; }
-.rmm-link-change:hover { text-decoration: underline; }
-.rmm-link-remove { flex-shrink: 0; background: none; border: none; color: #64748b; font-size: 14px; cursor: pointer; padding: 2px 4px; line-height: 1; }
-.rmm-link-remove:hover { color: #e2e8f0; }
+/* The attached record — a chip-like row naming what the reminder points at. */
+.rmm-link { display: flex; align-items: center; gap: var(--space-sm); background: var(--surface-sunken); border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-sm) var(--space-md); }
+.rmm-link-tag { flex-shrink: 0; font-size: var(--text-micro); font-weight: var(--weight-semibold); padding: 2px var(--space-sm); border-radius: var(--radius-pill); }
+.rmm-link-name { flex: 1; min-width: 0; font-size: var(--text-body); color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rmm-link-change { flex-shrink: 0; background: none; border: none; color: var(--link); font-size: var(--text-caption); font-weight: var(--weight-semibold); cursor: pointer; padding: 2px var(--space-xs); }
+.rmm-link-change:hover { color: var(--link-hover); text-decoration: underline; }
+.rmm-link-remove { flex-shrink: 0; background: none; border: none; color: var(--fg-secondary); font-size: var(--text-body); cursor: pointer; padding: 2px var(--space-xs); line-height: 1; }
+.rmm-link-remove:hover { color: var(--fg); }
+/* Dashed, because it is an empty slot asking to be filled rather than a filled
+   one. The only dashed border in the system, and it earns it. */
 .rmm-link-attach {
-  align-self: flex-start; background: #0f1117; border: 1px dashed #2d3148; border-radius: 6px;
-  padding: 7px 12px; color: #94a3b8; font-size: 14px; cursor: pointer; font-family: inherit;
+  align-self: flex-start; background: var(--surface-sunken); border: 1px dashed var(--border);
+  border-radius: var(--radius-md); padding: var(--space-sm) var(--space-md);
+  color: var(--fg-secondary); font-family: var(--font-sans); font-size: var(--text-body); cursor: pointer;
 }
-.rmm-link-attach:hover { color: #e2e8f0; border-color: #4a5568; }
+.rmm-link-attach:hover { color: var(--fg); border-color: var(--border-interactive); }
 
-.rmm-footer { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 13px 18px; border-top: 1px solid #1e2130; flex-shrink: 0; }
-.rmm-error { margin-right: auto; color: var(--h5-red); font-size: 14px; }
-.rmm-btn { padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; border: 1px solid transparent; }
-.rmm-btn.cancel { background: transparent; color: #94a3b8; border-color: #2d3148; }
-.rmm-btn.cancel:hover:not(:disabled) { color: #e2e8f0; border-color: #4a5568; }
-.rmm-btn.save { background: var(--h5-red); color: #fff; }
-.rmm-btn.save:hover:not(:disabled) { background: #c72820; }
-.rmm-btn:disabled { opacity: 0.5; cursor: default; }
-
-/* Light theme */
-[data-theme="light"] .rmm-panel { background: #ffffff; border-color: #e2e8f0; color: #0f172a; }
-[data-theme="light"] .rmm-header { border-bottom-color: #e2e8f0; }
-[data-theme="light"] .rmm-header h3 { color: #0f172a; }
-[data-theme="light"] .rmm-field > span { color: #64748b; }
-[data-theme="light"] .rmm-field input, [data-theme="light"] .rmm-field textarea, [data-theme="light"] .rmm-field select { background: #f8fafc; border-color: #e2e8f0; color: #0f172a; }
-[data-theme="light"] .rmm-field input[type="date"], [data-theme="light"] .rmm-field input[type="time"] { color-scheme: light; }
-[data-theme="light"] .rmm-link { background: #f8fafc; border-color: #e2e8f0; }
-[data-theme="light"] .rmm-link-name { color: #0f172a; }
-[data-theme="light"] .rmm-link-attach { background: #f8fafc; border-color: #cbd5e1; color: #64748b; }
-[data-theme="light"] .rmm-link-attach:hover { color: #0f172a; border-color: #94a3b8; }
-[data-theme="light"] .rmm-footer { border-top-color: #e2e8f0; }
-[data-theme="light"] .rmm-btn.cancel { color: #64748b; border-color: #e2e8f0; }
+.rmm-error { margin-right: auto; color: var(--error-fg); font-size: var(--text-body); }

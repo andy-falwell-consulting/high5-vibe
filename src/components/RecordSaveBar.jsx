@@ -20,8 +20,8 @@ export default function RecordSaveBar({ count = 0, saving = false, status = null
         <span className="rsb-count">{count} unsaved change{count > 1 ? 's' : ''}</span>
         {status === 'error' && <span className="rsb-err">✗ {errorMessage || 'Save failed'}</span>}
         <span className="rsb-spacer" />
-        <button className="rsb-discard" onClick={onDiscard} disabled={saving}>Discard</button>
-        <button className="rsb-save" onClick={onSave} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+        <button className="h5-btn h5-btn--secondary h5-btn--sm" onClick={onDiscard} disabled={saving}>Discard</button>
+        <button className="h5-btn h5-btn--primary h5-btn--sm" onClick={onSave} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
       </div>
     )
   }

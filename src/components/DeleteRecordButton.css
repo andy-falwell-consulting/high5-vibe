@@ -1,83 +1,37 @@
-/* Shared delete control. Deliberately quiet in the header — it sits beside
-   everyday actions and shouldn't invite a click — and loud once the dialog is
-   open, where the action is irreversible. */
-.drb-btn {
-  padding: 4px 10px;
-  border-radius: 7px;
-  border: 1px solid #2d3148;
-  background: transparent;
-  color: #8b97aa;
-  font-size: 14px;
-  font-family: inherit;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.drb-btn:hover { border-color: var(--h5-red); color: var(--h5-red); }
+/* Shared delete control — a quiet trigger in the record header and a loud
+   confirmation dialog, in seven modules.
 
-.drb-backdrop {
-  position: fixed; inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(2px);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 2000;
-}
+   Deliberately quiet in the header (it sits beside everyday actions and should
+   not invite a click) and loud once open, where the action is irreversible.
+   That intent is unchanged; it is now expressed in tokens.
 
-.drb-panel {
-  background: #141626;
-  border: 1px solid #2a2f45;
-  border-radius: 12px;
-  padding: 22px 24px 18px;
-  width: 420px;
-  max-width: calc(100vw - 40px);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
-}
+   83 lines to 30, and 33 hardcoded hex values to zero. The dialog is
+   .h5-scrim / .h5-modal, the input is .h5-field__control, and the two footer
+   buttons are .h5-btn--secondary and .h5-btn--danger.
 
-.drb-title { font-size: 19px; color: #e2e8f0; margin-bottom: 8px; }
-.drb-title strong { font-weight: 600; }
-.drb-warn { font-size: 15px; color: #94a3b8; line-height: 1.5; margin: 0 0 16px; }
-.drb-label { display: block; font-size: 14px; color: #8b97aa; margin-bottom: 6px; }
-.drb-label strong { color: var(--h5-red); font-weight: 600; letter-spacing: 0.05em; }
+   THE CONFIRM BUTTON'S RED CHANGED, and this one is an accessibility fix rather
+   than a preference. It was `background: var(--h5-red)` — the style-sheet hex —
+   with white text, which measures 4.38:1 and FAILS WCAG AA. .h5-btn--danger
+   resolves to --error-solid, the darker step the system carries precisely so a
+   destructive label can be read. This is the one place in the app where a red
+   fill is sanctioned, so it is worth it being the right red. */
 
-.drb-input {
-  width: 100%; box-sizing: border-box;
-  padding: 8px 10px;
-  background: #1e2130;
-  border: 1px solid #2d3148;
-  border-radius: 7px;
-  color: #e2e8f0;
-  font-size: 15px;
-  font-family: inherit;
-  outline: none;
-}
-.drb-input:focus { border-color: var(--h5-red); }
+/* The trigger is .h5-btn--quiet, shared with Remind so the two read as a pair.
+   All this class adds is the red on intent — the control is not destructive
+   until it is clicked, and the accent arriving on hover is what separates it
+   from its neighbours. */
+/* Red on hover only. The control is not destructive until it is clicked, and
+   the accent arriving on intent is what distinguishes it from the neighbours. */
+.drb-btn.h5-btn--quiet:hover { border-color: var(--error-fg); color: var(--error-fg); background: var(--error-bg); }
 
-.drb-error {
-  margin-top: 10px;
-  font-size: 14px;
-  color: #fca5a5;
-  background: #7f1d1d33;
-  border: 1px solid #7f1d1d66;
-  border-radius: 7px;
-  padding: 7px 9px;
-  line-height: 1.45;
-}
+/* The dialog is narrower than the system's default modal: it holds one sentence
+   and one input, and 680px of empty width would read as a bigger decision than
+   it is. */
+.drb-panel { width: min(420px, 100%); }
+.drb-title { font-family: var(--font-title); font-size: var(--text-h3); color: var(--fg); }
+.drb-title strong { font-weight: var(--weight-semibold); }
+.drb-warn { font-size: var(--text-body); color: var(--fg-secondary); line-height: var(--leading-normal); margin: 0; }
 
-.drb-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
-.drb-cancel, .drb-confirm {
-  padding: 6px 13px; border-radius: 7px; font-size: 15px; font-family: inherit; cursor: pointer;
-}
-.drb-cancel { background: transparent; border: 1px solid #2d3148; color: #94a3b8; }
-.drb-cancel:hover:not(:disabled) { color: #cbd5e1; border-color: #3a3f60; }
-.drb-confirm { background: var(--h5-red); border: 1px solid var(--h5-red); color: #fff; font-weight: 600; }
-.drb-confirm:disabled { opacity: 0.4; cursor: default; }
-.drb-cancel:disabled { opacity: 0.5; cursor: default; }
-
-/* ── Light theme ── */
-[data-theme="light"] .drb-btn { border-color: #e2e8f0; color: #5e6b7c; }
-[data-theme="light"] .drb-panel { background: #ffffff; border-color: #e2e8f0; box-shadow: 0 24px 60px rgba(0,0,0,0.15); }
-[data-theme="light"] .drb-title { color: #0f172a; }
-[data-theme="light"] .drb-warn { color: #475569; }
-[data-theme="light"] .drb-label { color: #5e6b7c; }
-[data-theme="light"] .drb-input { background: #f8fafc; border-color: #e2e8f0; color: #0f172a; }
-[data-theme="light"] .drb-error { color: #b91c1c; background: #fef2f2; border-color: #fecaca; }
-[data-theme="light"] .drb-cancel { border-color: #e2e8f0; color: #475569; }
+/* The word to type is the accent's job here — it is the single piece of the
+   dialog the reader must act on. */
+.drb-label strong { color: var(--error-fg); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-wide); }

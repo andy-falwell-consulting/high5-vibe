@@ -548,7 +548,7 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
                   );
                 })()}
                 <button className="cv2-ghost-btn" onClick={() => onNavigateTo?.('trainings-kanban', selected.recordId)}>Board →</button>
-                <button className="cv2-ghost-btn" onClick={() => setRemindOpen(true)}>⏰ Remind</button>
+                <button className="h5-btn h5-btn--quiet h5-btn--sm" onClick={() => setRemindOpen(true)}>⏰ Remind</button>
                 <DeleteRecordButton
                   layout={LAYOUT} cacheVersion={CACHE_VERSION}
                   recordId={selected.recordId}

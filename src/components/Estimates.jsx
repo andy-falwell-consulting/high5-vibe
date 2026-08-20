@@ -497,7 +497,7 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
                 />
               </div>
               <div className="est-topbar-actions">
-                <button className="est-ghost-btn" onClick={() => setRemindOpen(true)}>⏰ Remind</button>
+                <button className="h5-btn h5-btn--quiet h5-btn--sm" onClick={() => setRemindOpen(true)}>⏰ Remind</button>
                 <DeleteRecordButton
                   layout={LAYOUT} cacheVersion={CACHE_VERSION}
                   recordId={selected.recordId}
