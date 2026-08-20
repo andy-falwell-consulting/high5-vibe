@@ -16,7 +16,7 @@ import { bustCache, patchCachedRecord } from '../api/filemaker'
 import { updateVibeRecord } from '../api/vibeRecords'
 import { getCurrentEnv } from '../config/fmpEnvironments'
 import { TRAININGS_LAYOUT as LAYOUT, TRAININGS_CACHE_VERSION as CACHE_VERSION, TRAINER_SLOTS } from '../config/trainingsCache'
-import { BOARD_COLUMNS, BOARD_SHORT, statusColor } from '../config/trainingStatus'
+import { BOARD_COLUMNS, BOARD_SHORT, PIPELINE_STAGES, statusColor } from '../config/trainingStatus'
 import { useOpsLeads } from '../hooks/useOpsLeads';
 import { useTrainingsKanbanBoard } from '../hooks/useTrainingsKanbanBoard'
 import { useTrainingsKanbanOrder } from '../hooks/useTrainingsKanbanOrder'
@@ -33,20 +33,29 @@ const COLUMNS = BOARD_COLUMNS.map(id => ({
 }))
 const BOARD_STATUSES = new Set(BOARD_COLUMNS)
 
+// What the bulk seed offers: the seven pipeline stages — work that has started
+// and not finished.
+//
+// This was a DATE test ("starts today or later") and is now a STATUS test, and
+// the numbers are why. Measured against production: 14 trainings start today or
+// later, 1,935 carry any start date at all, and 544 carry NONE. A date filter
+// can never reach that last group however the cutoff is set, and a good deal of
+// live work sits in it. Status can: 33 records are in flight table-wide,
+// scheduled or not.
+//
+// Deliberately NOT included are the statuses that are neither pipeline nor
+// terminal — Covid (44), Keene EOL/C&S (32), Other (14), OE (3), Business
+// Development (1), Out Reach (0). They are historical categories rather than
+// work in progress, and seeding 94 dead records would bury the 33 live ones.
+// Each still has its own lane, so anything set to one is one click away in the
+// picker below.
+const IN_FLIGHT = new Set(PIPELINE_STAGES)
+
 // Trainings has no legacy-field aliasing the way CCS's mergedStatus does —
 // Status is the one field, read straight.
 const getStatus = r => String(r.fieldData?.Status || '').trim()
 
 const TRAINER_KEYS = ['Lead Trainer', ...TRAINER_SLOTS]
-
-// The same M/D/YYYY parser Trainings.jsx uses. Kept local rather than shared
-// because this file already carries its own small helpers, and a date parse
-// that returns 0 for an unparseable value is what the "upcoming" filter wants —
-// a training with no start date is not upcoming, it is unscheduled.
-const parseFmDate = v => {
-  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(String(v || '').trim())
-  return m ? new Date(`${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}T00:00:00`).getTime() || 0 : 0
-}
 
 function matchesSearch(r, q) {
   if (!q) return true
@@ -311,7 +320,7 @@ function KanbanColumn({ column, records, saving, onOpen, collapsed, onToggleColl
 // Searchable picker to add active-status trainings onto the board. Candidates
 // are active-stage records not already on the board; clicking one adds it (it
 // then drops out of the list). Stays open for bulk adding.
-function AddToBoardPanel({ candidates, upcoming, onAdd, onClose, onSeedUpcoming }) {
+function AddToBoardPanel({ candidates, seedable, onAdd, onClose, onSeedInFlight }) {
   const [q, setQ] = useState('')
   const [added, setAdded] = useState(() => new Set())
   const [seeding, setSeeding] = useState(false)
@@ -334,16 +343,16 @@ function AddToBoardPanel({ candidates, upcoming, onAdd, onClose, onSeedUpcoming 
         {/* Bulk seed, for filling an empty board. Adds only — nothing already
             on the board is touched and nothing is removed, so pressing it twice
             is harmless. */}
-        {upcoming.length > 0 && (
+        {seedable.length > 0 && (
           <div className="tkb-add-seed">
             <button className="tkb-add-seed-btn" disabled={seeding}
               onClick={async () => {
                 setSeeding(true); setSeedResult(null)
-                try { setSeedResult(await onSeedUpcoming(upcoming)) }
+                try { setSeedResult(await onSeedInFlight(seedable)) }
                 catch (e) { setSeedResult({ error: e.message }) }
                 finally { setSeeding(false) }
               }}>
-              {seeding ? 'Adding…' : `＋ Add all ${upcoming.length} upcoming`}
+              {seeding ? 'Adding…' : `＋ Add all ${seedable.length} in flight`}
             </button>
             <span className="tkb-add-seed-note">
               {seedResult
@@ -624,18 +633,11 @@ export default function TrainingsKanban({ navTarget, onNavigateTo, onClearNav })
   const totalActive = active.length
   const searchMatchCount = search ? active.filter(r => matchesSearch(r, search)).length : totalActive
 
-  // Everything not yet on the board. Every status is eligible now, so this is
-  // simply "not already a card" — the active-stage filter that used to be here
-  // is why pressing "add all upcoming" appeared to do nothing: with roughly 35
-  // records in flight table-wide, the candidate set was near-empty and the
-  // button did not even render.
+  // Everything not yet on the board. Any status can be picked by hand — the
+  // picker lists all of them — so this is simply "not already a card".
   const candidates = displayRecords.filter(r => !board.ids.has(String(r.recordId)))
-  const upcoming = candidates.filter(r => {
-    const d = parseFmDate(r.fieldData['Start Date'])
-    if (!d) return false
-    const today = new Date(); today.setHours(0, 0, 0, 0)
-    return d >= today.getTime()
-  })
+  // What the one-press seed offers: in-flight only. See IN_FLIGHT above.
+  const seedable = candidates.filter(r => IN_FLIGHT.has(getStatus(r)))
 
   return (
     <div className="tkb-root">
@@ -681,31 +683,31 @@ export default function TrainingsKanban({ navTarget, onNavigateTo, onClearNav })
         </div>
         <button className="tkb-add-btn" onClick={() => setShowAdd(true)} title="Add trainings to the board">＋ Add trainings</button>
       </div>
-      {/* Offered whenever there is an upcoming training NOT yet on the board —
+      {/* Offered whenever an in-flight training is NOT yet on the board —
           not only when the board is empty.
 
           Gating this on `totalActive === 0` was wrong, and wrong in the way
           that matters: two cards had been placed by hand, so the board was not
           empty, so the prompt never rendered and the only route to the seed was
           back to being two clicks deep in a panel. A board with two cards on it
-          and a dozen upcoming trainings missing is exactly when this should
-          speak up. It hides itself when there is nothing left to add, which is
-          the condition that actually means "done". */}
-      {!loading && !fetching && upcoming.length > 0 && (
+          and a dozen live trainings missing is exactly when this should speak
+          up. It hides itself when there is nothing left to add, which is the
+          condition that actually means "done". */}
+      {!loading && !fetching && seedable.length > 0 && (
         <div className="tkb-seed-prompt">
           <span>
             {totalActive === 0
-              ? `Nothing on the board yet — ${upcoming.length} ${upcoming.length === 1 ? 'training starts' : 'trainings start'} today or later.`
-              : `${upcoming.length} upcoming ${upcoming.length === 1 ? 'training is' : 'trainings are'} not on the board.`}
+              ? `Nothing on the board yet — ${seedable.length} ${seedable.length === 1 ? 'training is' : 'trainings are'} in flight.`
+              : `${seedable.length} in-flight ${seedable.length === 1 ? 'training is' : 'trainings are'} not on the board.`}
           </span>
           <button className="tkb-seed-prompt-btn" disabled={seedingAll}
             onClick={async () => {
               setSeedingAll(true); setSeedAllError(null)
-              try { await board.seed(upcoming.map(r => String(r.recordId))) }
+              try { await board.seed(seedable.map(r => String(r.recordId))) }
               catch (e) { setSeedAllError(e?.message || 'Could not add them') }
               finally { setSeedingAll(false) }
             }}>
-            {seedingAll ? 'Adding…' : `Add ${upcoming.length === 1 ? 'it' : `all ${upcoming.length}`} to the board`}
+            {seedingAll ? 'Adding…' : `Add ${seedable.length === 1 ? 'it' : `all ${seedable.length}`} to the board`}
           </button>
           {seedAllError && <span className="tkb-seed-prompt-err">{seedAllError}</span>}
         </div>
@@ -719,9 +721,9 @@ export default function TrainingsKanban({ navTarget, onNavigateTo, onClearNav })
       )}
       {showAdd && (
         <AddToBoardPanel
-          onSeedUpcoming={list => board.seed(list.map(r => String(r.recordId)))}
+          onSeedInFlight={list => board.seed(list.map(r => String(r.recordId)))}
           candidates={candidates}
-          upcoming={upcoming}
+          seedable={seedable}
           onAdd={r => board.toggle(r.recordId, true)}
           onClose={() => setShowAdd(false)}
         />
