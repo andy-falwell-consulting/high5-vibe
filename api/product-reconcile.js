@@ -12,16 +12,76 @@
 //     &full=1                                      include full per-bucket lists
 //     &bucket=<name>                               dump one bucket in full
 // Auth: x-sync-key header/query (QBO_SYNC_KEY) or a Google session.
+import { Redis } from '@upstash/redis';
 import { getGoogleSession } from './_googleSession.js';
 import { fmpToken, ALLOWED_DBS } from './_fmp.js';
 import { qboQuery } from './_qbo.js';
 
 export const config = { maxDuration: 120 };
 
+// `?report=1` returns the STORED result of the last run without doing any work.
+// The reconciliation itself pages FileMaker, QuickBooks and Shopify and takes up
+// to two minutes; a dashboard must never trigger that just to show a number.
+
 const FMP_HOST = 'https://ILELLCO.pcifmhosting.com';
 const LAYOUT = 'Products & Services_New';
 const SHOP_API = '2025-10';
 const SYNC_KEY = process.env.QBO_SYNC_KEY;
+
+const redis = Redis.fromEnv();
+const lastKey = db => `vibe:${db}:productdrift:last`;
+const histKey = db => `vibe:${db}:productdrift:history`;
+
+// The buckets that mean something is WRONG, as opposed to merely unlinked.
+//
+// qbo_no_match and shop_no_match are excluded on purpose: most products are not
+// invoiced or sold online, so those are large, stable and uninteresting. Counting
+// them as drift would bury the seven numbers that matter under 1,680 that do not.
+const DRIFT_BUCKETS = [
+  'qbo_price_drift', 'qbo_name_drift', 'qbo_link_broken',
+  'shop_price_drift', 'shop_link_broken',
+  'fm_sku_dupe', 'qbo_sku_dupe', 'shop_sku_dupe',
+];
+
+// Matched by SKU but with no id stored. Not drift — a link waiting to be made,
+// and separately actionable, so it is counted separately.
+const LINKABLE_BUCKETS = ['qbo_linkable', 'shop_linkable'];
+
+const sumOf = (summary, keys) => keys.reduce((n, k) => n + (summary[k] || 0), 0);
+
+/** Store this run and say what changed since the last one.
+ *
+ *  THE DELTA IS THE POINT, not the total. 71 name mismatches is today's normal;
+ *  what warrants attention is the day it becomes 74. A dashboard showing a large
+ *  number that never moves gets ignored within a week, which is the same as not
+ *  having one.
+ */
+async function record(db, summary) {
+  const at = new Date().toISOString();
+  const drift = sumOf(summary, DRIFT_BUCKETS);
+  const linkable = sumOf(summary, LINKABLE_BUCKETS);
+  const prev = await redis.get(lastKey(db)).catch(() => null);
+
+  const delta = {};
+  if (prev?.summary) {
+    for (const k of [...DRIFT_BUCKETS, ...LINKABLE_BUCKETS]) {
+      const d = (summary[k] || 0) - (prev.summary[k] || 0);
+      if (d) delta[k] = d;
+    }
+  }
+  const entry = {
+    at, summary, drift, linkable,
+    previousAt: prev?.at || null,
+    driftDelta: prev ? drift - (prev.drift ?? 0) : null,
+    delta,
+  };
+  await redis.set(lastKey(db), entry);
+  // A short history, so a slow climb is visible rather than only a jump. Capped
+  // hard — this is a trend line, not an archive.
+  await redis.lpush(histKey(db), { at, drift, linkable }).catch(() => {});
+  await redis.ltrim(histKey(db), 0, 59).catch(() => {});
+  return entry;
+}
 
 async function authorized(req) {
   if (SYNC_KEY && (req.headers['x-sync-key'] === SYNC_KEY || req.query?.key === SYNC_KEY)) return true;
@@ -118,6 +178,12 @@ export default async function handler(req, res) {
   const db = req.query?.db || 'High5_Core4';
   if (!ALLOWED_DBS.has(db)) return res.status(400).json({ error: 'db not allowed' });
 
+  if (req.query?.report === '1') {
+    const last = await redis.get(lastKey(db)).catch(() => null);
+    const history = await redis.lrange(histKey(db), 0, 59).catch(() => []);
+    return res.status(200).json({ db, last, history, buckets: { drift: DRIFT_BUCKETS, linkable: LINKABLE_BUCKETS } });
+  }
+
   let fm, qbo, shop;
   try {
     const token = await fmpToken(db);
@@ -205,8 +271,12 @@ export default async function handler(req, res) {
     shop_with_sku: shop.filter(v => normSku(v.sku)).length,
   };
 
+  // Every run is recorded, however it was triggered. A reconciliation that ran
+  // and told nobody is the situation this whole feature exists to end.
+  const recorded = await record(db, summary).catch(() => null);
+
   if (req.query?.bucket && B[req.query.bucket]) return res.status(200).json({ db, bucket: req.query.bucket, count: B[req.query.bucket].length, rows: B[req.query.bucket] });
   if (req.query?.full === '1') return res.status(200).json({ db, summary, buckets: B });
   const sample = Object.fromEntries(Object.entries(B).map(([k, v]) => [k, v.slice(0, 8)]));
-  return res.status(200).json({ db, summary, sample });
+  return res.status(200).json({ db, summary, sample, drift: recorded });
 }

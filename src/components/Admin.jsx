@@ -3,6 +3,7 @@ import ShopifyConnect from './ShopifyConnect';
 import { getVibeValueLists, seedValueLists, setValueList, compareValueLists } from '../api/valueLists';
 import { getTemplates, saveTemplate, TEMPLATE_VERSIONS, templateAttachments, sendTestEmail } from '../api/workshopEmail';
 import { getAgentConfig, saveAgentConfig } from '../api/agentConfig';
+import { getDriftReport, runReconcile, BUCKET_LABEL } from '../api/productDrift';
 import MarkdownEditor from './MarkdownEditor';
 import QboConnect from './QboConnect';
 import './Admin.css';
@@ -15,7 +16,132 @@ const TABS = [
   { id: 'vocab', label: 'Vocabularies' },
   { id: 'wsemail', label: 'Workshop e-mails' },
   { id: 'agent', label: 'Assistant' },
+  { id: 'drift', label: 'Product drift' },
 ];
+
+const ago = iso => {
+  if (!iso) return 'never';
+  const h = Math.floor((Date.now() - new Date(iso).getTime()) / 3600000);
+  return h < 1 ? 'just now' : h < 24 ? `${h}h ago` : `${Math.floor(h / 24)}d ago`;
+};
+
+// Product drift between Vibe, QuickBooks and Shopify — see
+// docs/product-sync-audit.md.
+//
+// THE DELTA LEADS, not the total. 71 QuickBooks name mismatches is today's
+// normal; what warrants attention is the day it becomes 74. A dashboard whose
+// headline is a big number that never moves gets ignored within a week, which is
+// the same as not having one.
+function DriftTab() {
+  const [data, setData] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  const load = useCallback(async () => {
+    try { setData(await getDriftReport()); setError(null); }
+    catch (e) { setError(e.message); }
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try { const d = await getDriftReport(); if (alive) { setData(d); setError(null); } }
+      catch (e) { if (alive) setError(e.message); }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  async function runNow() {
+    setBusy(true); setError(null);
+    try { await runReconcile(); await load(); }
+    catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+
+  const last = data?.last;
+  const drift = last?.drift ?? null;
+  const dd = last?.driftDelta;
+  const changed = Object.entries(last?.delta || {});
+
+  return (
+    <section className="admin-section">
+      <h2 className="admin-section-title">Product drift</h2>
+      <p className="admin-note">
+        Vibe, QuickBooks and Shopify compared on SKU. Runs nightly at 05:00; this reads
+        the stored result rather than re-running, because a reconciliation pages all
+        three systems and takes up to two minutes.
+      </p>
+      {error && <p className="admin-error">{error}</p>}
+
+      {!data ? <p>Loading…</p> : !last ? (
+        <p className="admin-note admin-missing">
+          No run recorded yet. The nightly job will populate this, or run it now.
+        </p>
+      ) : (
+        <>
+          <div className="admin-drift-head">
+            <div className={`admin-drift-total${drift > 0 ? ' bad' : ''}`}>
+              <span>{drift}</span><label>records drifted</label>
+            </div>
+            {dd !== null && dd !== undefined && (
+              <div className={`admin-drift-delta${dd > 0 ? ' worse' : dd < 0 ? ' better' : ''}`}>
+                {dd > 0 ? `▲ ${dd} since last run` : dd < 0 ? `▼ ${Math.abs(dd)} since last run` : 'unchanged since last run'}
+              </div>
+            )}
+            <div className="admin-drift-when">
+              checked {ago(last.at)}{last.previousAt ? ` · previous ${ago(last.previousAt)}` : ''}
+            </div>
+          </div>
+
+          {changed.length > 0 && (
+            <div className="admin-callout-warn">
+              <strong>Changed since the last run</strong>
+              <ul>
+                {changed.map(([k, v]) => (
+                  <li key={k}>{BUCKET_LABEL[k] || k}: <strong>{v > 0 ? `+${v}` : v}</strong></li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <table className="h5-table admin-drift-table">
+            <thead><tr><th>What</th><th className="h5-table__num">Count</th></tr></thead>
+            <tbody>
+              {(data.buckets?.drift || []).map(k => (
+                <tr key={k}>
+                  <td>{BUCKET_LABEL[k] || k}</td>
+                  <td className="h5-table__num">{last.summary?.[k] ?? 0}</td>
+                </tr>
+              ))}
+              {(data.buckets?.linkable || []).map(k => (
+                <tr key={k}>
+                  <td>{BUCKET_LABEL[k] || k} <span className="admin-vocab-count">not drift</span></td>
+                  <td className="h5-table__num">{last.summary?.[k] ?? 0}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <p className="admin-note">
+            {last.linkable > 0 && (
+              <>
+                <strong>{last.linkable}</strong> products match a QuickBooks item or Shopify
+                variant by SKU but have no id stored. Not drift — a link waiting to be made.{' '}
+              </>
+            )}
+            Products with no SKU cannot be linked to anything: SKU is the join key.
+          </p>
+        </>
+      )}
+
+      <div className="admin-agent-foot">
+        <button className="admin-btn" disabled={busy} onClick={runNow}>
+          {busy ? 'Reconciling… (up to 2 min)' : 'Run now'}
+        </button>
+      </div>
+    </section>
+  );
+}
 
 // Settings for the assistant. See docs/agent-admin-scope.md for why the prompt
 // is split into generated facts and editable guidance rather than made wholly
@@ -1154,6 +1280,7 @@ export default function Admin() {
       {tab === 'vocab' && <VocabTab />}
       {tab === 'wsemail' && <WorkshopEmailTab />}
       {tab === 'agent' && <AgentTab />}
+      {tab === 'drift' && <DriftTab />}
     </main>
   );
 }

@@ -53,6 +53,10 @@
     {
       "path": "/api/backup?mode=cron",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/product-reconcile?db=High5_Core4",
+      "schedule": "0 5 * * *"
     }
   ]
 }
