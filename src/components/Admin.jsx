@@ -3,6 +3,7 @@ import ShopifyConnect from './ShopifyConnect';
 import { getVibeValueLists, seedValueLists, setValueList, compareValueLists } from '../api/valueLists';
 import { getTemplates, saveTemplate, TEMPLATE_VERSIONS, templateAttachments } from '../api/workshopEmail';
 import { getAgentConfig, saveAgentConfig } from '../api/agentConfig';
+import MarkdownEditor from './MarkdownEditor';
 import QboConnect from './QboConnect';
 import './Admin.css';
 
@@ -284,8 +285,10 @@ function WorkshopEmailTab() {
         back to that mailbox and a copy lands in its Sent folder.
       </p>
       <p className="admin-note">
-        Tokens: {EMAIL_TOKENS.map(t => <code key={t} className="admin-token">{`{{${t}}}`}</code>)}
-        {' '}— anything unrecognised is left in the message as written, so check spelling.
+        Bodies are written in <strong>Markdown</strong> and delivered as HTML, with a plain-text
+        copy alongside for clients that prefer it — both from the same source, so they cannot
+        say different things. Merge tokens insert from the toolbar; anything unrecognised is
+        left in the message exactly as written, so check spelling.
       </p>
 
       {error && <p className="admin-error">{error}</p>}
@@ -325,8 +328,12 @@ function WorkshopEmailTab() {
                   <>
                     <input className="admin-vocab-edit" placeholder="Subject"
                       value={editing.subject} onChange={e => setEditing({ ...editing, subject: e.target.value })} />
-                    <textarea className="admin-vocab-edit" rows={12} placeholder="Message body"
-                      value={editing.body} onChange={e => setEditing({ ...editing, body: e.target.value })} />
+                    <MarkdownEditor
+                      value={editing.body}
+                      onChange={body => setEditing({ ...editing, body })}
+                      disabled={busy === v.id}
+                      tokens={EMAIL_TOKENS}
+                      placeholder={'Written in Markdown and sent as HTML.\n\n## Welcome\n\nHi {{first_name}}, you are booked on **{{course_name}}**.'} />
                   </>
                 ) : tpl ? (
                   <div className="admin-vocab-values">

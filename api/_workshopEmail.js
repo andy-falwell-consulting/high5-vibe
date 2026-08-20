@@ -3,6 +3,7 @@ import { getServiceAccountToken, GMAIL_SEND_SCOPE, DRIVE_SCOPE } from './_gsa.js
 import { scanReplica } from './_replica.js';
 import { courseKey } from './_oeTraining.js';
 import { listForParent, getFile, driveToken } from './_vibeFiles.js';
+import { renderEmailHtml, renderEmailText } from './_mdEmail.js';
 import { downloadFile } from './_backupDrive.js';
 
 // Workshop e-mails, sent by Vibe.
@@ -243,29 +244,75 @@ const encodeHeader = s => (/^[\x20-\x7E]*$/.test(String(s ?? '')) ? String(s ?? 
   : `=?UTF-8?B?${Buffer.from(String(s), 'utf-8').toString('base64')}?=`);
 const wrap76 = s => String(s).replace(/(.{1,76})/g, '$1\r\n').trim();
 
-function buildMime({ from, to, replyTo, subject, body, attachments }) {
+const boundary = tag => `${tag}_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+
+/** Build the message.
+ *
+ *  ALWAYS multipart/alternative: a text/plain part alongside the HTML. Sending
+ *  HTML alone is what makes a message look like bulk mail to a spam filter and
+ *  unreadable to anyone whose client prefers text. Both parts come from the same
+ *  Markdown source, so they cannot say different things.
+ *
+ *  With attachments the alternative is nested inside a multipart/mixed, which is
+ *  the order clients expect: mixed holds the body and the files, and the body is
+ *  itself a choice of two renderings.
+ */
+function buildMime({ from, to, replyTo, subject, text, html, attachments }) {
   const headers = [
     `From: ${from}`, `To: ${to}`,
-    replyTo ? `Reply-To: ${replyTo}` : null,
+    replyTo && replyTo !== from ? `Reply-To: ${replyTo}` : null,
     `Subject: ${encodeHeader(subject)}`,
     'MIME-Version: 1.0',
   ].filter(Boolean);
-  const textPart = ['Content-Type: text/plain; charset="UTF-8"', 'Content-Transfer-Encoding: 8bit', '', String(body ?? '')].join('\r\n');
+
+  const alt = boundary('alt');
+  const bodyParts = [
+    `--${alt}`,
+    'Content-Type: text/plain; charset="UTF-8"',
+    'Content-Transfer-Encoding: 8bit',
+    '',
+    String(text ?? ''),
+    '',
+    `--${alt}`,
+    'Content-Type: text/html; charset="UTF-8"',
+    'Content-Transfer-Encoding: 8bit',
+    '',
+    String(html ?? ''),
+    '',
+    `--${alt}--`,
+  ];
+
   if (!attachments?.length) {
-    return Buffer.from([...headers, textPart].join('\r\n'), 'utf-8').toString('base64url');
+    return Buffer.from([
+      ...headers,
+      `Content-Type: multipart/alternative; boundary="${alt}"`,
+      '',
+      ...bodyParts,
+    ].join('\r\n'), 'utf-8').toString('base64url');
   }
-  const b = 'mix_' + Math.random().toString(36).slice(2);
-  const parts = [[...headers, `Content-Type: multipart/mixed; boundary="${b}"`, '', `--${b}`, textPart].join('\r\n')];
+
+  const mix = boundary('mix');
+  const parts = [
+    [
+      ...headers,
+      `Content-Type: multipart/mixed; boundary="${mix}"`,
+      '',
+      `--${mix}`,
+      `Content-Type: multipart/alternative; boundary="${alt}"`,
+      '',
+      ...bodyParts,
+    ].join('\r\n'),
+  ];
   for (const a of attachments) {
     parts.push([
-      `--${b}`,
+      `--${mix}`,
       `Content-Type: ${a.mimeType || 'application/octet-stream'}; name="${a.filename}"`,
       `Content-Disposition: attachment; filename="${a.filename}"`,
       'Content-Transfer-Encoding: base64', '',
       wrap76(String(a.base64 || '')),
     ].join('\r\n'));
   }
-  parts.push(`--${b}--`);
+  parts.push(`--${mix}--`);
   return Buffer.from(parts.join('\r\n'), 'utf-8').toString('base64url');
 }
 
@@ -411,6 +458,10 @@ export async function sendTestMessage(to) {
  *  a failed delegation grant reports as a 403 here, and saying so plainly beats
  *  a generic "send failed". */
 export async function sendAsWorkshops({ to, replyTo, subject, body, attachments }) {
+  // `body` is Markdown. Both renderings come from it, so the text and HTML
+  // parts can never drift apart.
+  const html = renderEmailHtml(body, { footer: 'High 5 Adventure Learning Center · workshops@high5adventure.org' });
+  const text = renderEmailText(body);
   const from = senderAddress();
   const user = senderUser();
   // Impersonate the USER, then set From to the sending address. When the two
@@ -418,7 +469,7 @@ export async function sendAsWorkshops({ to, replyTo, subject, body, attachments 
   // otherwise — which is the correct behaviour: it is the check that stops this
   // becoming a way to send as anyone.
   const token = await getServiceAccountToken({ scope: GMAIL_SEND_SCOPE, subject: user });
-  const raw = buildMime({ from, to, replyTo, subject, body, attachments });
+  const raw = buildMime({ from, to, replyTo, subject, text, html, attachments });
   const res = await fetch(GMAIL_SEND, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },

@@ -8,6 +8,7 @@ import {
   templateFiles, loadAttachments, checkDelegation, replyToAddress, sendTestMessage,
   templateIsSendable,
 } from './_workshopEmail.js';
+import { renderEmailHtml } from './_mdEmail.js';
 
 // Workshop e-mails — preview, send, and template administration.
 //
@@ -140,9 +141,13 @@ export default async function handler(req, res) {
     // file store — not a list of ids kept on the template, which could drift
     // from the files actually there.
     const files = tpl ? await templateFiles(db, version) : [];
+    const renderedBody = tpl ? render(tpl.body, vars) : '';
     const rendered = tpl ? {
       subject: render(tpl.subject, vars),
-      body: render(tpl.body, vars),
+      body: renderedBody,
+      // The actual HTML that would be delivered, merge fields resolved. The
+      // preview shows what arrives, not an approximation of it.
+      html: renderEmailHtml(renderedBody, { footer: 'High 5 Adventure Learning Center · workshops@high5adventure.org' }),
       attachments: files.map(f => ({ fileId: f.fileId, name: f.name, size: f.size, mime: f.mime })),
     } : null;
 

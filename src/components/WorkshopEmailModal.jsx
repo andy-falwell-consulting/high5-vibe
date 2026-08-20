@@ -114,7 +114,18 @@ export default function WorkshopEmailModal({ workshop, courseLabel, onClose, onS
                     <span className="wem-from">From {preview.from}</span>
                     <span className="wem-subject">{preview.rendered.subject || '(no subject)'}</span>
                   </div>
-                  <pre className="wem-preview-body">{preview.rendered.body}</pre>
+                  {/* The server's own HTML, in a sandboxed frame. This is the
+                      exact markup that will be delivered — an approximation
+                      here would defeat the point of previewing before a send
+                      that cannot be recalled. Sandboxed with no permissions:
+                      the content is staff-authored, but it is still a document
+                      being rendered inside the app. */}
+                  {preview.rendered.html ? (
+                    <iframe className="wem-preview-frame" title="Message preview"
+                      sandbox="" srcDoc={preview.rendered.html} />
+                  ) : (
+                    <pre className="wem-preview-body">{preview.rendered.body}</pre>
+                  )}
                   {preview.rendered.attachments?.length > 0 ? (
                     <div className="wem-attach">
                       {preview.rendered.attachments.map(a => (
