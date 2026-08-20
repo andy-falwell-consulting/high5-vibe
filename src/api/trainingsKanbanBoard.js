@@ -28,3 +28,22 @@ export async function setBoardMembership(id, on) {
   const j = await r.json().catch(() => ({}));
   return Array.isArray(j.ids) ? j.ids.map(String) : [];
 }
+
+/** Put many trainings on the board at once.
+ *
+ *  Adds only — existing cards are untouched and nothing is removed, so running
+ *  it twice is harmless and it can never clear a curated board. Returns
+ *  `{ seeded, alreadyOnBoard, ids }` so the caller can say what actually
+ *  changed rather than claiming a number it did not verify.
+ */
+export async function seedBoard(ids) {
+  const db = getCurrentEnv().db;
+  const r = await fetch(`/api/trainings-kanban-board?db=${encodeURIComponent(db)}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ seedIds: ids }),
+  });
+  if (!r.ok) throw new Error(`trainings-kanban-board ${r.status}`);
+  return r.json();
+}

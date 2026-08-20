@@ -655,3 +655,17 @@ div:hover > .tkb-card-remove { opacity: 1; }
 }
 [data-theme="light"] .tkb-save-error { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
 [data-theme="light"] .tkb-save-error strong { color: #7f1d1d; }
+
+/* Bulk "add all upcoming" — for filling an empty board. */
+.tkb-add-seed { display: flex; align-items: center; gap: 10px; padding: 0 0 10px; flex-wrap: wrap; }
+.tkb-add-seed-btn { background: #1e2130; border: none; color: #93c5fd; border-radius: 6px; padding: 6px 11px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.tkb-add-seed-btn:hover:not(:disabled) { background: #2a2f42; color: #dbeafe; }
+.tkb-add-seed-btn:disabled { opacity: 0.55; cursor: wait; }
+.tkb-add-seed-note { font-size: 11px; color: #64748b; }
+[data-theme="light"] .tkb-add-seed-btn { background: #e2e8f0; color: #1d4ed8; }
+[data-theme="light"] .tkb-add-seed-note { color: #64748b; }
+
+/* Ops lead on a card, distinct from the lead trainer above it. */
+.tkb-card-ops { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #94a3b8; margin-top: 3px; }
+.tkb-card-ops-ic { color: #0ea5e9; }
+[data-theme="light"] .tkb-card-ops { color: #64748b; }

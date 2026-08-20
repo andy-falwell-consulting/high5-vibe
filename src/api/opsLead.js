@@ -7,16 +7,23 @@
 // seeds FileMaker value lists.
 export const OPS_LEAD_FALLBACK = ['Ian', 'Krister', 'Jamie', 'Todd', 'Kyle'];
 
+// `kind` namespaces the assignments — 'ccs' or 'trainings'. Both identify
+// records by FileMaker recordId, and those are only unique within a table, so
+// sharing one namespace would show one record's lead on another's card.
+// Defaults to 'ccs' so every existing call site is unchanged.
+const q = (db, kind) =>
+  `db=${encodeURIComponent(db)}${kind && kind !== 'ccs' ? `&kind=${encodeURIComponent(kind)}` : ''}`;
+
 /** Every assignment for an environment, in one request. → { leads, roster } */
-export async function fetchOpsLeads(db) {
-  const r = await fetch(`/api/ops-lead?db=${encodeURIComponent(db)}`, { credentials: 'include' });
+export async function fetchOpsLeads(db, kind) {
+  const r = await fetch(`/api/ops-lead?${q(db, kind)}`, { credentials: 'include' });
   if (!r.ok) throw new Error(`ops-lead ${r.status}`);
   return r.json();
 }
 
 /** Set one record's lead. Pass '' to clear it. */
-export async function setOpsLead(db, recordId, name) {
-  const r = await fetch(`/api/ops-lead?db=${encodeURIComponent(db)}`, {
+export async function setOpsLead(db, recordId, name, kind) {
+  const r = await fetch(`/api/ops-lead?${q(db, kind)}`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
@@ -33,8 +40,8 @@ export async function setOpsLead(db, recordId, name) {
  * assignment. Returns `{ name }`, which is '' when the creator isn't on the
  * roster.
  */
-export async function autoAssignOpsLead(db, recordId) {
-  const r = await fetch(`/api/ops-lead?db=${encodeURIComponent(db)}`, {
+export async function autoAssignOpsLead(db, recordId, kind) {
+  const r = await fetch(`/api/ops-lead?${q(db, kind)}`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },

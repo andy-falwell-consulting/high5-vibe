@@ -413,7 +413,7 @@ function Tabs({ tabs, active, onPick }) {
   );
 }
 
-// One draggable method row — email only, for now (see ContactMethods). Same
+// One draggable method row — e-mail and phone (see ContactMethods). Same
 // drag pattern as SortablePerson: a handle starts the drag, not the row, so
 // the edit/remove buttons stay clickable.
 function SortableMethodRow({ method, spec, busy, onEdit, onRemove }) {
@@ -483,12 +483,13 @@ function ContactMethods({ contact, busy, onAdd, onUpdate, onRemove, onReorder })
     <div className="c2-methods">
       {Object.entries(METHOD_SPEC).map(([kind, spec]) => {
         const rows = contact[spec.field] || [];
-        // Drag-to-sort is email-only for now — that's the one Andy asked for,
-        // and it's what Trainings reads "the first email" from (see
-        // contactLookup.js's firstEmail option). Off while a row in this
-        // group is mid-edit, so dragging never has to reconcile with the
-        // inline form swapping a row's shape out from under it.
-        const sortable = kind === 'email' && rows.length > 1 && form?.kind !== kind;
+        // Drag-to-sort on e-mail AND phone. Order is not decoration on either:
+        // Trainings reads "the first e-mail" (contactLookup.js firstEmail) and
+        // the work order prints the first work and cell numbers, so which one
+        // is first decides what lands on a document. Off while a row in this
+        // group is mid-edit, so dragging never has to reconcile with the inline
+        // form swapping a row's shape out from under it.
+        const sortable = (kind === 'email' || kind === 'phone') && rows.length > 1 && form?.kind !== kind;
         return (
           <div className="c2-methodgroup" key={kind}>
             <h3>{spec.plural}</h3>
