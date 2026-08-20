@@ -256,7 +256,7 @@ export default function OETrainings({ navTarget, onClearNav, onRecordSelect, onN
                                 <span className="oet-unassigned" title="No contact on the FileMaker record">unassigned</span>
                               )}
                             </td>
-                            <td>{w.organization || '—'}</td>
+                            <td className="oet-org">{w.organization || '—'}</td>
                             <td className="h5-table__num">{money(feeTotal(w))}</td>
                             <td className="h5-table__num">{money(depositDue(w))}</td>
                             <td className="h5-table__num">{money(w.depositReceived)}</td>
