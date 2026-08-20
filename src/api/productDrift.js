@@ -35,3 +35,42 @@ export const BUCKET_LABEL = {
   qbo_linkable: 'Matches a QuickBooks item, not linked',
   shop_linkable: 'Matches a Shopify variant, not linked',
 };
+
+// ── Fixing ──────────────────────────────────────────────────────────────────
+//
+// Both actions run through the SAME endpoints the per-product sync buttons
+// already use — /api/qbo, /api/shopify, and updateVibeRecord. Deliberately no
+// new server-side sync machinery: those paths are proven and idempotent, and a
+// second way to write to QuickBooks would be a second way to get it wrong.
+
+/** Record a link that already exists in fact.
+ *
+ *  The SAFE action. The product and the QuickBooks item / Shopify variant
+ *  already share a SKU — this only stores the id, so nothing in either external
+ *  system is written or overwritten. It is reversible by clearing the field.
+ */
+export async function linkRecord(updateVibeRecord, layout, row, target) {
+  const cand = target === 'qbo' ? row.qboCandidates?.[0] : row.shopCandidates?.[0];
+  if (!cand) throw new Error('no candidate to link');
+  const updates = target === 'qbo'
+    ? { _kat__Item_ID_QuickBooks: String(cand.id) }
+    : { _kat__Item_ID_Shopify: String(cand.productId), _kat__Item_Variant_Id: String(cand.variantId || '') };
+  await updateVibeRecord(layout, row.recordId, updates);
+  return updates;
+}
+
+/** True when a bucket's rows can be linked rather than pushed. */
+export const isLinkable = bucket => bucket === 'qbo_linkable' || bucket === 'shop_linkable';
+
+/** True when a bucket needs a person to decide, so no bulk action is offered. */
+export const needsJudgement = bucket => bucket.endsWith('_sku_dupe');
+
+/** Which side of a drift row differs, for display. Returns null for buckets
+ *  where "ours vs theirs" is not the shape of the problem. */
+export function compareValues(bucket, row) {
+  if (bucket === 'qbo_name_drift') return { field: 'Name', ours: row.name, theirs: row.qboName };
+  if (bucket === 'qbo_price_drift') return { field: 'Price', ours: row.fmPrice, theirs: row.qboPrice, money: true };
+  if (bucket === 'shop_price_drift') return { field: 'Price', ours: row.fmPrice, theirs: row.shopPrice, money: true };
+  if (bucket.endsWith('_link_broken')) return { field: 'Stored id', ours: row.storedId, theirs: '(not found)' };
+  return null;
+}

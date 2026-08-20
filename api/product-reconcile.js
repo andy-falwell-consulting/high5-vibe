@@ -56,7 +56,14 @@ const sumOf = (summary, keys) => keys.reduce((n, k) => n + (summary[k] || 0), 0)
  *  number that never moves gets ignored within a week, which is the same as not
  *  having one.
  */
-async function record(db, summary) {
+// How many rows per bucket are kept with the stored report.
+//
+// Enough to audit by hand, capped so the payload stays sane: the largest drift
+// bucket today is 71 and the largest linkable 62, so 150 holds everything with
+// room, and a bucket that ever exceeds it says so rather than silently truncating.
+const KEEP_ROWS = 150;
+
+async function record(db, summary, B) {
   const at = new Date().toISOString();
   const drift = sumOf(summary, DRIFT_BUCKETS);
   const linkable = sumOf(summary, LINKABLE_BUCKETS);
@@ -69,8 +76,20 @@ async function record(db, summary) {
       if (d) delta[k] = d;
     }
   }
+  // The rows themselves, for the buckets worth looking at. Only these — the
+  // no_match buckets run to 1,680 rows between them and nobody audits those by
+  // hand; they are the products that simply are not sold in that channel.
+  const rows = {};
+  const truncated = {};
+  for (const k of [...DRIFT_BUCKETS, ...LINKABLE_BUCKETS]) {
+    const all = B?.[k] || [];
+    if (!all.length) continue;
+    rows[k] = all.slice(0, KEEP_ROWS);
+    if (all.length > KEEP_ROWS) truncated[k] = all.length;
+  }
+
   const entry = {
-    at, summary, drift, linkable,
+    at, summary, drift, linkable, rows, truncated,
     previousAt: prev?.at || null,
     driftDelta: prev ? drift - (prev.drift ?? 0) : null,
     delta,
@@ -273,7 +292,7 @@ export default async function handler(req, res) {
 
   // Every run is recorded, however it was triggered. A reconciliation that ran
   // and told nobody is the situation this whole feature exists to end.
-  const recorded = await record(db, summary).catch(() => null);
+  const recorded = await record(db, summary, B).catch(() => null);
 
   if (req.query?.bucket && B[req.query.bucket]) return res.status(200).json({ db, bucket: req.query.bucket, count: B[req.query.bucket].length, rows: B[req.query.bucket] });
   if (req.query?.full === '1') return res.status(200).json({ db, summary, buckets: B });

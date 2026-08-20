@@ -376,3 +376,14 @@ input.admin-vocab-edit { margin-bottom: 8px; }
 .admin-drift-table { margin-bottom: 12px; }
 .admin-callout-warn { padding: 10px 14px; border-radius: 6px; background: var(--warning-bg); color: var(--warning-fg); font-size: 13px; margin-bottom: 14px; }
 .admin-callout-warn ul { margin: 6px 0 0; padding-left: 18px; }
+
+.admin-drift-row.clickable { cursor: pointer; }
+.admin-drift-row.clickable:hover { background: var(--surface-hover); }
+.admin-drift-row.open { background: var(--surface-hover); font-weight: var(--weight-semibold); }
+.admin-drift-caret { display: inline-block; width: 14px; color: var(--fg-secondary); }
+.admin-drift-hint { font-size: var(--text-micro); color: var(--fg-secondary); font-weight: 400; }
+.admin-drift-expanded > td { padding: 0 !important; background: var(--surface-sunken); }
+.admin-drift-detail { padding: var(--space-lg); }
+.admin-drift-detail .h5-table { background: var(--card); }
+.admin-drift-sku { font-family: var(--font-mono); font-size: var(--text-micro); }
+.admin-drift-theirs { color: var(--warning-fg); }
