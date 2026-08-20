@@ -14,6 +14,13 @@ import './MarkdownEditor.css'
 // The preview here uses react-markdown, which is already in the app. It is a
 // FAITHFUL-ENOUGH preview, not the delivered HTML — the server's renderer is the
 // authority, and the send dialog shows that one.
+//
+// SINGLE NEWLINES ARE LINE BREAKS, matching the server. Standard Markdown wants
+// two trailing spaces for a hard break, which nobody writing an e-mail will type
+// because they cannot see them. `hardBreaks` adds that syntax just before
+// rendering so the preview shows what the server will send — a preview that
+// silently collapses the lines a writer just typed is worse than none, because
+// it teaches them the wrong thing about their own text.
 
 const TOOLS = [
   { label: 'B', title: 'Bold', wrap: ['**', '**'], className: 'mde-b' },
@@ -25,6 +32,17 @@ const TOOLS = [
   { label: '❝', title: 'Quote', line: '> ' },
   { label: '—', title: 'Divider', block: '\n---\n' },
 ]
+
+// Two trailing spaces on every line that is followed by another non-blank line.
+// Blank lines are untouched, so paragraphs still separate normally.
+const hardBreaks = md => String(md ?? '')
+  .replace(/\r\n?/g, '\n')
+  .split('\n')
+  .map((line, i, all) => {
+    const next = all[i + 1];
+    return line.trim() && next !== undefined && next.trim() ? line + '  ' : line;
+  })
+  .join('\n');
 
 export default function MarkdownEditor({ value, onChange, disabled, rows = 14, tokens = [], placeholder }) {
   const ref = useRef(null)
@@ -93,7 +111,7 @@ export default function MarkdownEditor({ value, onChange, disabled, rows = 14, t
       ) : (
         <div className="mde-preview">
           {String(value ?? '').trim()
-            ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{value}</ReactMarkdown>
+            ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{hardBreaks(value)}</ReactMarkdown>
             : <p className="mde-empty">Nothing to preview yet.</p>}
         </div>
       )}
