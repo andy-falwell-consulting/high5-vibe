@@ -175,12 +175,26 @@ export function render(text, vars) {
 
 /** The substitutions a workshop e-mail can use. Every one comes from Vibe —
  *  nothing here reads FileMaker. */
+// Every merge value is tidied on the way in.
+//
+// The data carries stray whitespace that has nothing to do with e-mail: the OE
+// Lookup catalogue stores one course as " Level 2 Challenge Course Certification
+// Exam" with a leading space, which turned "High 5 Confirmation: {{course_name}}"
+// into a subject with a double space. Trainer names hold doubles too ("Andrew
+// Wood"). Fixing it here rather than in each template means no author has to
+// know which values are dirty, and none of them can be caught out by one that
+// becomes dirty later.
+//
+// Every field below is a single-line value — a name, a date, a money figure — so
+// collapsing internal runs is safe. Nothing here carries deliberate formatting.
+const tidy = v => String(v ?? '').replace(/\s+/g, ' ').trim();
+
 export function templateVars({ workshop, catalogue, recipient }) {
   const w = workshop || {}, c = catalogue || {};
   const money = v => Number(v || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
   const fee = Number(w.tuitionFee || 0) + Number(w.foodFee || 0)
     + Number(w.lodgingFee || 0) + Number(w.extraLodgingFee || 0);
-  return {
+  const vars = {
     first_name: String(w.contactName || '').trim().split(/\s+/)[0] || '',
     full_name: w.contactName || '',
     organization: w.organization || '',
@@ -197,6 +211,8 @@ export function templateVars({ workshop, catalogue, recipient }) {
     balance_due: money(Math.round((fee - Number(w.depositReceived || 0)) * 100) / 100),
     recipient_email: recipient?.address || '',
   };
+  for (const k of Object.keys(vars)) vars[k] = tidy(vars[k]);
+  return vars;
 }
 
 // ── Attachments ─────────────────────────────────────────────────────────────
