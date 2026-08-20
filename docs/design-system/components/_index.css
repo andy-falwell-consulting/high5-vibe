@@ -1,0 +1,23 @@
+/* High 5 component barrel.
+   Import tokens FIRST — every rule below resolves against them, and a component
+   loaded without them falls back to whatever the browser thinks var(--fg) is,
+   which is nothing.
+
+     @import url('./tokens/tokens.css');
+     @import url('./components/_index.css'); */
+
+@import url('./typography.css');
+@import url('./layout.css');
+@import url('./page-header.css');
+@import url('./list.css');
+@import url('./card.css');
+@import url('./button.css');
+@import url('./chip.css');
+@import url('./badge.css');
+@import url('./field.css');
+@import url('./tabs.css');
+@import url('./table.css');
+@import url('./callout.css');
+@import url('./modal.css');
+@import url('./empty-state.css');
+@import url('./skeleton.css');

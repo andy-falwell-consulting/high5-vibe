@@ -1,0 +1,18 @@
+/* Callout — an inline message with a status.
+   NO left-edge accent stripe. A border-left in the brand red is the single most
+   common way an accent colour leaks into chrome, and the tinted background already
+   carries the status. See BRAND.md prohibitions. */
+
+.h5-callout {
+  display: flex; gap: var(--space-md); padding: var(--space-lg);
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--surface-sunken); color: var(--fg);
+  font-family: var(--font-sans); font-size: var(--text-body); line-height: var(--leading-normal);
+}
+.h5-callout--error   { background: var(--error-bg);   border-color: var(--error-border);   color: var(--error-fg); }
+.h5-callout--success { background: var(--success-bg); border-color: var(--success-border); color: var(--success-fg); }
+.h5-callout--warning { background: var(--warning-bg); border-color: var(--warning-border); color: var(--warning-fg); }
+.h5-callout--info    { background: var(--info-bg);    border-color: var(--info-border);    color: var(--info-fg); }
+.h5-callout__icon { flex-shrink: 0; line-height: var(--leading-normal); }
+.h5-callout__body { min-width: 0; }
+.h5-callout__title { font-weight: var(--weight-semibold); margin: 0 0 var(--space-xs); }

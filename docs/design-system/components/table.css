@@ -1,0 +1,18 @@
+/* Table — a dense data grid.
+   Wide tables scroll inside their own container. A page that scrolls sideways because
+   of one table is a layout bug, not a table feature. */
+
+.h5-table-wrap { overflow-x: auto; border: 1px solid var(--card-border); border-radius: var(--radius-md); }
+.h5-table { width: 100%; border-collapse: collapse; font-family: var(--font-sans); font-size: var(--text-body); }
+.h5-table th {
+  text-align: left; padding: var(--space-sm) var(--space-md);
+  background: var(--surface-sunken); color: var(--fg-secondary);
+  font-size: var(--text-micro); font-weight: var(--weight-semibold);
+  text-transform: uppercase; letter-spacing: var(--tracking-wide);
+  border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+.h5-table td { padding: var(--space-sm) var(--space-md); border-bottom: 1px solid var(--border); color: var(--fg); }
+.h5-table tbody tr:last-child td { border-bottom: 0; }
+.h5-table tbody tr:hover { background: var(--surface-hover); }
+/* Numerals right-aligned and tabular, so columns of figures line up. */
+.h5-table .h5-table__num { text-align: right; font-family: var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }

@@ -1,0 +1,38 @@
+/* Button
+   Four variants. The destructive one is the only place a red FILL is permitted, and
+   even there it is not the brand red: white on the style-sheet hex measures 4.38:1
+   and fails WCAG AA, so --error-solid resolves to the darker step. See BRAND.md,
+   "The red cannot carry a label". */
+
+.h5-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-sm);
+  box-sizing: border-box; padding: var(--space-sm) var(--space-lg);
+  border: 1px solid transparent; border-radius: var(--radius-md);
+  font-family: var(--font-sans); font-size: var(--text-body); font-weight: var(--weight-semibold);
+  line-height: var(--leading-snug); cursor: pointer; white-space: nowrap;
+  transition: background var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard),
+              color var(--duration-fast) var(--ease-standard);
+}
+.h5-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.h5-btn:disabled { color: var(--fg-disabled); cursor: not-allowed; }
+
+.h5-btn--primary { background: var(--fg); color: var(--fg-inverse); }
+.h5-btn--primary:hover:not(:disabled) { background: var(--fg-hover); }
+.h5-btn--primary:disabled { background: var(--surface-hover); }
+
+.h5-btn--secondary { background: var(--surface); color: var(--fg); border-color: var(--border-interactive); }
+.h5-btn--secondary:hover:not(:disabled) { background: var(--surface-hover); }
+
+.h5-btn--ghost { background: transparent; color: var(--fg); }
+.h5-btn--ghost:hover:not(:disabled) { background: var(--surface-hover); }
+
+.h5-btn--danger { background: var(--error-solid); color: var(--on-error-solid); }
+.h5-btn--danger:hover:not(:disabled) { background: var(--error-solid-hover); }
+
+/* The resting half of an arm/confirm destructive action — label only, no fill, so
+   it reads against the card rather than against --error-bg. */
+.h5-btn--danger-subtle { background: transparent; color: var(--error-fg); }
+.h5-btn--danger-subtle:hover:not(:disabled) { background: var(--error-bg); }
+
+.h5-btn--sm { padding: var(--space-xs) var(--space-md); font-size: var(--text-caption); }

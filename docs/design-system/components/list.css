@@ -1,0 +1,20 @@
+/* List — the sidebar record list.
+   The selected row is marked by a LEFT BORDER in the accent plus a surface change.
+   This is the one place a left-edge accent is right: it marks position in a list
+   rather than decorating a message, and the surface change carries the state on its
+   own for anyone who cannot see the colour. */
+
+.h5-list-item {
+  display: flex; align-items: center; gap: var(--space-md);
+  padding: var(--space-sm) var(--space-lg);
+  border-left: 3px solid transparent; cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+.h5-list-item:hover { background: var(--surface-hover); }
+.h5-list-item--active { background: var(--surface-hover); border-left-color: var(--brand); }
+.h5-list-item__body { min-width: 0; flex: 1; }
+.h5-list-item__title { font-family: var(--font-sans); font-size: var(--text-body); font-weight: var(--weight-semibold); color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.h5-list-item__sub { font-size: var(--text-micro); color: var(--fg-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.h5-list-item__count { flex-shrink: 0; font-size: var(--text-micro); font-weight: var(--weight-semibold); color: var(--fg-secondary); background: var(--surface-sunken); padding: 2px var(--space-sm); border-radius: var(--radius-pill); }
+/* A–Z section header inside a long list. */
+.h5-list-letter { position: sticky; top: 0; z-index: var(--z-sticky); padding: var(--space-xs) var(--space-lg); background: var(--surface-sunken); color: var(--fg-secondary); font-size: var(--text-micro); font-weight: var(--weight-bold); letter-spacing: var(--tracking-wide); }

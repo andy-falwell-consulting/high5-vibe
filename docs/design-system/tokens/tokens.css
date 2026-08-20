@@ -1,0 +1,334 @@
+/* ==========================================================================
+   High 5 design tokens — THE single source of truth for colour, type and scale.
+
+   Layer 1  Primitives  --h5-<hue>-<step>    the derived colour matrix.
+                                             Never reference these in components.
+   Layer 2  Semantic    --fg, --bg, --error-*  what components actually consume.
+   Layer 3  Scales      --space-*, --radius-*  house conventions (see BRAND.md).
+
+   Brand source:  High 5 Adventure Learning Center style sheet (2026-07-20)
+   Derived from:  brand.json -> palette.json -> here. Never hand-edit.
+                  python tokens/derive_palette.py && python tokens/generate.py
+   tests/ enforces that these files stay in sync and that contrast holds.
+   ========================================================================== */
+
+/* The four brand faces are commercial and licensed, so they cannot be bundled as
+   webfonts here. Each token names the brand face first and falls back; install the
+   licensed faces locally and the real thing is picked up with no change. */
+
+/* --------------------------------------------------------------------------
+   Layer 1 — PRIMITIVES. Twelve gradations around each brand anchor.
+   The step marked ANCHOR is the style-sheet colour itself, unchanged; every
+   other value is derived and is a house convention. tier=core is the subset a
+   component may consume; extended is for data/category encoding.
+   -------------------------------------------------------------------------- */
+:root {
+  /* grey — anchor at 1100; core: 100, 200, 300, 400, 600, 700, 800, 1000 */
+  --h5-grey-0: #FFFFFF;
+  --h5-grey-100: #F6F6F6;
+  --h5-grey-200: #F1F1F1;
+  --h5-grey-300: #EBEBEB;
+  --h5-grey-400: #DDDDDD;
+  --h5-grey-500: #C1C1C1;
+  --h5-grey-600: #898989;
+  --h5-grey-700: #6F6F6F;
+  --h5-grey-800: #525252;
+  --h5-grey-900: #404040;
+  --h5-grey-1000: #222222;
+  --h5-grey-1100: #000000;  /* ANCHOR — brand */
+  /* red — anchor at 700; core: 100, 200, 300, 400, 600, 700, 800, 1000 */
+  --h5-red-0: #FFFFFF;
+  --h5-red-100: #FFE5D7;
+  --h5-red-200: #FFDECF;
+  --h5-red-300: #FFD6C6;
+  --h5-red-400: #FFC4B2;
+  --h5-red-500: #FF9E8A;
+  --h5-red-600: #F9463B;
+  --h5-red-700: #ED1C24;  /* ANCHOR — brand */
+  --h5-red-800: #AE000D;
+  --h5-red-900: #8F0000;
+  --h5-red-1000: #5D0000;
+  --h5-red-1100: #000000;
+  /* gold — anchor at 600; core: 100, 200, 300, 400, 600, 700, 800, 1000 */
+  --h5-gold-0: #FFFFFF;
+  --h5-gold-100: #FFEEC6;
+  --h5-gold-200: #FFE7BB;
+  --h5-gold-300: #FFE0AF;
+  --h5-gold-400: #FFD093;
+  --h5-gold-500: #FFAF59;
+  --h5-gold-600: #ED8B00;  /* ANCHOR — brand */
+  --h5-gold-700: #A95C00;
+  --h5-gold-800: #824100;
+  --h5-gold-900: #6A3000;
+  --h5-gold-1000: #441300;
+  --h5-gold-1100: #000000;
+  /* blue — anchor at 600; core: 100, 200, 300, 400, 600, 700, 800, 1000 */
+  --h5-blue-0: #FFFFFF;
+  --h5-blue-100: #E0FAFF;
+  --h5-blue-200: #D7F4FF;
+  --h5-blue-300: #CFEFFF;
+  --h5-blue-400: #B9E2FF;
+  --h5-blue-500: #8BC7F7;
+  --h5-blue-600: #009CDE;  /* ANCHOR — brand */
+  --h5-blue-700: #0077B0;
+  --h5-blue-800: #005989;
+  --h5-blue-900: #004671;
+  --h5-blue-1000: #002648;
+  --h5-blue-1100: #000000;
+  /* mustard — anchor at 500; core: 100, 200, 300, 400, 600, 700, 800, 1000 */
+  --h5-mustard-0: #FFFFFF;
+  --h5-mustard-100: #FFF3C3;
+  --h5-mustard-200: #FFEDB6;
+  --h5-mustard-300: #FFE7A9;
+  --h5-mustard-400: #FED888;
+  --h5-mustard-500: #DAAA00;  /* ANCHOR — brand */
+  --h5-mustard-600: #AB8300;
+  --h5-mustard-700: #8D6B00;
+  --h5-mustard-800: #6A4E00;
+  --h5-mustard-900: #553C00;
+  --h5-mustard-1000: #361E00;
+  --h5-mustard-1100: #000000;
+  /* khaki — anchor at 500; core: 100, 200, 300, 400, 600, 700, 800, 1000 */
+  --h5-khaki-0: #FFFFFF;
+  --h5-khaki-100: #FDF6E3;
+  --h5-khaki-200: #F8F0DA;
+  --h5-khaki-300: #F4EBD1;
+  --h5-khaki-400: #E7DCBC;
+  --h5-khaki-500: #C6B784;  /* ANCHOR — brand */
+  --h5-khaki-600: #95895D;
+  --h5-khaki-700: #7A6F48;
+  --h5-khaki-800: #5B5230;
+  --h5-khaki-900: #474021;
+  --h5-khaki-1000: #282104;
+  --h5-khaki-1100: #000000;
+  /* purple — anchor at 800; core: 100, 200, 300, 400, 600, 700, 800, 1000 */
+  --h5-purple-0: #FFFFFF;
+  --h5-purple-100: #FFEDFF;
+  --h5-purple-200: #FFE6FF;
+  --h5-purple-300: #FFE0FF;
+  --h5-purple-400: #FAD0F5;
+  --h5-purple-500: #E5B0DF;
+  --h5-purple-600: #B96FB2;
+  --h5-purple-700: #A3509D;
+  --h5-purple-800: #92368D;  /* ANCHOR — brand */
+  --h5-purple-900: #6B1F68;
+  --h5-purple-1000: #41043F;
+  --h5-purple-1100: #000000;
+  /* green — anchor at 500; core: 100, 200, 300, 400, 600, 700, 800, 1000 */
+  --h5-green-0: #FFFFFF;
+  --h5-green-100: #D4FFDA;
+  --h5-green-200: #CAFDD1;
+  --h5-green-300: #BFF9C7;
+  --h5-green-400: #A4EEB0;
+  --h5-green-500: #22C55E;  /* ANCHOR — brand */
+  --h5-green-600: #009F44;
+  --h5-green-700: #008331;
+  --h5-green-800: #00621B;
+  --h5-green-900: #004E0D;
+  --h5-green-1000: #002C00;
+  --h5-green-1100: #000000;
+}
+
+/* --------------------------------------------------------------------------
+   Layer 3 — SCALES (house conventions; the style sheet publishes none of these)
+   -------------------------------------------------------------------------- */
+:root {
+  /* space */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 20px;
+  --space-2xl: 24px;
+  --space-3xl: 32px;
+  --space-4xl: 48px;
+  /* radius */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+  --radius-circle: 50%;
+  /* shadow */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 2px 16px rgba(0, 0, 0, 0.07);
+  --shadow-lg: 0 4px 20px rgba(0, 0, 0, 0.10);
+  --shadow-overlay: 0 24px 60px rgba(0, 0, 0, 0.25);
+  /* overlay */
+  --scrim: rgba(0, 0, 0, 0.45);
+  /* font-family */
+  --font-sans: 'Myriad Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-title: 'Berthold Imago', 'Myriad Pro', Optima, Candara, 'Segoe UI', sans-serif;
+  --font-quote: 'Kremlin Pro', Georgia, 'Times New Roman', serif;
+  --font-num: 'Bernhardt Standard', 'Myriad Pro', Georgia, serif;
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  /* font-size */
+  --text-display: 40px;
+  --text-h1: 32px;
+  --text-h2: 24px;
+  --text-h3: 18px;
+  --text-body-lg: 16px;
+  --text-body: 14px;
+  --text-caption: 13px;
+  --text-micro: 11px;
+  /* font-weight */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  /* line-height */
+  --leading-tight: 1.2;
+  --leading-snug: 1.4;
+  --leading-normal: 1.55;
+  /* letter-spacing */
+  --tracking-tight: -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.06em;
+  /* duration */
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 280ms;
+  /* easing */
+  --ease-standard: cubic-bezier(0.2, 0, 0.2, 1);
+  --ease-decelerate: cubic-bezier(0.16, 1, 0.3, 1);
+  /* z-index */
+  --z-base: 0;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-banner: 300;
+  --z-overlay: 400;
+  --z-panel: 410;
+  --z-modal: 500;
+  --z-toast: 600;
+}
+
+/* --------------------------------------------------------------------------
+   Layer 2 — SEMANTIC TOKENS, light (default)
+   -------------------------------------------------------------------------- */
+:root {
+  --bg: var(--h5-grey-100);
+  --surface: var(--h5-grey-0);
+  --surface-sunken: var(--h5-grey-200);
+  --card: var(--h5-grey-0);
+  --surface-selected: var(--h5-grey-0);
+  --on-surface-selected: var(--h5-grey-1000);
+  --surface-hover: var(--h5-grey-200);
+  --fg: var(--h5-grey-1000);
+  --fg-hover: var(--h5-grey-1100);
+  --fg-secondary: var(--h5-grey-700);
+  --fg-disabled: var(--h5-grey-500);
+  --fg-inverse: var(--h5-grey-0);
+  --border: var(--h5-grey-300);
+  --card-border: var(--h5-grey-400);
+  --border-interactive: var(--h5-grey-600);
+  --brand: var(--h5-red-700);
+  --brand-strong: var(--h5-red-800);
+  --focus-ring: var(--h5-red-700);
+  --error-fg: var(--h5-red-800);
+  --error-bg: var(--h5-red-100);
+  --error-border: var(--h5-red-300);
+  --error-solid: var(--h5-red-800);
+  --error-solid-hover: var(--h5-red-900);
+  --on-error-solid: var(--h5-grey-0);
+  --success-fg: var(--h5-green-800);
+  --success-bg: var(--h5-green-100);
+  --success-border: var(--h5-green-300);
+  --warning-fg: var(--h5-gold-800);
+  --warning-bg: var(--h5-gold-100);
+  --warning-border: var(--h5-gold-300);
+  --info-fg: var(--h5-blue-800);
+  --info-bg: var(--h5-blue-100);
+  --info-border: var(--h5-blue-300);
+
+  /* Category colours — data/category encoding ONLY, never UI chrome.
+     Red is absent by design: it is the accent. See BRAND.md. */
+  --cat-blue-bg: var(--h5-blue-100);
+  --cat-blue-fg: var(--h5-blue-800);
+  --cat-blue-solid: var(--h5-blue-700);
+  --cat-purple-bg: var(--h5-purple-100);
+  --cat-purple-fg: var(--h5-purple-800);
+  --cat-purple-solid: var(--h5-purple-700);
+  --cat-gold-bg: var(--h5-gold-100);
+  --cat-gold-fg: var(--h5-gold-800);
+  --cat-gold-solid: var(--h5-gold-700);
+  --cat-mustard-bg: var(--h5-mustard-100);
+  --cat-mustard-fg: var(--h5-mustard-800);
+  --cat-mustard-solid: var(--h5-mustard-700);
+  --cat-khaki-bg: var(--h5-khaki-100);
+  --cat-khaki-fg: var(--h5-khaki-800);
+  --cat-khaki-solid: var(--h5-khaki-700);
+  --cat-green-bg: var(--h5-green-100);
+  --cat-green-fg: var(--h5-green-800);
+  --cat-green-solid: var(--h5-green-700);
+  --cat-neutral-bg: var(--h5-grey-200);
+  --cat-neutral-fg: var(--h5-grey-1000);
+  --cat-neutral-solid: var(--h5-grey-700);
+}
+
+/* --------------------------------------------------------------------------
+   DARK THEME — exactly ONE block, by design.
+
+   No @media (prefers-color-scheme: dark) rule here. Vibe's own index.css
+   currently duplicates its dark palette across a [data-theme] block AND a media
+   query, which is a guaranteed drift source. One selector is enough when the
+   app always resolves an explicit data-theme. tests/ fails if a second dark
+   block appears.
+   -------------------------------------------------------------------------- */
+html[data-theme="dark"] {
+  --bg: var(--h5-grey-1100);
+  --surface: var(--h5-grey-1000);
+  --surface-sunken: var(--h5-grey-1100);
+  --card: var(--h5-grey-1000);
+  --surface-selected: var(--h5-grey-300);
+  --on-surface-selected: var(--h5-grey-1100);
+  --surface-hover: var(--h5-grey-900);
+  --fg: var(--h5-grey-0);
+  --fg-hover: var(--h5-grey-200);
+  --fg-secondary: var(--h5-grey-500);
+  --fg-disabled: var(--h5-grey-700);
+  --fg-inverse: var(--h5-grey-1100);
+  --border: var(--h5-grey-900);
+  --card-border: var(--h5-grey-800);
+  --border-interactive: var(--h5-grey-600);
+  --brand: var(--h5-red-600);
+  --brand-strong: var(--h5-red-600);
+  --focus-ring: var(--h5-red-600);
+  --error-fg: var(--h5-red-400);
+  --error-bg: var(--h5-red-1000);
+  --error-border: var(--h5-red-900);
+  --error-solid: var(--h5-red-800);
+  --error-solid-hover: var(--h5-red-900);
+  --on-error-solid: var(--h5-grey-0);
+  --success-fg: var(--h5-green-400);
+  --success-bg: var(--h5-green-1000);
+  --success-border: var(--h5-green-900);
+  --warning-fg: var(--h5-gold-400);
+  --warning-bg: var(--h5-gold-1000);
+  --warning-border: var(--h5-gold-900);
+  --info-fg: var(--h5-blue-400);
+  --info-bg: var(--h5-blue-1000);
+  --info-border: var(--h5-blue-900);
+
+  /* Category colours — dark. */
+  --cat-blue-bg: var(--h5-blue-1000);
+  --cat-blue-fg: var(--h5-blue-400);
+  --cat-blue-solid: var(--h5-blue-600);
+  --cat-purple-bg: var(--h5-purple-1000);
+  --cat-purple-fg: var(--h5-purple-400);
+  --cat-purple-solid: var(--h5-purple-600);
+  --cat-gold-bg: var(--h5-gold-1000);
+  --cat-gold-fg: var(--h5-gold-400);
+  --cat-gold-solid: var(--h5-gold-600);
+  --cat-mustard-bg: var(--h5-mustard-1000);
+  --cat-mustard-fg: var(--h5-mustard-400);
+  --cat-mustard-solid: var(--h5-mustard-600);
+  --cat-khaki-bg: var(--h5-khaki-1000);
+  --cat-khaki-fg: var(--h5-khaki-400);
+  --cat-khaki-solid: var(--h5-khaki-600);
+  --cat-green-bg: var(--h5-green-1000);
+  --cat-green-fg: var(--h5-green-400);
+  --cat-green-solid: var(--h5-green-600);
+  --cat-neutral-bg: var(--h5-grey-900);
+  --cat-neutral-fg: var(--h5-grey-0);
+  --cat-neutral-solid: var(--h5-grey-500);
+}

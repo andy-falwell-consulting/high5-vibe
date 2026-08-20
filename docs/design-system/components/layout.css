@@ -1,0 +1,42 @@
+/* Layout — the module shell: sidebar list, resize handle, detail pane.
+   This is the shape every records module in Vibe already has, written down.
+
+   THE SCROLLING RULES ARE THE POINT OF THIS FILE. They are unintuitive, they are
+   the cause of the two most-repeated layout bugs in the app, and neither is
+   discoverable from looking at working markup:
+
+   1. A module mounts under a `display: contents` wrapper, so its root is a direct
+      flex child of the app root. It needs `flex: 1; min-height: 0` — NOT
+      `height: 100%`, which collapses under display: contents and leaves the page
+      unfilled.
+
+   2. `min-height: 0` on any flex child that scrolls. A flex item will not shrink
+      below its content without it, so the container never becomes short enough to
+      need scrolling and `overflow-y: auto` never fires.
+
+   3. `flex-shrink: 0` on EVERY direct child of a scrolling flex column. Flex items
+      default to shrinking, so on a content-heavy record the sections compress to
+      fit instead of overflowing — the pane never scrolls and sections with their
+      own `overflow: hidden` clip their contents, which looks like a section that
+      failed to render.
+
+   4. A list needs its OWN scroller. A list helper that returns a bare array of
+      items has no wrapper of its own, so the container must come from the caller;
+      without it the sidebar simply clips at the fold with no way to reach the rest. */
+
+.h5-module { display: flex; flex: 1; min-height: 0; overflow: hidden; background: var(--bg); color: var(--fg); }
+
+.h5-sidebar { display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); }
+.h5-sidebar__head { padding: var(--space-lg) var(--space-lg) var(--space-md); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.h5-sidebar__list { flex: 1; min-height: 0; overflow-y: auto; }
+
+.h5-resize { width: 4px; flex-shrink: 0; cursor: col-resize; background: var(--border); transition: background var(--duration-fast) var(--ease-standard); }
+.h5-resize:hover { background: var(--brand); }
+
+.h5-detail { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+.h5-detail__body { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-xl); padding: var(--space-xl) var(--space-2xl) var(--space-3xl); }
+.h5-detail__body > * { flex-shrink: 0; }
+
+.h5-scroll::-webkit-scrollbar { width: 4px; height: 4px; }
+.h5-scroll::-webkit-scrollbar-track { background: transparent; }
+.h5-scroll::-webkit-scrollbar-thumb { background: var(--border-interactive); border-radius: var(--radius-pill); }

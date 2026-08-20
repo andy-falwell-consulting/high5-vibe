@@ -1,0 +1,10 @@
+/* Empty state.
+   Distinguish NOTHING HERE YET from NOTHING MATCHED and from SOMETHING BROKE — the
+   three read identically as a blank pane and need three different actions from the
+   person looking at it. */
+
+.h5-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-sm); padding: var(--space-4xl) var(--space-2xl); text-align: center; color: var(--fg-secondary); }
+.h5-empty__icon { font-size: 34px; opacity: 0.45; }
+.h5-empty__title { font-family: var(--font-title); font-size: var(--text-h3); font-weight: var(--weight-semibold); color: var(--fg); margin: 0; }
+.h5-empty__body { font-size: var(--text-body); max-width: 42ch; margin: 0; }
+.h5-empty--error .h5-empty__icon { color: var(--error-fg); opacity: 1; }

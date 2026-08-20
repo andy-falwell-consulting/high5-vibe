@@ -1,0 +1,31 @@
+/* Badge — a non-interactive status or category mark.
+   Category variants come from the cat-* tokens, which exclude red by design. */
+
+.h5-badge {
+  display: inline-flex; align-items: center; gap: var(--space-xs);
+  padding: 2px var(--space-sm); border-radius: var(--radius-pill);
+  font-family: var(--font-sans); font-size: var(--text-micro); font-weight: var(--weight-semibold);
+  line-height: var(--leading-snug); white-space: nowrap;
+  background: var(--cat-neutral-bg); color: var(--cat-neutral-fg);
+}
+.h5-badge--error   { background: var(--error-bg);   color: var(--error-fg); }
+.h5-badge--success { background: var(--success-bg); color: var(--success-fg); }
+.h5-badge--warning { background: var(--warning-bg); color: var(--warning-fg); }
+.h5-badge--info    { background: var(--info-bg);    color: var(--info-fg); }
+
+.h5-badge--blue    { background: var(--cat-blue-bg);    color: var(--cat-blue-fg); }
+.h5-badge--purple  { background: var(--cat-purple-bg);  color: var(--cat-purple-fg); }
+.h5-badge--gold    { background: var(--cat-gold-bg);    color: var(--cat-gold-fg); }
+.h5-badge--mustard { background: var(--cat-mustard-bg); color: var(--cat-mustard-fg); }
+.h5-badge--khaki   { background: var(--cat-khaki-bg);   color: var(--cat-khaki-fg); }
+.h5-badge--green   { background: var(--cat-green-bg);   color: var(--cat-green-fg); }
+
+/* A filled mark with no text on it — a legend swatch or status dot. Uses -solid,
+   which is contrast-tested at 3:1 against the card per WCAG 1.4.11. */
+.h5-dot { display: inline-block; width: 8px; height: 8px; border-radius: var(--radius-circle); background: var(--cat-neutral-solid); }
+.h5-dot--blue { background: var(--cat-blue-solid); }
+.h5-dot--purple { background: var(--cat-purple-solid); }
+.h5-dot--gold { background: var(--cat-gold-solid); }
+.h5-dot--mustard { background: var(--cat-mustard-solid); }
+.h5-dot--khaki { background: var(--cat-khaki-solid); }
+.h5-dot--green { background: var(--cat-green-solid); }
