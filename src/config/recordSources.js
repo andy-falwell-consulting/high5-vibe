@@ -58,6 +58,13 @@ export const RECORD_SOURCES = [
     title: f => f.zz__Display_Organization__ct, sub: f => f['Type of Program'] || '' },
   { module: 'oe-lookup', layout: 'OELookup_New', cv: 1, type: 'OE Lookup', icon: '⌕', color: '#a3a3a3',
     title: f => f['Program Type'], sub: f => f['Program Code'] || '' },
+  // OE Trainings is keyed by COURSE CODE rather than a recordId — a session has
+  // no FileMaker record of its own, it is a group of registrations sharing a
+  // code. It joins the OE Lookup replica for a readable title, which is the
+  // same join the module's own sidebar makes.
+  { module: 'oe-trainings', layout: 'OELookup_New', cv: 1, type: 'OE Training', icon: '◆', color: '#0ea5e9',
+    idOf: f => f['Program Code'],
+    title: f => f['Program Type'], sub: f => f['Program Code'] || '' },
 ]
 
 // FIRST entry wins per module, not last. Two sources share the `contacts-v2`

@@ -296,3 +296,8 @@ input.trn-inline-date::-webkit-calendar-picker-indicator { filter: invert(1); cu
 }
 .trn-notes-area:focus { outline: none; border-color: var(--cv2-accent); }
 @media (max-width: 1100px) { .trn-detail-grid { grid-template-columns: 130px minmax(0, 1fr); } }
+
+/* "Include trainer costs" — beside the work-order buttons it affects. */
+.cv2-wo-check { display: flex; align-items: center; gap: 7px; font-size: 12px; color: #94a3b8; margin: 8px 0 2px; cursor: pointer; }
+.cv2-wo-check input { cursor: pointer; }
+[data-theme="light"] .cv2-wo-check { color: #64748b; }

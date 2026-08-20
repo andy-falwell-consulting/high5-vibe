@@ -14,12 +14,14 @@ import { updateVibeRecord } from '../api/vibeRecords';
 import { displayFieldsForContact } from '../api/contactDisplay';
 import { useCcsOrgs } from '../hooks/useCcsOrgs';
 import { useValueLists } from '../hooks/useValueLists';
+import { useOpsLeads } from '../hooks/useOpsLeads';
 import { useTrainingsKanbanBoard } from '../hooks/useTrainingsKanbanBoard';
 import ContactPicker from './ContactPicker';
 import { getCurrentEnv } from '../config/fmpEnvironments';
 import { qboLink } from '../config/qboLinks';
 import './Trainings.css';
 import DeleteRecordButton from './DeleteRecordButton'
+import ReminderModal from './ReminderModal'
 import { TRAININGS_LAYOUT as LAYOUT, TRAININGS_CACHE_VERSION as CACHE_VERSION, TRAINER_SLOTS } from '../config/trainingsCache';
 
 const STATUS_COLOR = {
@@ -210,6 +212,15 @@ function SelectValue({ value, options, onChange }) {
 
 // Same cv2-inline-select class CCS's own Team card uses — this sits inside
 // the shared cv2-team-pick markup, so it needs CCS's styling, not trn-inline's.
+// Mirrors CCSv2's Avatar and its `initials`, deliberately as a copy: both
+// modules already keep their own small presentational helpers, and hoisting one
+// into a shared file would touch more than this change needs to.
+const initialsOf = n => String(n || '').trim().split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase();
+
+function Avatar({ name, lead }) {
+  return <span className={`cv2-avatar${lead ? ' lead' : ''}`} title={name}>{initialsOf(name)}</span>;
+}
+
 function InlineSelect({ value, options, onChange }) {
   const opts = value && !options.includes(value) ? [value, ...options] : options;
   return (
@@ -239,6 +250,7 @@ const isOn = v => v === 1 || v === '1';
 export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNavigateApp, onNavigateTo } = {}) {
   const { records, total } = useAllRecords(LAYOUT, { cacheVersion: CACHE_VERSION });
   const [selected, setSelected] = useState(null);
+  const [remindOpen, setRemindOpen] = useState(false)
   const [navWidth, setNavWidth] = useState(300);
   const [edits, setEdits] = useState({});
   const [saving, setSaving] = useState(false);
@@ -253,6 +265,9 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
   const [contactPicker, setContactPicker] = useState(false);
   const trainingOrgs = useCcsOrgs(getCurrentEnv().db, 'trainings');
   const board = useTrainingsKanbanBoard();
+  // 'trainings' namespaces this away from CCS: both key by FileMaker recordId,
+  // and those are only unique within a table.
+  const opsLead = useOpsLeads(getCurrentEnv().db, 'trainings');
   const valueLists = useValueLists(LAYOUT, { Trainers: TRAINER_OPTIONS });
   const trainerOptions = valueLists.Trainers ?? TRAINER_OPTIONS;
 
@@ -535,6 +550,7 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
                   );
                 })()}
                 <button className="cv2-ghost-btn" onClick={() => onNavigateTo?.('trainings-kanban', selected.recordId)}>Board →</button>
+                <button className="cv2-ghost-btn" onClick={() => setRemindOpen(true)}>⏰ Remind</button>
                 <DeleteRecordButton
                   layout={LAYOUT} cacheVersion={CACHE_VERSION}
                   recordId={selected.recordId}
@@ -623,6 +639,21 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
 
                   <LayoutCard title="Trainers">
                     <div className="cv2-team">
+                      {/* Operations lead — a Vibe-only field held in Redis, not
+                          FileMaker, exactly as CCS has it. Saves immediately on
+                          change rather than going through the record's Save
+                          button, because there is no FileMaker field to stage. */}
+                      <div className="cv2-team-row">
+                        <Avatar name={opsLead.leadFor(selected.recordId)} lead />
+                        <div className="cv2-team-pick">
+                          <label>Operations lead</label>
+                          <InlineSelect
+                            value={opsLead.leadFor(selected.recordId)}
+                            options={['', ...opsLead.roster]}
+                            onChange={v => opsLead.assign(selected.recordId, v)}
+                          />
+                        </div>
+                      </div>
                       {/* Every filled slot, editable in place, plus exactly one
                           open slot at the end so adding a trainer is just
                           picking a name — filling it reveals the next blank
@@ -767,6 +798,19 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
                         placeholder="Add a work order…"
                         onChange={e => handleFieldChange('Work Order', e.target.value)}
                       />
+                      {/* Sits beside the buttons it affects, not on the Costs
+                          tab where the figures live — a setting is easiest to
+                          understand next to the thing it changes. Off by
+                          default: the work order is handed to a CLIENT for
+                          signature, and trainer food, lodging and mileage are
+                          internal figures that should be disclosed on purpose
+                          rather than by default. */}
+                      <label className="cv2-wo-check" title="Print the Trainer costs from the Costs / Expenses tab on the work order">
+                        <input type="checkbox"
+                          checked={String(val(f, edits, 'include_trainer_costs') || '') === '1'}
+                          onChange={e => handleFieldChange('include_trainer_costs', e.target.checked ? '1' : '')} />
+                        Include trainer costs
+                      </label>
                       <div className="cv2-wo-actions">
                         <button type="button" className="cv2-wo-btn" disabled={!!woBusy} onClick={() => handleGenerateWorkOrder(true)}>
                           {woBusy === 'attach' ? (woStage || 'Working…') : '＋ Generate work order & attach'}
@@ -795,7 +839,7 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
             </div>
 
             <div className="trn-tabs">
-              {[['info', 'Training Info'], ['costs', 'Costs / Expenses'], ['logistics', 'Logistics'], ['attachments', 'Attachments'], ['extra', 'Extra']].map(([id, label]) => (
+              {[['info', 'Training Info'], ['costs', 'Costs / Expenses'], ['logistics', 'Logistics'], ['attachments', 'Attachments']].map(([id, label]) => (
                 <button key={id} className={`trn-tab${tab === id ? ' on' : ''}`} onClick={() => setTab(id)}>{label}</button>
               ))}
             </div>
@@ -854,31 +898,6 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
               </div>
               )}
 
-              {tab === 'extra' && (<>
-              <Section title="Record" icon="⚙">
-                <div className="trn-field-grid">
-                  <TextField label="Trainings #" fieldKey="_kpt__TrainingProposal_ID" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} mono />
-                  <TextField label="QB invoice #" fieldKey="_kat__QuickBooks_Invoice_ID" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable mono />
-                  <TextField label="QB deposit/estimate #" fieldKey="_kat__QuickBooks_Estimate_ID" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable mono />
-                  <TextField label="Site number" fieldKey="trnpp_CNTCT__site::Site Number" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} mono />
-                  <div className="trn-field"><label>Created</label><span className="trn-value">{f.zz__Created_On || '—'} by {f.zz__Created_By || '—'}</span></div>
-                  <div className="trn-field"><label>Modified</label><span className="trn-value">{f.zz__Modified_On || '—'} by {f.zz__Modified_By || '—'}</span></div>
-                </div>
-              </Section>
-
-              <Section title="Sales / pipeline" icon="◔">
-                <div className="trn-field-grid">
-                  <TextField label="Proposed" fieldKey="Proposed" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <CheckField label="Proposed received" fieldKey="proposed_recvd" f={f} edits={edits} onChange={handleFieldChange} />
-                  <TextField label="Confirmed" fieldKey="Confirmed" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <CheckField label="Confirmed received" fieldKey="confirmed_recvd" f={f} edits={edits} onChange={handleFieldChange} />
-                  <TextField label="Final sent" fieldKey="Final Sent" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="Email sent" fieldKey="email_sent_date" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <TextField label="Deposit #" fieldKey="deposit_number" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable />
-                  <CheckField label="PO received" fieldKey="po_received" f={f} edits={edits} onChange={handleFieldChange} />
-                </div>
-              </Section>
-              </>)}
 
               <div className="trn-record-footer">
                 ID {f._kpt__TrainingProposal_ID} · Record {selected.recordId} · Created {f.zz__Created_On?.split(' ')[0]} by {f.zz__Created_By} · Modified {f.zz__Modified_On?.split(' ')[0] || '—'} by {f.zz__Modified_By}
@@ -888,6 +907,22 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
           </>
         )}
       </main>
+
+      {remindOpen && selected && (
+        <ReminderModal
+          initial={{
+            // The FileMaker recordId, which is what this module's navTarget
+            // resolves and what RECORD_SOURCES looks a record up by. Contacts
+            // are the exception (they key on the contact id) because their
+            // FileMaker table is being retired; these layouts are not.
+            recordType: 'trainings',
+            recordId: String(selected.recordId),
+            recordLabel: f.zz__Display_Organization__ct || 'training',
+            title: `Follow up on ${f.zz__Display_Organization__ct || 'training'}`,
+          }}
+          onClose={() => setRemindOpen(false)}
+          onSaved={() => setRemindOpen(false)} />
+      )}
 
       {orgPicker && (
         <ContactPicker

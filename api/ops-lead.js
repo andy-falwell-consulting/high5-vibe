@@ -30,7 +30,15 @@ const redis = Redis.fromEnv();
 const SYNC_KEY = process.env.QBO_SYNC_KEY;
 
 export const ROSTER = ['Ian', 'Krister', 'Jamie', 'Todd', 'Kyle'];
-const keyFor = db => `ops:lead:${db}`;
+// Namespaced by KIND, because both CCS and Trainings identify records by
+// FileMaker recordId and those are only unique WITHIN a table. RCD recordId
+// 5373 and trainings recordId 5373 are different records, so a single shared
+// hash would silently show one record's lead on another's card.
+//
+// 'ccs' keeps the original unsuffixed key so the assignments already made are
+// untouched — a rename here would have quietly dropped every existing lead.
+const KINDS = new Set(['ccs', 'trainings']);
+const keyFor = (db, kind) => (kind === 'ccs' ? `ops:lead:${db}` : `ops:lead:${kind}:${db}`);
 
 // Auto-assign resolves the caller's FIRST name against the roster: a match is
 // assigned, anything else is left blank. That is the agreed behaviour for
@@ -53,7 +61,10 @@ export default async function handler(req, res) {
 
   const db = String(req.query?.db || '');
   if (!ALLOWED_DBS.has(db)) return res.status(400).json({ error: 'db not allowed' });
-  const key = keyFor(db);
+  // Defaults to 'ccs' so every existing caller keeps working unchanged.
+  const kind = String(req.query?.kind || 'ccs');
+  if (!KINDS.has(kind)) return res.status(400).json({ error: `kind must be one of ${[...KINDS].join(', ')}` });
+  const key = keyFor(db, kind);
 
   try {
     if (req.method === 'POST') {
