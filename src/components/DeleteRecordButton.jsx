@@ -78,32 +78,36 @@ export default function DeleteRecordButton({
       <button className="drb-btn" onClick={() => setOpen(true)} title="Delete this record">🗑 {label}</button>
 
       {open && (
-        <div className="drb-backdrop" onClick={e => e.target === e.currentTarget && !busy && close()}>
-          <div className="drb-panel" role="dialog" aria-modal="true">
-            <div className="drb-title">Delete {name ? <strong>{name}</strong> : 'this record'}?</div>
-            <p className="drb-warn">
-              This removes the record from Vibe for everyone, including its related
-              records here. There is no undo in the app.
-              <br /><br />
-              Its FileMaker copy is left alone, so anyone working directly in
-              FileMaker Pro will still see it.
-            </p>
-            <label className="drb-label" htmlFor="drb-confirm">Type <strong>DELETE</strong> to confirm</label>
-            <input
-              id="drb-confirm"
-              ref={inputRef}
-              className="drb-input"
-              value={typed}
-              disabled={busy}
-              onChange={e => setTyped(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && armed) handleDelete(); }}
-              placeholder="DELETE"
-              autoComplete="off"
-            />
-            {error && <div className="drb-error">{error}</div>}
-            <div className="drb-actions">
-              <button className="drb-cancel" onClick={close} disabled={busy}>Cancel</button>
-              <button className="drb-confirm" onClick={handleDelete} disabled={!armed || busy}>
+        <div className="h5-scrim" onClick={e => e.target === e.currentTarget && !busy && close()}>
+          <div className="h5-modal drb-panel" role="dialog" aria-modal="true">
+            <div className="h5-modal__body">
+              <div className="drb-title">Delete {name ? <strong>{name}</strong> : 'this record'}?</div>
+              <p className="drb-warn">
+                This removes the record from Vibe for everyone, including its related
+                records here. There is no undo in the app.
+                <br /><br />
+                Its FileMaker copy is left alone, so anyone working directly in
+                FileMaker Pro will still see it.
+              </p>
+              <div className="h5-field">
+                <label className="h5-field__label drb-label" htmlFor="drb-confirm">Type <strong>DELETE</strong> to confirm</label>
+                <input
+                  id="drb-confirm"
+                  ref={inputRef}
+                  className="h5-field__control"
+                  value={typed}
+                  disabled={busy}
+                  onChange={e => setTyped(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && armed) handleDelete(); }}
+                  placeholder="DELETE"
+                  autoComplete="off"
+                />
+              </div>
+              {error && <div className="h5-callout h5-callout--error">{error}</div>}
+            </div>
+            <div className="h5-modal__foot">
+              <button className="h5-btn h5-btn--secondary h5-btn--sm" onClick={close} disabled={busy}>Cancel</button>
+              <button className="h5-btn h5-btn--danger h5-btn--sm" onClick={handleDelete} disabled={!armed || busy}>
                 {busy ? 'Deleting…' : 'Delete record'}
               </button>
             </div>

@@ -62,14 +62,14 @@ export default function RecordFormModal({ title, fields, submitLabel = 'Create',
   }
 
   return (
-    <div className="rfm-backdrop" onClick={e => e.target === e.currentTarget && status !== 'saving' && onClose()}>
-      <div className="rfm-drawer">
-        <div className="rfm-header">
-          <h2>{title}</h2>
+    <div className="h5-scrim" onClick={e => e.target === e.currentTarget && status !== 'saving' && onClose()}>
+      <div className="h5-modal rfm-drawer">
+        <div className="h5-modal__head">
+          <h2 className="h5-modal__title">{title}</h2>
           <button className="rfm-close" onClick={onClose} disabled={status === 'saving'}>✕</button>
         </div>
 
-        <div className="rfm-body">
+        <div className="h5-modal__body">
           <div className="rfm-grid">
             {fields.map(f => (
               <label key={f.key} className={`rfm-field${f.wide || f.type === 'textarea' || f.type === 'contact' ? ' wide' : ''}`}>
@@ -87,10 +87,10 @@ export default function RecordFormModal({ title, fields, submitLabel = 'Create',
           {typeof children === 'function' ? children(values) : children}
         </div>
 
-        <div className="rfm-footer">
+        <div className="h5-modal__foot">
           {status === 'error' && <span className="rfm-error">{error}</span>}
-          <button className="rfm-btn cancel" onClick={onClose} disabled={status === 'saving'}>Cancel</button>
-          <button className="rfm-btn save" onClick={submit} disabled={status === 'saving'}>
+          <button className="h5-btn h5-btn--secondary h5-btn--sm" onClick={onClose} disabled={status === 'saving'}>Cancel</button>
+          <button className="h5-btn h5-btn--primary h5-btn--sm" onClick={submit} disabled={status === 'saving'}>
             {status === 'saving' ? 'Creating…' : submitLabel}
           </button>
         </div>

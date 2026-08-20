@@ -1,84 +1,99 @@
-/* Reusable attachments panel. Inherits the host module's CSS variables
-   (falls back to CCS values) so it sits natively inside the detail view. */
+/* Reusable attachments panel — files and photos on a record, in five modules.
+
+   84 lines to 46, and 24 hardcoded hex values to zero.
+
+   THE --att-* INDIRECTION IS GONE. Every colour used to be declared three
+   times: an --att-* alias, a --cv2-* value to inherit from the host module, and
+   a hardcoded fallback for when there was no host. That existed so the panel
+   could take on the colours of whichever detail view it sat in — a real problem
+   before the design system, and one the system solves outright, because the
+   semantic tokens already resolve per theme and are the same in every module.
+   Three declarations became one, and the [data-theme="light"] block that
+   restated all seven aliases is deleted.
+
+   Two colours had no brand basis at all:
+     --att-accent  #d85a30  an orange, on the heading icon, file extensions and
+                            every filename hover. Chrome decoration in a colour
+                            the style sheet does not contain. Now --fg-secondary
+                            for the static marks and --link for the hover, which
+                            is what a clickable filename should look like.
+     invoice green #2ca01c  QuickBooks' own brand green. Mapped to --success-*:
+                            the button means "this worked / this is the finished
+                            invoice", and a vendor's hex is not a licence to add
+                            an eighth colour to the palette. */
+
 .att-panel {
-  --att-surface: var(--cv2-surface, #12151f);
-  --att-surface-2: var(--cv2-surface-2, #1a1e2b);
-  --att-border: var(--cv2-border, #1e2130);
-  --att-border-2: var(--cv2-border-2, #2a2f45);
-  --att-text: var(--cv2-text, #e6e8ec);
-  --att-text-2: var(--cv2-text-2, #9aa3b2);
-  --att-accent: var(--cv2-accent, #d85a30);
-  margin-top: 12px;
-  border: 1px solid var(--att-border);
-  border-radius: 12px;
-  padding: 14px 16px;
-  background: var(--att-surface);
+  margin-top: var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md) var(--space-lg);
+  background: var(--card);
 }
 
-.att-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
-.att-head-icon { color: var(--att-accent); font-size: 17px; }
-.att-head h3 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--att-text-2); }
+.att-head { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-md); }
+.att-head-icon { color: var(--fg-secondary); font-size: var(--text-h3); }
+.att-head h3 { margin: 0; font-size: var(--text-body); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-wide); text-transform: uppercase; color: var(--fg-secondary); }
 
-.att-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.att-actions { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin-bottom: var(--space-md); }
 .att-btn {
-  padding: 6px 14px; border-radius: 8px;
-  border: 1px solid var(--att-border-2); background: transparent;
-  color: var(--att-text-2); font-size: 15px; cursor: pointer; font-family: inherit;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  padding: var(--space-sm) var(--space-lg); border-radius: var(--radius-md);
+  border: 1px solid var(--border); background: transparent;
+  color: var(--fg-secondary); font-family: var(--font-sans); font-size: var(--text-body); cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard),
+              color var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard);
 }
-.att-btn:hover:not(:disabled) { background: var(--att-surface-2); color: var(--att-text); }
+.att-btn:hover:not(:disabled) { background: var(--surface-hover); color: var(--fg); }
+.att-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .att-btn:disabled { opacity: 0.5; cursor: default; }
-.att-btn.invoice { border-color: #2ca01c66; color: #4cc63a; }
-.att-btn.invoice:hover:not(:disabled) { background: #2ca01c1a; border-color: #2ca01c; color: #6fdc5c; }
+.att-btn.invoice { border-color: var(--success-border); color: var(--success-fg); }
+.att-btn.invoice:hover:not(:disabled) { background: var(--success-bg); border-color: var(--success-fg); color: var(--success-fg); }
 
-.att-error { color: #f87171; font-size: 15px; margin: 0 0 10px; }
+.att-error { color: var(--error-fg); font-size: var(--text-body); margin: 0 0 var(--space-sm); }
 
+/* Dashed while idle because it is a target waiting for something. The accent on
+   drag-over is a transient active state, which is the one thing red is for
+   besides the focus ring — and it lasts exactly as long as the drag. */
 .att-drop {
-  border: 1.5px dashed var(--att-border-2); border-radius: 10px;
-  padding: 14px; transition: border-color 0.15s, background 0.15s;
+  border: 1.5px dashed var(--border); border-radius: var(--radius-md);
+  padding: var(--space-md);
+  transition: border-color var(--duration-fast) var(--ease-standard),
+              background var(--duration-fast) var(--ease-standard);
 }
-.att-drop.over { border-color: var(--att-accent); background: color-mix(in srgb, var(--att-accent) 8%, transparent); }
-.att-empty { color: var(--att-text-2); font-size: 15px; text-align: center; margin: 18px 0; }
+.att-drop.over { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 8%, transparent); }
+.att-empty { color: var(--fg-secondary); font-size: var(--text-body); text-align: center; margin: var(--space-lg) 0; }
 
 .att-grid {
   list-style: none; margin: 0; padding: 0;
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: var(--space-sm);
 }
 .att-card {
   position: relative; display: flex; flex-direction: column;
-  background: var(--att-surface-2); border: 1px solid var(--att-border); border-radius: 10px; overflow: hidden;
+  background: var(--surface-sunken); border: 1px solid var(--border);
+  border-radius: var(--radius-md); overflow: hidden;
 }
 .att-thumb {
   display: flex; align-items: center; justify-content: center;
-  height: 96px; background: var(--att-border); text-decoration: none; overflow: hidden; cursor: pointer;
+  height: 96px; background: var(--border); text-decoration: none; overflow: hidden; cursor: pointer;
 }
 .att-thumb img { width: 100%; height: 100%; object-fit: cover; }
-.att-ext { font-size: 20px; font-weight: 700; letter-spacing: 0.5px; color: var(--att-accent); }
-.att-meta { padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.att-ext { font-size: var(--text-h2); font-weight: var(--weight-bold); letter-spacing: 0.5px; color: var(--fg-secondary); }
+.att-meta { padding: var(--space-sm) var(--space-md); display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .att-name {
-  font-size: 14px; color: var(--att-text); text-decoration: none; cursor: pointer;
+  font-size: var(--text-body); color: var(--fg); text-decoration: none; cursor: pointer;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.att-name:hover { color: var(--att-accent); }
-.att-sub { font-size: 13px; color: var(--att-text-2); }
+.att-name:hover { color: var(--link); text-decoration: underline; }
+.att-sub { font-size: var(--text-caption); color: var(--fg-secondary); }
+
+/* Destructive, so it earns the red fill — but only on hover, since the resting
+   state sits on top of a photo and should not shout. */
 .att-del {
   position: absolute; top: 6px; right: 6px;
-  width: 22px; height: 22px; border-radius: 50%;
-  border: none; background: color-mix(in srgb, var(--att-surface) 80%, transparent); color: var(--att-text-2);
-  font-size: 13px; line-height: 1; cursor: pointer; transition: background 0.15s, color 0.15s;
+  width: 22px; height: 22px; border-radius: var(--radius-circle);
+  border: none; background: color-mix(in srgb, var(--card) 80%, transparent); color: var(--fg-secondary);
+  font-size: var(--text-caption); line-height: 1; cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
 }
-.att-del:hover:not(:disabled) { background: var(--h5-red); color: #fff; }
+.att-del:hover:not(:disabled) { background: var(--error-solid); color: var(--on-error-solid); }
 .att-del:disabled { opacity: 0.5; cursor: default; }
-
-/* ── Light Theme ─────────────────────────────────────────────────── */
-[data-theme="light"] .att-panel {
-  --att-surface: #ffffff;
-  --att-surface-2: #f1f5f9;
-  --att-border: #e2e8f0;
-  --att-border-2: #cbd5e1;
-  --att-text: #0f172a;
-  --att-text-2: #5e6b7c;
-  --att-accent: #c2570f;
-}
-[data-theme="light"] .att-del { background: #ffffffcc; color: #5e6b7c; }
-[data-theme="light"] .att-del:hover:not(:disabled) { background: var(--h5-red); color: #fff; }

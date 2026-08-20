@@ -1,29 +1,38 @@
+/* Record save bar — the sticky "N unsaved changes / Discard / Save" strip, in
+   six modules.
+
+   29 lines to 21, and 19 hardcoded hex values to zero. The two buttons are the
+   system's; what is left is the bar itself, which is a positioned container the
+   system has no component for.
+
+   THE SAVE BUTTON IS NO LONGER RED. It was `background: var(--h5-red)` with
+   white text, which is two separate problems the system already has an answer
+   to. First the accent policy: red is reserved for the logo, the focus ring,
+   the active nav indicator and a DESTRUCTIVE fill, and saving is the opposite
+   of destructive — spending the accent here leaves nothing to say "this one
+   matters" with. Second contrast: white on the style-sheet red measures 4.38:1
+   and fails WCAG AA, so the label was already below standard. It is now
+   .h5-btn--primary, which is the neutral fill the system uses for the affirming
+   action everywhere else. */
+
 .rsb-bar {
-  position: sticky; bottom: 14px; z-index: 5;
-  display: flex; align-items: center; gap: 12px;
-  margin: 8px 16px 14px; padding: 11px 16px;
-  background: #13151c; border: 1px solid #2d3148; border-radius: 12px;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
-  font-family: system-ui, -apple-system, sans-serif;
+  position: sticky; bottom: var(--space-md); z-index: var(--z-sticky);
+  display: flex; align-items: center; gap: var(--space-md);
+  margin: var(--space-sm) var(--space-lg) var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  background: var(--card); border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
 }
-.rsb-count { font-size: 15px; font-weight: 600; color: #e2e8f0; }
-.rsb-err { font-size: 15px; color: #f87171; }
+.rsb-count { font-size: var(--text-body); font-weight: var(--weight-semibold); color: var(--fg); }
+.rsb-err { font-size: var(--text-body); color: var(--error-fg); }
 .rsb-spacer { flex: 1; }
-.rsb-discard { background: transparent; border: 1px solid #2d3148; color: #94a3b8; border-radius: 8px; padding: 6px 14px; font-size: 15px; cursor: pointer; font-family: inherit; }
-.rsb-discard:hover:not(:disabled) { color: #e2e8f0; border-color: #4a5568; }
-.rsb-save { background: var(--h5-red); border: none; color: #fff; border-radius: 8px; padding: 6px 18px; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit; }
-.rsb-save:hover:not(:disabled) { background: #c72820; }
-.rsb-save:disabled, .rsb-discard:disabled { opacity: 0.5; cursor: default; }
 
+/* Success confirmation. A pill rather than a badge: it is a transient
+   announcement that replaces the bar, not a label attached to something. */
 .rsb-toast {
-  position: sticky; bottom: 14px; align-self: center;
-  margin: 8px auto 14px; padding: 8px 16px;
-  background: #16a34a; color: #fff; border-radius: 20px;
-  font-size: 15px; font-weight: 600; width: fit-content;
+  position: sticky; bottom: var(--space-md); align-self: center;
+  margin: var(--space-sm) auto var(--space-md); padding: var(--space-sm) var(--space-lg);
+  background: var(--success-bg); color: var(--success-fg);
+  border: 1px solid var(--success-border); border-radius: var(--radius-pill);
+  font-size: var(--text-body); font-weight: var(--weight-semibold); width: fit-content;
 }
-
-/* Light theme */
-[data-theme="light"] .rsb-bar { background: #ffffff; border-color: #e2e8f0; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12); }
-[data-theme="light"] .rsb-count { color: #0f172a; }
-[data-theme="light"] .rsb-discard { color: #64748b; border-color: #e2e8f0; }
-[data-theme="light"] .rsb-discard:hover:not(:disabled) { color: #0f172a; border-color: #cbd5e1; }
