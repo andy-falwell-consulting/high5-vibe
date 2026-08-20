@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import ShopifyConnect from './ShopifyConnect';
 import { getVibeValueLists, seedValueLists, setValueList, compareValueLists } from '../api/valueLists';
 import { getTemplates, saveTemplate, TEMPLATE_VERSIONS, templateAttachments } from '../api/workshopEmail';
+import { getAgentConfig, saveAgentConfig } from '../api/agentConfig';
 import QboConnect from './QboConnect';
 import './Admin.css';
 
@@ -12,7 +13,146 @@ const TABS = [
   { id: 'backup', label: 'Backup' },
   { id: 'vocab', label: 'Vocabularies' },
   { id: 'wsemail', label: 'Workshop e-mails' },
+  { id: 'agent', label: 'Assistant' },
 ];
+
+// Settings for the assistant. See docs/agent-admin-scope.md for why the prompt
+// is split into generated facts and editable guidance rather than made wholly
+// editable.
+function AgentTab() {
+  const [data, setData] = useState(null);
+  const [draft, setDraft] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [showPrompt, setShowPrompt] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try { const d = await getAgentConfig(); if (alive) { setData(d); setDraft(d.config); setError(null); } }
+      catch (e) { if (alive) setError(e.message); }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  async function save(changes) {
+    setBusy(true); setError(null);
+    try { const d = await saveAgentConfig(changes); setData(d); setDraft(d.config); }
+    catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+
+  if (error && !data) return <section className="admin-section"><p className="admin-error">{error}</p></section>;
+  if (!data || !draft) return <section className="admin-section"><p>Loading…</p></section>;
+
+  const { choices, enabledTools, prompt, promptChars, config } = data;
+  const isOff = t => draft.disabled.includes(t);
+  const toggle = t => setDraft(d => ({
+    ...d, disabled: isOff(t) ? d.disabled.filter(x => x !== t) : [...d.disabled, t],
+  }));
+  const dirty = JSON.stringify(draft) !== JSON.stringify(config);
+
+  return (
+    <section className="admin-section">
+      <h2 className="admin-section-title">Assistant</h2>
+      <p className="admin-note">
+        The ✦ assistant runs <strong>{config.model}</strong> with {enabledTools.length} of{' '}
+        {choices.tools.length} tools available. Changes take effect on the next question —
+        no deploy.
+      </p>
+      {error && <p className="admin-error">{error}</p>}
+
+      {/* Safety first, because it is the setting with consequences. */}
+      <div className={`admin-agent-block${draft.readOnly ? ' admin-agent-block--on' : ''}`}>
+        <label className="admin-agent-switch">
+          <input type="checkbox" checked={draft.readOnly} disabled={busy}
+            onChange={e => setDraft({ ...draft, readOnly: e.target.checked })} />
+          <span><strong>Read-only mode</strong> — disable every tool that writes or acts outside Vibe</span>
+        </label>
+        <p className="admin-note">
+          Turns off {choices.writeTools.join(', ')}. Worth knowing what that covers today:
+          the assistant can otherwise <strong>permanently delete</strong> a Gmail message
+          (not trash it), delete a Drive file, and share a Drive file with anyone.
+          Disabled tools are removed from the request, not merely discouraged.
+        </p>
+      </div>
+
+      <div className="admin-agent-grid">
+        <label className="admin-field">
+          <span>Model</span>
+          <select value={draft.model} disabled={busy}
+            onChange={e => setDraft({ ...draft, model: e.target.value })}>
+            {choices.models.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+          </select>
+        </label>
+        <label className="admin-field">
+          <span>Max tool turns (1–30)</span>
+          <input type="number" min={1} max={30} value={draft.maxTurns} disabled={busy}
+            onChange={e => setDraft({ ...draft, maxTurns: e.target.value })} />
+        </label>
+        <label className="admin-field">
+          <span>Max output tokens (512–16384)</span>
+          <input type="number" min={512} max={16384} step={512} value={draft.maxOutputTokens} disabled={busy}
+            onChange={e => setDraft({ ...draft, maxOutputTokens: e.target.value })} />
+        </label>
+      </div>
+
+      <h3 className="admin-agent-h3">Tools</h3>
+      <div className="admin-agent-tools">
+        {choices.tools.map(t => {
+          const writes = choices.writeTools.includes(t);
+          const offByReadOnly = draft.readOnly && writes;
+          return (
+            <label key={t} className={`admin-agent-tool${isOff(t) || offByReadOnly ? ' off' : ''}`}>
+              <input type="checkbox" checked={!isOff(t) && !offByReadOnly}
+                disabled={busy || offByReadOnly} onChange={() => toggle(t)} />
+              <code>{t}</code>
+              {writes && <span className="admin-agent-writes">writes</span>}
+            </label>
+          );
+        })}
+      </div>
+
+      <h3 className="admin-agent-h3">House guidance</h3>
+      <p className="admin-note">
+        Added to the assistant&apos;s standing rules — it does not replace them. The rules
+        already in force (prefer Vibe contacts over the legacy table, confirm before a
+        write, compute real totals rather than one page) stay whatever you put here; each
+        of those exists because it fixed a real mistake.
+      </p>
+      <textarea className="admin-vocab-edit" rows={8} disabled={busy}
+        placeholder="e.g. When asked about a training, always give the course code alongside the name."
+        value={draft.guidance} onChange={e => setDraft({ ...draft, guidance: e.target.value })} />
+
+      <div className="admin-agent-foot">
+        <button className="admin-btn" disabled={busy || !dirty} onClick={() => save(draft)}>
+          {busy ? 'Saving…' : dirty ? 'Save changes' : 'Saved'}
+        </button>
+        <button className="admin-btn admin-btn--ghost" disabled={busy || !dirty}
+          onClick={() => setDraft(config)}>Discard</button>
+        <button className="admin-btn admin-btn--ghost" onClick={() => setShowPrompt(v => !v)}>
+          {showPrompt ? 'Hide' : 'Show'} assembled prompt ({promptChars.toLocaleString()} chars)
+        </button>
+        {config.updatedAt && (
+          <span className="admin-note admin-agent-when">
+            Last changed {String(config.updatedAt).split('T')[0]}
+            {config.updatedBy ? ` by ${config.updatedBy}` : ''}
+          </span>
+        )}
+      </div>
+
+      {showPrompt && (
+        <>
+          <p className="admin-note">
+            Exactly what the model is told, assembled. Read-only — the tool and schema
+            sections are generated from the running code so they cannot drift from it.
+          </p>
+          <pre className="admin-agent-prompt">{prompt}</pre>
+        </>
+      )}
+    </section>
+  );
+}
 
 // The tokens a workshop e-mail body may use. Listed in the UI because a
 // template is written by staff, not by a developer, and an unknown token is
@@ -940,6 +1080,7 @@ export default function Admin() {
       {tab === 'backup' && <><SaTestSection /><BackupTab /><RestoreSection /></>}
       {tab === 'vocab' && <VocabTab />}
       {tab === 'wsemail' && <WorkshopEmailTab />}
+      {tab === 'agent' && <AgentTab />}
     </main>
   );
 }

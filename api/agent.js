@@ -4,20 +4,19 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { Redis } from '@upstash/redis';
 import { getGoogleSession } from './_googleSession.js';
+import { readAgentConfig, activeTools, WRITE_TOOLS } from './_agentConfig.js';
 
 export const config = { maxDuration: 60 };
 
 const FMP_HOST = 'https://ILELLCO.pcifmhosting.com';
 const FMP_BASIC = 'Basic ' + Buffer.from('admin:itstime').toString('base64');
 const ALLOWED_DBS = ['High5_Core4_Dev', 'High5_Core4_Stage', 'High5_Core4'];
-// Agent model. Defaults to Sonnet (best fit for tool-use, query generation, and
-// write actions); override per-environment with the AGENT_MODEL env var in Vercel
-// — e.g. set it to claude-haiku-4-5 to trade some reliability for speed/cost.
-const MODEL = process.env.AGENT_MODEL || 'claude-sonnet-4-6';
-const MAX_TOOL_TURNS = 12;
-// Output cap per turn. Generous so long answers (e.g. a 50-row invoice table +
-// summary) don't get cut off mid-sentence; 2000 was truncating list results.
-const MAX_OUTPUT_TOKENS = 8192;
+// Model, turn cap and output cap now come from _agentConfig.js, which is
+// editable in Admin -> Assistant. The defaults there are the values that used to
+// live here — Sonnet for tool use, 12 turns, and an 8,192 output cap that is
+// generous so a long answer (a 50-row invoice table plus a summary) is not cut
+// off mid-sentence; 2,000 was truncating list results. AGENT_MODEL is still
+// honoured as the default model.
 
 // ── FileMaker modules ────────────────────────────────────────────────────────
 const MODULES = {
@@ -41,10 +40,28 @@ const MODULES = {
 };
 
 // ── System prompt factory ────────────────────────────────────────────────────
-function buildSystem(googleUser) {
+export function buildSystem(googleUser, config = {}) {
   const userCtx = googleUser
     ? `You are acting on behalf of ${googleUser.name} (${googleUser.email}). Their Google account is connected — you can access their Gmail, Calendar, and Drive.`
     : 'No Google account is connected for this session — gmail, calendar, and drive tools are unavailable.';
+
+  // Admin-authored guidance is APPENDED to the standing rules above, never
+  // substituted for them. Those rules encode fixes for real misbehaviour — the
+  // aggregate rule exists because a "total everything" answer was capped at one
+  // page — and a blank-slate editor would invite losing them by accident.
+  //
+  // A read-only session says so in the prompt AS WELL as having the write tools
+  // removed from the request. Belt and braces on purpose: the removal is what
+  // enforces it, but a model told nothing about why a tool vanished will keep
+  // promising to send the e-mail it can no longer send.
+  const notes = [];
+  if (config.readOnly) {
+    notes.push(`\n## Read-only mode\nWrite and external-action tools (${WRITE_TOOLS.join(', ')}) are DISABLED for this session. Answer from what you can read, and say plainly that you cannot perform the action if asked to.`);
+  } else if (config.disabled?.length) {
+    notes.push(`\n## Unavailable tools\nThese tools are disabled and cannot be called: ${config.disabled.join(', ')}. Say so plainly if asked to do something that needs one.`);
+  }
+  if (config.guidance) notes.push(`\n## House guidance\n${config.guidance}`);
+  const extra = notes.join('\n');
 
   return `You are the High 5 Adventure Learning Center assistant. You help the team work across FileMaker (internal records), Shopify (e-commerce), QuickBooks Online (accounting), Gmail, Google Calendar, and Google Drive.
 
@@ -130,7 +147,8 @@ Actions:
 - For write actions (send email, create event, delete file), confirm intent is clear from the conversation before acting. Do not ask for confirmation if the user has already explicitly stated what to do.
 - Be concise and cite what you touched. If a search returns nothing, say so.
 - Format with Markdown (it is rendered, not shown raw): present lists of records as a table with a header row, **bold** key figures, and close multi-row results with a one-line summary. Keep tables scannable — pick the few most useful columns rather than every field.
-- For "how many" / "what's the total" questions, compute the real aggregate across ALL matching rows — not just one page — and lead with it: the count (COUNT(*)) and any money total (fetch + sum, since QBO can't SUM). When you also list a large result set, state the full count and total FIRST, then the rows, so the key number is never lost even if the list is long.`;
+- For "how many" / "what's the total" questions, compute the real aggregate across ALL matching rows — not just one page — and lead with it: the count (COUNT(*)) and any money total (fetch + sum, since QBO can't SUM). When you also list a large result set, state the full count and total FIRST, then the rows, so the key number is never lost even if the list is long.
+${extra}`;
 }
 
 // ── FileMaker auth ───────────────────────────────────────────────────────────
@@ -628,10 +646,12 @@ export default async function handler(req, res) {
 
   try {
     // Resolve FileMaker token and Google session in parallel
-    const [fmpTok, googleSession] = await Promise.all([
+    const [fmpTok, googleSession, agentConfig] = await Promise.all([
       fmpToken(db),
       getGoogleSession(req),
+      readAgentConfig(db),
     ]);
+    const tools = activeTools(TOOLS, agentConfig);
 
     const ctx = {
       db,
@@ -647,8 +667,14 @@ export default async function handler(req, res) {
     const sources = []; const seen = new Set();
     const addSource = s => { const k = `${s.module}:${s.recordId}`; if (!seen.has(k) && sources.length < 12) { seen.add(k); sources.push(s); } };
 
-    for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
-      const stream = anthropic.messages.stream({ model: MODEL, max_tokens: MAX_OUTPUT_TOKENS, system: buildSystem(ctx.googleUser), tools: TOOLS, messages: convo });
+    for (let turn = 0; turn < agentConfig.maxTurns; turn++) {
+      const stream = anthropic.messages.stream({
+        model: agentConfig.model,
+        max_tokens: agentConfig.maxOutputTokens,
+        system: buildSystem(ctx.googleUser, agentConfig),
+        tools,
+        messages: convo,
+      });
       stream.on('text', delta => send({ type: 'delta', text: delta }));
       const msg = await stream.finalMessage();
 
@@ -659,7 +685,16 @@ export default async function handler(req, res) {
           if (block.type !== 'tool_use') continue;
           send({ type: 'status', text: statusFor(block.name, block.input) });
           let result;
-          try { result = await runTool(block.name, block.input, ctx); }
+          // Omitted from the request AND refused here. The two are not
+          // redundant: a tool_use can arrive from earlier conversation history
+          // that was built when the tool was still enabled.
+          try {
+            if (!tools.some(t => t.name === block.name)) {
+              result = { error: `The ${block.name} tool is disabled.` };
+            } else {
+              result = await runTool(block.name, block.input, ctx);
+            }
+          }
           catch (e) { result = { error: String(e?.message || e) }; }
           collectSources(block.name, block.input, result, addSource);
           results.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(result) });
