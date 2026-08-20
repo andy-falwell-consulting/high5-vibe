@@ -58,6 +58,14 @@ LIGHT = collections.OrderedDict(
         # Error shares the brand hue, because the palette has exactly one red. The
         # accent policy is what keeps the two signals apart; see BRAND.md, "One red,
         # two jobs".
+        # A link is a UI ROLE the system needs a token for, and it is NOT the accent.
+        # OE Trainings shipped with every registrant name in var(--brand), which put
+        # brand red on a whole column of table text — precisely what the accent
+        # policy prohibits ("red on text below 24px that is not a destructive
+        # label"). Blue is a brand colour, reads as a link everywhere, and leaves
+        # red meaning "this one matters".
+        ("link", "blue/800"),
+        ("link-hover", "blue/900"),
         ("error-fg", "red/800"),
         ("error-bg", "red/100"),
         ("error-border", "red/300"),
@@ -108,6 +116,8 @@ DARK = collections.OrderedDict(
         ("brand", "red/600"),
         ("brand-strong", "red/600"),
         ("focus-ring", "red/600"),
+        ("link", "blue/400"),
+        ("link-hover", "blue/300"),
         ("error-fg", "red/400"),
         ("error-bg", "red/1000"),
         ("error-border", "red/900"),
@@ -314,6 +324,9 @@ CONTRAST = [
     {"name": "danger button label", "fg": "on-error-solid", "bg": "error-solid", "min": 4.5},
     {"name": "danger button label (hover)", "fg": "on-error-solid", "bg": "error-solid-hover", "min": 4.5},
     {"name": "selected segment label", "fg": "on-surface-selected", "bg": "surface-selected", "min": 4.5},
+    {"name": "link on surface", "fg": "link", "bg": "surface", "min": 4.5},
+    {"name": "link on card", "fg": "link", "bg": "card", "min": 4.5},
+    {"name": "link hover on card", "fg": "link-hover", "bg": "card", "min": 4.5},
     {"name": "error callout", "fg": "error-fg", "bg": "error-bg", "min": 4.5},
     {"name": "subtle danger button label", "fg": "error-fg", "bg": "card", "min": 4.5},
     {"name": "success callout", "fg": "success-fg", "bg": "success-bg", "min": 4.5},
@@ -528,13 +541,20 @@ A("")
 A("/* --------------------------------------------------------------------------")
 A("   DARK THEME — exactly ONE block, by design.")
 A("")
-A("   No @media (prefers-color-scheme: dark) rule here. Vibe's own index.css")
-A("   currently duplicates its dark palette across a [data-theme] block AND a media")
-A("   query, which is a guaranteed drift source. One selector is enough when the")
-A("   app always resolves an explicit data-theme. tests/ fails if a second dark")
-A("   block appears.")
+A("   The selector is ATTRIBUTE-ONLY on purpose. An earlier version scoped it to")
+A("   html[data-theme=\"dark\"] and it never matched: Vibe sets data-theme on a DIV")
+A("   inside the body, not on the document element. The app went dark from its own")
+A("   stylesheets while these tokens stayed light, so every migrated component drew")
+A("   light-theme text on a dark background and the brand red resolved to its")
+A("   light-mode value. Custom properties inherit, so an unqualified attribute")
+A("   selector works wherever the attribute is put — which is not this system's")
+A("   business to dictate.")
+A("")
+A("   No @media (prefers-color-scheme: dark) rule either: one selector is enough")
+A("   when the app always resolves an explicit data-theme, and two blocks is a")
+A("   guaranteed drift source.")
 A("   -------------------------------------------------------------------------- */")
-A('html[data-theme="dark"] {')
+A('[data-theme="dark"] {')
 A(block(DARK, resolver=True))
 A("")
 A("  /* Category colours — dark. */")

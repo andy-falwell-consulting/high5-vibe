@@ -126,6 +126,9 @@ prominent" fails the label contrast.
   into chrome, and the tinted background already carries the status
 - Red as a **category colour**. It is the accent, and a category palette containing
   it cannot also signal "this one matters". `CAT_HUES` excludes it
+- Red as a **link colour**. Use `--link` (blue). A column of table rows whose every
+  name is brand red is the accent applied to ordinary body text — this happened in
+  OE Trainings' first migration and is what `--link` was added to prevent
 - Red on text below 24px that is not a destructive label, where it fails AA
 
 ### Category colour
