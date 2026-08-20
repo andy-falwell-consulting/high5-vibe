@@ -5,6 +5,7 @@ import { getTemplates, saveTemplate, TEMPLATE_VERSIONS, templateAttachments, sen
 import { getAgentConfig, saveAgentConfig } from '../api/agentConfig';
 import { getDriftReport, runReconcile, BUCKET_LABEL, linkRecord, isLinkable, needsJudgement, compareValues } from '../api/productDrift';
 import { updateVibeRecord } from '../api/vibeRecords';
+import { getCurrentEnv } from '../config/fmpEnvironments';
 import { pushToShopify, pushToQBO } from '../api/integrations';
 import MarkdownEditor from './MarkdownEditor';
 import QboConnect from './QboConnect';
@@ -155,6 +156,49 @@ function DriftBucket({ bucket, rows, truncated, onDone }) {
   );
 }
 
+// The SKU counter, read-only. It lives in Redis now rather than in a Tray
+// workflow, and the whole point of moving it was that someone at High 5 can
+// look at it — so it needs somewhere to be looked at. GET /api/next-sku peeks
+// without consuming, so opening this page can never burn a number.
+function SkuCounter() {
+  const [info, setInfo] = useState(null);
+  const [err, setErr] = useState(null);
+  useEffect(() => {
+    const db = getCurrentEnv().db;
+    fetch(`/api/next-sku?db=${encodeURIComponent(db)}`, { credentials: 'include' })
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then(setInfo).catch(e => setErr(e.message));
+  }, []);
+  return (
+    <section className="admin-section">
+      <h2 className="admin-section-title">Product SKU counter</h2>
+      <p className="admin-note">
+        Vibe issues product SKUs from its own counter. It starts at {info?.floor ?? 3000} so
+        it can never collide with the Tray counter FileMaker&apos;s script trigger still
+        uses — a numeric SKU at or above {info?.floor ?? 3000} was issued here. Vendor part
+        numbers and ISBNs are left alone; this only ever issues the next integer.
+      </p>
+      {err && <p className="admin-error">{err}</p>}
+      {!info ? <p>Loading…</p> : (
+        <div className="admin-drift-head">
+          <div className="admin-drift-total">
+            <span>{info.next}</span><label>next SKU</label>
+          </div>
+          <div className="admin-drift-total">
+            <span>{info.seeded ? info.current : '—'}</span><label>last issued</label>
+          </div>
+        </div>
+      )}
+      {info && !info.seeded && (
+        <p className="admin-note admin-missing">
+          Not seeded yet — the counter is created the first time a product is made, and the
+          first SKU it hands out will be {info.floor}.
+        </p>
+      )}
+    </section>
+  );
+}
+
 // Product drift between Vibe, QuickBooks and Shopify — see
 // docs/product-sync-audit.md.
 //
@@ -195,6 +239,8 @@ function DriftTab() {
   const changed = Object.entries(last?.delta || {});
 
   return (
+    <>
+    <SkuCounter />
     <section className="admin-section">
       <h2 className="admin-section-title">Product drift</h2>
       <p className="admin-note">
@@ -292,6 +338,7 @@ function DriftTab() {
         </button>
       </div>
     </section>
+    </>
   );
 }
 

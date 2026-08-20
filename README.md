@@ -97,7 +97,10 @@ breaks, since the failure is otherwise silent.
 
 **Shopify** — product and price sync, description backfill.
 
-**Tray** — issues product SKUs from an incrementing counter (`api/next-sku.js`).
+Product SKUs come from **Vibe's own counter** (`api/_sku.js`, issued via
+`api/next-sku.js`). This used to be a Tray workflow; Tray is no longer in the
+app's path at all. FileMaker Pro's script trigger still draws from Tray for
+products created there, in a range that cannot meet Vibe's — see `api/_sku.js`.
 
 Reconnect flows for QuickBooks and Shopify both live in **Admin → Integrations**.
 
