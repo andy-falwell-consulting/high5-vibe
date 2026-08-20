@@ -6,18 +6,18 @@
 
 .cl-trigger {
   font-size: 17px;
-  color: #79859a;
+  color: var(--fg-secondary);
   cursor: default;
   user-select: none;
   line-height: 1;
 }
-.cl-trigger:hover { color: var(--h5-red); }
+.cl-trigger:hover { color: var(--brand); }
 
 .cl-tooltip {
   position: fixed;
   z-index: 9999;
-  background: #1e2130;
-  border: 1px solid #2a2f45;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px 12px;
   min-width: 160px;
@@ -30,7 +30,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #79859a;
+  color: var(--fg-secondary);
   margin-bottom: 8px;
 }
 
@@ -50,15 +50,7 @@
 
 .cl-label {
   font-size: 15px;
-  color: #cbd5e1;
+  color: var(--fg);
 }
 
 /* Light theme */
-[data-theme="light"] .cl-tooltip {
-  background: #ffffff;
-  border-color: #e2e8f0;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-}
-[data-theme="light"] .cl-label { color: #334155; }
-[data-theme="light"] .cl-trigger { color: #5e6b7c; }
-[data-theme="light"] .cl-trigger:hover { color: var(--h5-red); }

@@ -6,16 +6,16 @@
   height: 100vh;
   padding: 24px;
   box-sizing: border-box;
-  background: radial-gradient(120% 90% at 50% -10%, #fff5ea 0%, #f4f7fb 48%, #eef2ff 100%);
-  font-family: 'Source Sans 3', 'Myriad Pro', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: radial-gradient(120% 90% at 50% -10%, var(--warning-bg) 0%, var(--surface-sunken) 48%, var(--info-bg) 100%);
+  font-family: var(--font-sans);
 }
 
 .ls-card {
   position: relative;
   width: 380px;
   max-width: 100%;
-  background: #ffffff;
-  border: 1px solid #eef1f6;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 22px;
   overflow: hidden;
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.16), 0 3px 10px rgba(15, 23, 42, 0.05);
@@ -41,7 +41,7 @@
   width: 76px;
   padding: 9px 11px;
   border-radius: 16px;
-  background: #ffffff;
+  background: var(--surface);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -61,10 +61,10 @@
 
 .ls-title {
   margin: 0;
-  font-family: 'Oswald', sans-serif;
+  font-family: var(--font-title);
   font-size: 30px;
   font-weight: 600;
-  color: #0f172a;
+  color: var(--fg);
   letter-spacing: 0.02em;
 }
 
@@ -72,7 +72,7 @@
   margin: 0;
   font-size: 15px;
   font-weight: 600;
-  color: var(--h5-red);
+  color: var(--brand);
   letter-spacing: 0.01em;
 }
 
@@ -80,14 +80,14 @@
   margin: 6px 0 4px;
   font-size: 15.5px;
   line-height: 1.45;
-  color: #64748b;
+  color: var(--fg-secondary);
   max-width: 260px;
 }
 
 .ls-error {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  color: #b91c1c;
+  background: var(--error-bg);
+  border: 1px solid var(--error-fg);
+  color: var(--error-solid);
   font-size: 14px;
   padding: 8px 12px;
   border-radius: 8px;
@@ -101,9 +101,9 @@
   gap: 10px;
   margin-top: 10px;
   padding: 12px 20px;
-  background: #ffffff;
-  color: #3c4043;
-  border: 1px solid #dadce0;
+  background: var(--surface);
+  color: var(--fg-disabled);
+  border: 1px solid var(--border-interactive);
   border-radius: 10px;
   font-size: 16px;
   font-weight: 600;
@@ -115,8 +115,8 @@
   justify-content: center;
 }
 .ls-google-btn:hover {
-  background: #f8fafc;
-  border-color: #c9ced6;
+  background: var(--surface-sunken);
+  border-color: var(--border-interactive);
   box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
   transform: translateY(-1px);
 }
@@ -126,31 +126,31 @@
 .ls-note {
   margin: 12px 0 0;
   font-size: 13px;
-  color: #94a3b8;
+  color: var(--fg-secondary);
 }
 
 .ls-version {
   margin: 6px 0 0;
   font-size: 12px;
-  color: #cbd5e1;
+  color: var(--fg);
 }
 
 /* ── Dark theme ─────────────────────────────────────────────────── */
 [data-theme="dark"] .ls-root {
-  background: radial-gradient(120% 90% at 50% -10%, #171a24 0%, #0e1017 55%, #0b0d14 100%);
+  background: radial-gradient(120% 90% at 50% -10%, var(--surface-hover) 0%, var(--bg) 55%, var(--bg) 100%);
 }
 [data-theme="dark"] .ls-card {
-  background: #13151c;
-  border-color: #1e2130;
+  background: var(--card);
+  border-color: var(--border);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 3px 10px rgba(0, 0, 0, 0.4);
 }
 /* dusk-ify the scene so it reads as evening rather than midday */
 [data-theme="dark"] .ls-scene svg { filter: brightness(0.72) saturate(0.92); }
-[data-theme="dark"] .ls-logo { border-color: #13151c; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5); }
-[data-theme="dark"] .ls-title { color: #f1f5f9; }
-[data-theme="dark"] .ls-hello { color: #9aa3b2; }
-[data-theme="dark"] .ls-error { background: #2d1a1a; border-color: #7f1d1d; color: #fca5a5; }
-[data-theme="dark"] .ls-google-btn { background: #ffffff; color: #3c4043; border-color: #dadce0; }
-[data-theme="dark"] .ls-google-btn:hover { background: #f1f5f9; }
-[data-theme="dark"] .ls-note { color: #64748b; }
-[data-theme="dark"] .ls-version { color: #475569; }
+[data-theme="dark"] .ls-logo { border-color: var(--border); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5); }
+[data-theme="dark"] .ls-title { color: var(--fg); }
+[data-theme="dark"] .ls-hello { color: var(--fg-secondary); }
+[data-theme="dark"] .ls-error { background: var(--error-bg); border-color: var(--error-bg); color: var(--error-fg); }
+[data-theme="dark"] .ls-google-btn { background: var(--surface); color: var(--fg-disabled); border-color: var(--border-interactive); }
+[data-theme="dark"] .ls-google-btn:hover { background: var(--surface-sunken); }
+[data-theme="dark"] .ls-note { color: var(--fg-secondary); }
+[data-theme="dark"] .ls-version { color: var(--fg-disabled); }
