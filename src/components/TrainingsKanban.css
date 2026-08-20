@@ -669,3 +669,41 @@ div:hover > .tkb-card-remove { opacity: 1; }
 .tkb-card-ops { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #94a3b8; margin-top: 3px; }
 .tkb-card-ops-ic { color: #0ea5e9; }
 [data-theme="light"] .tkb-card-ops { color: #64748b; }
+
+/* On the board but carrying a status no lane matches — blank, or one of the
+   four spliced values in the data. Stated in the header rather than left as a
+   silent gap between "N on board" and the number of cards you can count. */
+.tkb-stranded {
+  font-size: var(--text-caption, 12px);
+  color: var(--warning-fg, #b45309);
+  background: var(--warning-bg, #fef3c7);
+  border-radius: var(--radius-pill, 999px);
+  padding: 1px 8px;
+  white-space: nowrap;
+  cursor: help;
+}
+
+/* Empty-board prompt. Only renders when the board is genuinely empty and there
+   is something to put on it, so it cannot nag a board someone deliberately
+   cleared down to nothing. */
+.tkb-seed-prompt {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 16px;
+  background: var(--surface-sunken, #13151c);
+  border-bottom: 1px solid var(--border, #1e2130);
+  font-size: var(--text-caption, 12px);
+  color: var(--fg-secondary, #8b93a7);
+}
+.tkb-seed-prompt-btn {
+  border: 1px solid var(--border, #1e2130);
+  background: var(--card, #1a1d27);
+  color: var(--fg, #e6e9f0);
+  border-radius: var(--radius-sm, 6px);
+  padding: 4px 12px;
+  font-size: var(--text-caption, 12px);
+  font-weight: 600;
+  cursor: pointer;
+}
+.tkb-seed-prompt-btn:hover:not(:disabled) { border-color: var(--h5-red, #e8322a); }
+.tkb-seed-prompt-btn:disabled { opacity: 0.6; cursor: default; }
+.tkb-seed-prompt-err { color: var(--error-fg, #f87171); }

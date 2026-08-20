@@ -41,16 +41,7 @@ export const PIPELINE_SHORT = [
   'Inquiry', 'Follow-up', 'Proposed', 'Approved', 'Waiting on $', 'Confirmed', 'Ready to bill',
 ];
 
-// Kanban board columns = every in-flight stage (same set as PIPELINE_STAGES —
-// there's no separate "active" subset to carve out here the way CCS does,
-// since Trainings has no non-pipeline in-flight status). Terminal statuses
-// (Final Invoiced, Completed, No Go, ...) are not columns: a card set to one
-// drops off the board, same as CCS's board. Named to match CCS's ccsStatus.js
-// (ACTIVE_STAGES) since it's the same role — the board component and its API
-// route both key off this name.
-export const ACTIVE_STAGES = PIPELINE_STAGES;
-
-// Terminal — shown as a pill, never as a stage.
+// Terminal — shown as a pill on the record, and its own lane on the board.
 export const TERMINAL_STATUSES = ['Final Invoiced', 'Completed', 'No Go'];
 
 // Everything the dropdown offers. Includes values found only in the DATA
@@ -62,6 +53,27 @@ export const ALL_STATUSES = [
   ...TERMINAL_STATUSES,
   'Keene EOL/C&S', 'Covid', 'OE', 'Business Development', 'Out Reach', 'Other',
 ];
+
+// Kanban board columns — ONE LANE PER STATUS THE DROPDOWN OFFERS, in the same
+// order the dropdown lists them.
+//
+// This used to be the seven pipeline stages only, on the reasoning that a
+// terminal record has left the pipeline rather than reached its end. That
+// reasoning is sound for a funnel and wrong for a board: it meant nine of the
+// sixteen statuses had nowhere to go, so a card set to one silently vanished
+// with no lane to look in and no message saying why. The pipeline reading still
+// exists — PIPELINE_STAGES drives the hero dots on the record — but the board
+// now shows the whole vocabulary.
+export const BOARD_COLUMNS = ALL_STATUSES;
+
+// Header labels. The seven pipeline stages reuse the short labels the hero dots
+// already use, so the same stage reads the same in both places; the rest are
+// short enough already, apart from the one that is not.
+export const BOARD_SHORT = {
+  ...Object.fromEntries(PIPELINE_STAGES.map((s, i) => [s, PIPELINE_SHORT[i]])),
+  'Business Development': 'Biz Dev',
+  'Keene EOL/C&S': 'Keene EOL',
+};
 
 export const stageIndex = status => PIPELINE_STAGES.indexOf(String(status || '').trim());
 

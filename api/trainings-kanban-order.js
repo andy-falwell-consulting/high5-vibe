@@ -13,8 +13,8 @@ import { ALLOWED_DBS } from './_fmp.js';
 
 const redis = Redis.fromEnv();
 const SYNC_KEY = process.env.QBO_SYNC_KEY;
-// Mirrors ACTIVE_STAGES in src/config/trainingStatus.js — the in-flight
-// training statuses that are Kanban board columns.
+// Mirrors BOARD_COLUMNS in src/config/trainingStatus.js — one column per
+// training status, which is every value the record's dropdown offers.
 //
 // Duplicated rather than imported for the same reason api/kanban-order.js
 // duplicates CCS's list: modules under src/ use extensionless relative
@@ -22,11 +22,14 @@ const SYNC_KEY = process.env.QBO_SYNC_KEY;
 // resolves at build time but Node's ESM loader will not — importing it here
 // would break this function at runtime.
 //
-// KEEP IN SYNC WITH src/config/trainingStatus.js's PIPELINE_STAGES /
-// ACTIVE_STAGES. If a stage is ever renamed there, rename it here too (and
-// see kanban-order.js's LEGACY_COLUMNS pattern if old orders need to survive
-// the rename — not needed yet, since Trainings' stage names haven't changed).
-const ACTIVE_STAGES = [
+// KEEP IN SYNC WITH src/config/trainingStatus.js's ALL_STATUSES /
+// BOARD_COLUMNS. This list is a WHITELIST — a column missing from it is
+// rejected with 400 and its lane silently loses drag-to-reorder, which is
+// exactly how the nine statuses added below would have failed. If a status is
+// ever renamed there, rename it here too (and see kanban-order.js's
+// LEGACY_COLUMNS pattern if old orders need to survive the rename).
+const BOARD_COLUMNS = [
+  // The seven pipeline stages.
   'Inquiry',
   'Follow-up Needed',
   'Proposed',
@@ -34,6 +37,17 @@ const ACTIVE_STAGES = [
   'Waiting on $ & Signed TC',
   'Confirmed/Scheduled',
   'Ready to Bill',
+  // Terminal.
+  'Final Invoiced',
+  'Completed',
+  'No Go',
+  // Neither — real values carried by real records.
+  'Keene EOL/C&S',
+  'Covid',
+  'OE',
+  'Business Development',
+  'Out Reach',
+  'Other',
 ];
 const keyFor = (db, columnId) => `trainings-kanban:order:${db}:${columnId}`;
 const asList = v => (Array.isArray(v) ? v.map(String) : []);
@@ -44,7 +58,7 @@ async function authorized(req) {
 }
 
 async function allOrders(db) {
-  const entries = await Promise.all(ACTIVE_STAGES.map(async col => [col, asList(await redis.lrange(keyFor(db, col), 0, -1))]));
+  const entries = await Promise.all(BOARD_COLUMNS.map(async col => [col, asList(await redis.lrange(keyFor(db, col), 0, -1))]));
   return Object.fromEntries(entries);
 }
 
@@ -56,7 +70,7 @@ export default async function handler(req, res) {
   try {
     if (req.method === 'POST') {
       const columnId = String(req.query?.columnId || '');
-      if (!ACTIVE_STAGES.includes(columnId)) return res.status(400).json({ error: 'columnId not recognized' });
+      if (!BOARD_COLUMNS.includes(columnId)) return res.status(400).json({ error: 'columnId not recognized' });
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
       const order = asList(body.order);
       const key = keyFor(db, columnId);
