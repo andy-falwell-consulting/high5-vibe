@@ -187,7 +187,10 @@ export default function App() {
       const pump = () => {
         if (cancelled || next >= queue.length) return
         const s = queue[next++]
-        getAllRecords(s.layout, s.opts).catch(() => {}).finally(pump)
+        // revalidate:false — prewarm exists to make the first navigation to a
+        // module fast, so a cache that already exists needs nothing further.
+        // Without this each page load re-pulled all seven from the replica.
+        getAllRecords(s.layout, { ...s.opts, revalidate: false }).catch(() => {}).finally(pump)
       }
       for (let i = 0; i < PREWARM_CONCURRENCY; i++) pump()
     }, 2500)

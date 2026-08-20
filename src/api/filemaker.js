@@ -257,6 +257,24 @@ const MEM_TTL_MS = 5 * 60 * 1000;
 // in the list (in-app create/edit/delete patch the cache live). The real fix for
 // both speed AND freshness is the server-side replica.
 const IDB_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+// How long an IndexedDB entry counts as FRESH — i.e. good enough to serve
+// without also re-pulling the layout from the replica behind it.
+//
+// This did not exist, and its absence was the single largest consumer of
+// Upstash bandwidth. readCacheAsync returned `fresh: false` for every IDB hit
+// regardless of age, so on every page load the (empty) memory cache fell
+// through to IndexedDB, the entry was treated as stale, and
+// revalidateFromReplica re-pulled the WHOLE LAYOUT. Measured against
+// production: the eight prewarmed layouts are 61 MB, so one page load cost
+// 61 MB of Redis egress, per tab, silently, in the background.
+//
+// Ten minutes rather than something longer, because this does trade freshness:
+// a record another user changes is now up to ten minutes late in a list that
+// was already open. In-app creates and edits still patch the cache live
+// (patchCachedRecord), so this only affects changes made by SOMEONE ELSE or
+// directly in FileMaker — and FileMaker's own sync is manual now anyway.
+const IDB_FRESH_MS = 10 * 60 * 1000;
 const memCache = {};
 
 // When true, a present (even stale) cache is displayed as-is and NOT bulk-
@@ -362,9 +380,13 @@ export async function readCacheAsync(layout, cacheVersion) {
   try {
     const entry = await idbGet(idbKey(layout, cacheVersion));
     if (entry) {
-      if (Date.now() - entry.ts < IDB_TTL_MS) {
+      const age = Date.now() - entry.ts;
+      if (age < IDB_TTL_MS) {
         memCache[memKey(layout, cacheVersion)] = { ts: entry.ts, records: entry.records, total: entry.total, complete: entry.complete };
-        return { records: entry.records, total: entry.total, fresh: false, complete: entry.complete ?? true };
+        // The promoted memCache entry keeps the ORIGINAL write time, so this
+        // window is measured from when the data was fetched, not from when the
+        // tab happened to open.
+        return { records: entry.records, total: entry.total, fresh: age < IDB_FRESH_MS, complete: entry.complete ?? true };
       }
       idbDelete(idbKey(layout, cacheVersion)).catch(() => {});
     }
@@ -654,7 +676,11 @@ async function revalidateFromReplica(layout, cacheVersion) {
   finally { revalidating.delete(mk); }
 }
 
-export async function getAllRecords(layout, { onProgress, batchSize = 100, slimForStorage, cacheVersion, findQuery, sort } = {}) {
+// `revalidate: false` — return a cache if there is one and DO NOT refresh it
+// behind the scenes. For the startup prewarm, whose job is to make the FIRST
+// navigation to a module fast. Once a cache exists that job is done; re-pulling
+// seven layouts nobody is looking at, on every page load, was pure egress.
+export async function getAllRecords(layout, { onProgress, batchSize = 100, slimForStorage, cacheVersion, findQuery, sort, revalidate = true } = {}) {
   purgeLegacyCacheKeys();
   const mk = memKey(layout, cacheVersion);
   const cached = await readCacheAsync(layout, cacheVersion);
@@ -668,7 +694,9 @@ export async function getAllRecords(layout, { onProgress, batchSize = 100, slimF
     if (onProgress) onProgress({ records: cached.records, total: cached.total, done: true });
     // Serve the cache instantly, then refresh in the background so separate
     // browsers/tabs converge within seconds instead of waiting out the cache TTL.
-    if (REPLICA_LAYOUTS[layout] && !findQuery) {
+    if (!revalidate) {
+      // Prewarm: a cache exists, which is all this call was for.
+    } else if (REPLICA_LAYOUTS[layout] && !findQuery) {
       revalidateFromReplica(layout, cacheVersion); // fast replica re-pull (stale-while-revalidate)
     } else if (!LAZY_REFRESH) {
       // Non-replica layouts stay lazy — a full FileMaker re-fetch is slow and
