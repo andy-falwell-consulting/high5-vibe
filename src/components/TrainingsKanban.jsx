@@ -17,6 +17,7 @@ import { updateVibeRecord } from '../api/vibeRecords'
 import { getCurrentEnv } from '../config/fmpEnvironments'
 import { TRAININGS_LAYOUT as LAYOUT, TRAININGS_CACHE_VERSION as CACHE_VERSION, TRAINER_SLOTS } from '../config/trainingsCache'
 import { ACTIVE_STAGES, PIPELINE_STAGES, PIPELINE_SHORT, statusColor } from '../config/trainingStatus'
+import { useOpsLeads } from '../hooks/useOpsLeads';
 import { useTrainingsKanbanBoard } from '../hooks/useTrainingsKanbanBoard'
 import { useTrainingsKanbanOrder } from '../hooks/useTrainingsKanbanOrder'
 import './TrainingsKanban.css'
@@ -38,6 +39,15 @@ const getStatus = r => String(r.fieldData?.Status || '').trim()
 
 const TRAINER_KEYS = ['Lead Trainer', ...TRAINER_SLOTS]
 
+// The same M/D/YYYY parser Trainings.jsx uses. Kept local rather than shared
+// because this file already carries its own small helpers, and a date parse
+// that returns 0 for an unparseable value is what the "upcoming" filter wants —
+// a training with no start date is not upcoming, it is unscheduled.
+const parseFmDate = v => {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(String(v || '').trim())
+  return m ? new Date(`${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}T00:00:00`).getTime() || 0 : 0
+}
+
 function matchesSearch(r, q) {
   if (!q) return true
   const f = r.fieldData
@@ -51,7 +61,7 @@ function matchesSearch(r, q) {
   return haystack.includes(q.toLowerCase())
 }
 
-function KanbanCardView({ record, saving, dimmed }) {
+function KanbanCardView({ record, saving, dimmed, opsLead }) {
   const f = record.fieldData
   const leadTrainer = f['Lead Trainer']
   return (
@@ -69,6 +79,13 @@ function KanbanCardView({ record, saving, dimmed }) {
       {leadTrainer && (
         <div className="tkb-card-lead"><span className="tkb-card-lead-ic">◇</span>{leadTrainer}</div>
       )}
+      {/* The OPS lead, which is a different person answering a different
+          question from the lead trainer: who is running the job internally,
+          rather than who is delivering the training. CCS's board shows only the
+          ops lead because it has no trainer; here both are worth seeing. */}
+      {opsLead && (
+        <div className="tkb-card-ops"><span className="tkb-card-ops-ic">◈</span>{opsLead}</div>
+      )}
     </div>
   )
 }
@@ -77,7 +94,7 @@ function KanbanCardView({ record, saving, dimmed }) {
 // card reorders between them (over.id resolves to that specific card's id,
 // not just "somewhere in this column") — see handleDragEnd for how that's
 // distinguished from a cross-lane move.
-function DraggableCard({ record, saving, onOpen, dimmed, onRemove }) {
+function DraggableCard({ record, saving, onOpen, dimmed, onRemove, leadFor }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: record.recordId,
   })
@@ -101,7 +118,7 @@ function DraggableCard({ record, saving, onOpen, dimmed, onRemove }) {
         onOpen(record)
       }}
     >
-      <KanbanCardView record={record} saving={saving} dimmed={dimmed} />
+      <KanbanCardView record={record} saving={saving} dimmed={dimmed} opsLead={leadFor?.(record.recordId)} />
       {onRemove && (
         <button className="tkb-card-remove" title="Remove from board"
           onPointerDown={e => e.stopPropagation()}
@@ -226,7 +243,7 @@ function KanbanDetail({ record, onClose, onNavigateTo }) {
   )
 }
 
-function KanbanColumn({ column, records, saving, onOpen, collapsed, onToggleCollapse, search, onRemove }) {
+function KanbanColumn({ column, records, saving, onOpen, collapsed, onToggleCollapse, search, onRemove, leadFor }) {
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: column.id })
   const { attributes, listeners, setNodeRef: setSortRef, transform, transition, isDragging: isColDragging } = useSortable({
     id: `col::${column.id}`,
@@ -277,6 +294,7 @@ function KanbanColumn({ column, records, saving, onOpen, collapsed, onToggleColl
                   onOpen={onOpen}
                   dimmed={search && !matches}
                   onRemove={onRemove}
+                  leadFor={leadFor}
                 />
               )
             })}
@@ -293,9 +311,21 @@ function KanbanColumn({ column, records, saving, onOpen, collapsed, onToggleColl
 // Searchable picker to add active-status trainings onto the board. Candidates
 // are active-stage records not already on the board; clicking one adds it (it
 // then drops out of the list). Stays open for bulk adding.
-function AddToBoardPanel({ candidates, onAdd, onClose }) {
+function AddToBoardPanel({ candidates, onAdd, onClose, onSeedUpcoming }) {
   const [q, setQ] = useState('')
   const [added, setAdded] = useState(() => new Set())
+  const [seeding, setSeeding] = useState(false)
+  const [seedResult, setSeedResult] = useState(null)
+
+  // Everything starting today or later, from the candidates already computed —
+  // so "upcoming" means the same thing here as the list below shows, and a
+  // record excluded from the picker cannot arrive on the board by another door.
+  const upcoming = candidates.filter(r => {
+    const d = parseFmDate(r.fieldData['Start Date'])
+    if (!d) return false
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    return d >= today.getTime()
+  })
   const needle = q.trim().toLowerCase()
   const list = candidates
     .filter(r => !added.has(String(r.recordId)))
@@ -310,6 +340,29 @@ function AddToBoardPanel({ candidates, onAdd, onClose }) {
           <span>Add trainings to the board</span>
           <button className="tkb-add-close" onClick={onClose} aria-label="Close">✕</button>
         </div>
+        {/* Bulk seed, for filling an empty board. Adds only — nothing already
+            on the board is touched and nothing is removed, so pressing it twice
+            is harmless. */}
+        {upcoming.length > 0 && (
+          <div className="tkb-add-seed">
+            <button className="tkb-add-seed-btn" disabled={seeding}
+              onClick={async () => {
+                setSeeding(true); setSeedResult(null)
+                try { setSeedResult(await onSeedUpcoming(upcoming)) }
+                catch (e) { setSeedResult({ error: e.message }) }
+                finally { setSeeding(false) }
+              }}>
+              {seeding ? 'Adding…' : `＋ Add all ${upcoming.length} upcoming`}
+            </button>
+            <span className="tkb-add-seed-note">
+              {seedResult
+                ? (seedResult.error
+                    ? seedResult.error
+                    : `Added ${seedResult.seeded}${seedResult.alreadyOnBoard ? `, ${seedResult.alreadyOnBoard} already there` : ''}.`)
+                : 'Everything starting today or later'}
+            </span>
+          </div>
+        )}
         <input className="tkb-add-search" autoFocus placeholder="Search active trainings…" value={q} onChange={e => setQ(e.target.value)} />
         <div className="tkb-add-list">
           {list.length === 0 && <div className="tkb-add-empty">{needle ? 'No matching active trainings.' : 'No active trainings left to add.'}</div>}
@@ -331,6 +384,7 @@ function AddToBoardPanel({ candidates, onAdd, onClose }) {
 }
 
 export default function TrainingsKanban({ navTarget, onNavigateTo, onClearNav }) {
+  const opsLead = useOpsLeads(getCurrentEnv().db, 'trainings');
   const [refreshKey, setRefreshKey] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
   const [search, setSearch] = useState('')
@@ -616,6 +670,7 @@ export default function TrainingsKanban({ navTarget, onNavigateTo, onClearNav })
       )}
       {showAdd && (
         <AddToBoardPanel
+          onSeedUpcoming={list => board.seed(list.map(r => String(r.recordId)))}
           candidates={displayRecords.filter(r => ACTIVE_STATUSES.has(getStatus(r)) && !board.ids.has(String(r.recordId)))}
           onAdd={r => board.toggle(r.recordId, true)}
           onClose={() => setShowAdd(false)}
@@ -637,6 +692,7 @@ export default function TrainingsKanban({ navTarget, onNavigateTo, onClearNav })
                 records={byColumn[col.id] || []}
                 saving={saving}
                 onOpen={setDetailRecord}
+                leadFor={opsLead.leadFor}
                 collapsed={!!collapsed[col.id]}
                 onToggleCollapse={() => toggleCollapse(col.id)}
                 search={search}
@@ -646,7 +702,7 @@ export default function TrainingsKanban({ navTarget, onNavigateTo, onClearNav })
           </div>
         </SortableContext>
         <DragOverlay dropAnimation={null}>
-          {activeRecord && <KanbanCardView record={activeRecord} />}
+          {activeRecord && <KanbanCardView record={activeRecord} opsLead={opsLead.leadFor(activeRecord.recordId)} />}
         </DragOverlay>
       </DndContext>
       {detailRecord && (

@@ -18,6 +18,7 @@ import {
 import { BRAND, UI } from '../config/brandColors'
 import './Estimates.css'
 import DeleteRecordButton from './DeleteRecordButton'
+import ReminderModal from './ReminderModal'
 
 // FileMaker MM/DD/YYYY → QBO YYYY-MM-DD
 const toIsoDate = v => { if (!v) return undefined; const [m, d, y] = String(v).split(' ')[0].split('/'); return y ? `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}` : undefined }
@@ -98,6 +99,7 @@ function Section({ title, icon, children }) {
 export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}) {
   const { records, total, loading, error } = useAllRecords(LAYOUT, { cacheVersion: CACHE_VERSION })
   const [selected, setSelected] = useState(null)
+  const [remindOpen, setRemindOpen] = useState(false)
   const [sidebarWidth, setSidebarWidth] = useState(300)
   const [edits, setEdits] = useState({})
   const [saving, setSaving] = useState(false)
@@ -495,6 +497,7 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
                 />
               </div>
               <div className="est-topbar-actions">
+                <button className="est-ghost-btn" onClick={() => setRemindOpen(true)}>⏰ Remind</button>
                 <DeleteRecordButton
                   layout={LAYOUT} cacheVersion={CACHE_VERSION}
                   recordId={selected.recordId}
@@ -563,6 +566,22 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
           </>
         )}
       </main>
+
+      {remindOpen && selected && (
+        <ReminderModal
+          initial={{
+            // The FileMaker recordId, which is what this module's navTarget
+            // resolves and what RECORD_SOURCES looks a record up by. Contacts
+            // are the exception (they key on the contact id) because their
+            // FileMaker table is being retired; these layouts are not.
+            recordType: 'estimates',
+            recordId: String(selected.recordId),
+            recordLabel: f.Title || f.zz__Display_Contact__ct || 'estimate',
+            title: `Follow up on ${f.Title || f.zz__Display_Contact__ct || 'estimate'}`,
+          }}
+          onClose={() => setRemindOpen(false)}
+          onSaved={() => setRemindOpen(false)} />
+      )}
 
       {showNew && (
         <RecordFormModal

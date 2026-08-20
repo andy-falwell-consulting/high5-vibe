@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { fetchBoardIds, setBoardMembership } from '../api/trainingsKanbanBoard';
+import { fetchBoardIds, setBoardMembership, seedBoard } from '../api/trainingsKanbanBoard';
 
 // Shared board-membership set: which Trainings recordIds the team has put on
 // the Kanban board. Optimistic toggle, reverts to server truth on failure.
@@ -25,5 +25,12 @@ export function useTrainingsKanbanBoard() {
       .catch(() => refresh()); // revert to server state on error
   }, [refresh]);
 
-  return { ids, loaded, toggle, refresh };
+  /** Add many at once. Resolves to what the server actually did. */
+  const seed = useCallback(async (list) => {
+    const r = await seedBoard(list);
+    setIds(new Set(r.ids || []));
+    return r;
+  }, []);
+
+  return { ids, loaded, toggle, refresh, seed };
 }

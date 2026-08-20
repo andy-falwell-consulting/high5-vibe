@@ -4,6 +4,7 @@ import ListToolbar, { useListControls, ListBody } from './ListControls'
 import { listCourses, getRoster, courseKey, feeTotal, depositDue, balanceDue, rosterTotals, money } from '../api/oeTrainings'
 import { canonicalEnrollment } from '../config/oeEnrollment'
 import WorkshopEmailModal from './WorkshopEmailModal'
+import ReminderModal from './ReminderModal'
 import './OETrainings.css'
 
 // OE Trainings — the ROSTER side of open-enrollment programs.
@@ -40,6 +41,7 @@ export default function OETrainings({ navTarget, onClearNav, onRecordSelect, onN
   const [selected, setSelected] = useState(null)    // { course, rows } | null
   const [rosterBusy, setRosterBusy] = useState(false)
   const [emailing, setEmailing] = useState(null)   // the registration being e-mailed
+  const [remindOpen, setRemindOpen] = useState(false)
   const [error, setError] = useState(null)
   const [sidebarWidth, setSidebarWidth] = useState(320)
   const dragging = useRef(false)
@@ -195,6 +197,7 @@ export default function OETrainings({ navTarget, onClearNav, onRecordSelect, onN
                       View offering →
                     </button>
                   )}
+                  <button className="oet-link" onClick={() => setRemindOpen(true)}>⏰ Remind</button>
                 </div>
               </div>
             </div>
@@ -277,6 +280,22 @@ export default function OETrainings({ navTarget, onClearNav, onRecordSelect, onN
           </>
         )}
       </main>
+
+      {remindOpen && selected && (
+        <ReminderModal
+          initial={{
+            // The COURSE CODE, not a recordId — a session is the thing being
+            // reminded about, and it has no FileMaker record of its own. The
+            // module's deep link takes the same code, so the reminder opens the
+            // roster it came from.
+            recordType: 'oe-trainings',
+            recordId: selected.course,
+            recordLabel: cat?.['Program Type'] || selected.course,
+            title: `Follow up on ${cat?.['Program Type'] || selected.course}`,
+          }}
+          onClose={() => setRemindOpen(false)}
+          onSaved={() => setRemindOpen(false)} />
+      )}
 
       {emailing && (
         <WorkshopEmailModal

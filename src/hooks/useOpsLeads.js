@@ -7,13 +7,13 @@ import { fetchOpsLeads, setOpsLead, OPS_LEAD_FALLBACK } from '../api/opsLead';
 // can label every card without a call per card. Writes are optimistic and roll
 // back on failure — the value is a label, so showing it briefly and taking it
 // away beats blocking the dropdown on a round trip.
-export function useOpsLeads(db) {
+export function useOpsLeads(db, kind) {
   const [leads, setLeads] = useState({});
   const [roster, setRoster] = useState(OPS_LEAD_FALLBACK);
 
   useEffect(() => {
     let alive = true;
-    fetchOpsLeads(db)
+    fetchOpsLeads(db, kind)
       .then(j => {
         if (!alive) return;
         setLeads(j.leads || {});
@@ -21,18 +21,18 @@ export function useOpsLeads(db) {
       })
       .catch(() => { /* keep the fallback roster; an empty map just shows no leads */ });
     return () => { alive = false; };
-  }, [db]);
+  }, [db, kind]);
 
   const assign = useCallback(async (recordId, name) => {
     const id = String(recordId);
     let previous;
     setLeads(p => { previous = p[id]; const n = { ...p }; if (name) n[id] = name; else delete n[id]; return n; });
     try {
-      await setOpsLead(db, id, name);
+      await setOpsLead(db, id, name, kind);
     } catch {
       setLeads(p => { const n = { ...p }; if (previous) n[id] = previous; else delete n[id]; return n; });
     }
-  }, [db]);
+  }, [db, kind]);
 
   // For the create path: reflect a server-side auto-assignment locally without
   // re-fetching the whole map.

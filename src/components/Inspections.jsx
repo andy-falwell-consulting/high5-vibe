@@ -18,6 +18,7 @@ import { fetchCarriedLines, markCarriedLines, clearCarriedLine } from '../api/na
 import { copyProfileFields } from '../config/inspectionCopy';
 import './Inspections.css';
 import DeleteRecordButton from './DeleteRecordButton'
+import ReminderModal from './ReminderModal'
 
 const LAYOUT = 'Inspections_New';
 const CACHE_VERSION = 1;
@@ -137,6 +138,7 @@ function Section({ title, icon, children }) {
 export default function Inspections({ navTarget, onClearNav, onRecordSelect } = {}) {
   const { records, total } = useAllRecords(LAYOUT, { cacheVersion: CACHE_VERSION });
   const [selected, setSelected] = useState(null);
+  const [remindOpen, setRemindOpen] = useState(false)
   const [navWidth, setNavWidth] = useState(300);
   const [edits, setEdits] = useState({});
   const [saving, setSaving] = useState(false);
@@ -528,6 +530,7 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
                 </div>
               </div>
               <div className="insp-topbar-actions">
+                <button className="insp-ghost-btn" onClick={() => setRemindOpen(true)}>⏰ Remind</button>
                 <DeleteRecordButton
                   layout={LAYOUT} cacheVersion={CACHE_VERSION}
                   recordId={selected.recordId}
@@ -604,6 +607,22 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
           </>
         )}
       </main>
+
+      {remindOpen && selected && (
+        <ReminderModal
+          initial={{
+            // The FileMaker recordId, which is what this module's navTarget
+            // resolves and what RECORD_SOURCES looks a record up by. Contacts
+            // are the exception (they key on the contact id) because their
+            // FileMaker table is being retired; these layouts are not.
+            recordType: 'inspections',
+            recordId: String(selected.recordId),
+            recordLabel: f.Organization || f['inspt_CNTCT__site::Name_Organization'] || 'inspection',
+            title: `Follow up on ${f.Organization || f['inspt_CNTCT__site::Name_Organization'] || 'inspection'}`,
+          }}
+          onClose={() => setRemindOpen(false)}
+          onSaved={() => setRemindOpen(false)} />
+      )}
 
       {showNew && (
         <RecordFormModal

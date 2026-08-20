@@ -13,6 +13,17 @@ const fmtDateNoZero = v => {
 
 const STAFF_FIELDS = ['Lead Trainer', 'Trainers', 'trainers2', 'trainers3', 'trainers4', 'trainers5', 'trainers6', 'trainers7', 'trainers8', 'trainers9'];
 
+// Mirrors TRAINER_COSTS in Trainings.jsx — the same seven lines the Costs and
+// Expenses tab shows, so what prints is exactly what was entered there.
+const TRAINER_COST_LINES = [
+  { label: 'Food',        est: 'Prog Food',        act: 'Act Prog Food' },
+  { label: 'Lodging',     est: 'Prog Lodging',     act: 'Act Prog Lodging' },
+  { label: 'Mileage',     est: 'Prog Mileage',     act: null },
+  { label: 'Airfare',     est: 'Prog Airfare',     act: 'Act Prog Airfare' },
+  { label: 'Car rental',  est: 'Prog Car Rental',  act: 'Act Prog Car Rental' },
+  { label: 'Misc travel', est: 'Prog Misc Travel', act: 'Act Prog Misc Travel' },
+];
+
 export function workOrderMeta(record) {
   const f = record.fieldData || {};
   const id = f._kpt__TrainingProposal_ID || record.recordId || '';
@@ -63,6 +74,33 @@ export function buildWorkOrderDoc(record, logos, contactInfo) {
   // field, which is likewise separate from its general 'Notes'.
   const notes = String(f['Work Order'] || '').replace(/\r/g, '\n');
 
+  // Trainer costs, included only when the record says so.
+  //
+  // Off by default and per-record on purpose: the work order is handed to a
+  // CLIENT for signature, and trainer food, lodging, mileage and airfare are
+  // internal figures. Printing them on every sheet would disclose them by
+  // accident; printing them on request is a deliberate act by whoever knows
+  // this particular job.
+  //
+  // `include_trainer_costs` is Vibe-only — trainings_New has no such field and
+  // is Vibe-owned, so it needs no FileMaker schema change.
+  const includeTrainerCosts = String(f.include_trainer_costs || '') === '1';
+  const money = v => {
+    const n = Number(String(v ?? '').replace(/[^0-9.-]/g, ''));
+    return Number.isFinite(n) && n !== 0 ? n.toLocaleString('en-US', { style: 'currency', currency: 'USD' }) : '';
+  };
+  // Actual where it exists, estimate otherwise — the sheet should carry the
+  // best figure available, and a row with neither is omitted rather than
+  // printed as a blank line.
+  const trainerCostRows = !includeTrainerCosts ? [] : TRAINER_COST_LINES
+    .map(({ label, est, act }) => {
+      const value = money(act ? f[act] : '') || money(f[est]);
+      return value ? { label, value, actual: !!(act && money(f[act])) } : null;
+    })
+    .filter(Boolean);
+  const trainerCostTotal = trainerCostRows.reduce((n, r) =>
+    n + Number(String(r.value).replace(/[^0-9.-]/g, '')), 0);
+
   const row = (label, value) => ({
     columns: [{ width: 70, text: label, color: '#444444', fontSize: 10 }, { width: '*', text: value || '—', fontSize: 10, margin: [0, 0, 0, 5], border: [false, false, false, true] }],
     columnGap: 4, margin: [0, 0, 0, 4],
@@ -108,6 +146,27 @@ export function buildWorkOrderDoc(record, logos, contactInfo) {
       row('Training', trainingType),
       row('Staff', staff),
       row('Dates', dates),
+
+      ...(trainerCostRows.length ? [
+        { text: 'Trainer costs', bold: true, fontSize: 10, fillColor: '#c9cfb8', margin: [0, 12, 0, 6] },
+        {
+          table: {
+            widths: ['*', 70],
+            body: [
+              ...trainerCostRows.map(r => ([
+                { text: r.label + (r.actual ? '' : ' (est.)'), fontSize: 10, border: [false, false, false, true], borderColor: ['#ffffff', '#ffffff', '#ffffff', '#dddddd'], margin: [0, 2, 0, 2] },
+                { text: r.value, fontSize: 10, alignment: 'right', border: [false, false, false, true], borderColor: ['#ffffff', '#ffffff', '#ffffff', '#dddddd'], margin: [0, 2, 0, 2] },
+              ])),
+              [
+                { text: 'Total', fontSize: 10, bold: true, border: [false, false, false, false], margin: [0, 3, 0, 0] },
+                { text: trainerCostTotal.toLocaleString('en-US', { style: 'currency', currency: 'USD' }), fontSize: 10, bold: true, alignment: 'right', border: [false, false, false, false], margin: [0, 3, 0, 0] },
+              ],
+            ],
+          },
+          layout: { hLineWidth: () => 0.5, vLineWidth: () => 0, hLineColor: () => '#dddddd', paddingLeft: () => 0, paddingRight: () => 0 },
+          margin: [0, 0, 0, 8],
+        },
+      ] : []),
 
       { text: 'Notes', bold: true, fontSize: 10, fillColor: '#c9cfb8', margin: [0, 12, 0, 0] },
       { text: notes || ' ', fontSize: 10, margin: [0, 0, 0, 40], border: [true, false, true, true] },
