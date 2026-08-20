@@ -31,19 +31,38 @@ v1.0.250, and normal releases resumed. Don't reinstate the pause unless asked.)
 Everything else is a short-lived feature branch that gets a Vercel Preview URL
 on push, then is squash-merged to `main` and deleted.
 
-**Per change:**
+**ONE PUSH PER LOGICAL UNIT OF WORK — not one per commit.**
+
+Every push builds. A push to a feature branch builds it, and a push to
+`preview` builds that too, so a habit of pushing after each commit costs two
+Vercel builds per commit. On 2026-08-20 that produced 34 versions and roughly
+70 preview builds in a day. Don't.
+
+The unit is **the thing that was asked for**, however many files or steps it
+took. Three related fixes to the same area are one unit; a fix plus an
+unrelated refactor are two.
 
 1. `git fetch origin` then `git checkout -b feat/<short-name> origin/main`.
-2. Bump `package.json` `version`. Commit format: `v1.0.X — short description`.
-3. Build + lint + verify.
-4. Push the branch → Vercel auto-builds a **Preview** (unique URL + stable
-   `…-git-feat-<short-name>-…vercel.app` alias). Test it there. If the change
-   needs a real Google login to test, use the rolling `preview` branch instead
-   — see "Testing auth-gated features" below; only that host can sign in.
+2. Do the whole unit of work. Build, lint and verify LOCALLY as often as
+   useful — that costs nothing and catches most things.
+3. When the unit is done: bump `package.json` `version` ONCE and make ONE
+   commit, `v1.0.X — short description`. Several versions for one piece of work
+   just inflates the number; the squash-merge would collapse them anyway.
+4. Push the branch → one Vercel Preview build.
 5. Happy? Open a PR (`feat/... → main`), title `v1.0.X — short description`,
    **squash-merge**, then delete the branch. Not happy? Just delete it.
 6. Merge deploys production. The auto-tag workflow tags `v1.0.X`
    (`.github/workflows/auto-tag.yml`) — no manual `git tag`.
+
+**Do NOT push to `preview` by default.** It is a second build, and most work
+does not need it. Push there only when the change genuinely cannot be checked
+locally — anything needing Redis, a Google session, or real records, since
+`/api` does not run on localhost. Say so when you skip it, so the gap in
+verification is visible rather than assumed away.
+
+**If a unit turns out to need several pushes** (a fix after preview testing,
+say), that is fine — bump the version for the second one. The rule is about not
+pushing work that isn't finished, not about never pushing twice.
 
 **Tagging is one tag per merge, not one per version.**
 `.github/workflows/auto-tag.yml` reads `package.json` at the tip of `main`

@@ -6,7 +6,7 @@
 // (resumable backfill, then incremental modified-since); the app reads via
 // readReplica(). Files starting with _ are not Vercel routes.
 import { Redis } from '@upstash/redis';
-import { readOverlay, applyOverlay, VIBE_OWNED, recordShadowed } from './_vibeStore.js';
+import { readOverlay, applyOverlay, VIBE_OWNED, recordShadowed, changeKey } from './_vibeStore.js';
 
 const redis = Redis.fromEnv();
 const FMP_HOST = 'https://ILELLCO.pcifmhosting.com';
@@ -33,6 +33,16 @@ export const REPLICATED = {
 };
 
 const rk = (db, layout, suffix) => `repl:${db}:${layout}:${suffix}`;
+
+// Record a page of writes in the change index. ZADD takes them all in one
+// command, so indexing a 100-record page costs one round trip rather than 100.
+async function indexBatch(db, layout, stamps) {
+  if (!stamps.length) return;
+  try {
+    await redis.zadd(changeKey(db, layout), ...stamps.map(s => ({ score: s.at, member: String(s.id) })));
+  } catch { /* the index is an optimisation; a miss costs a stale row, not a wrong one */ }
+}
+
 
 async function fmpToken(db) {
   const r = await fetch(`${FMP_HOST}/fmi/data/v2/databases/${db}/sessions`, {
@@ -97,12 +107,18 @@ export async function runSync(db, key, budgetMs = 260000) {
       if (meta.total == null) meta.total = j?.response?.dataInfo?.foundCount ?? 0;
       if (!data.length) { meta.phase = 'idle'; break; }
       const entries = {};
+      const stamps = [];
       for (const r of data) {
         entries[r.recordId] = slim(r);
         const ts = modField ? fmTs(r.fieldData?.[modField]) : 0;
         if (ts > meta.lastModifiedMs) meta.lastModifiedMs = ts;
+        // FileMaker's own modification time, not now — so a client asking
+        // "what changed since X" gets the truth about WHEN it changed, and a
+        // backfill of old records does not look like a flood of fresh edits.
+        stamps.push({ id: r.recordId, at: ts || Date.now() });
       }
       await redis.hset(rk(db, layout, 'recs'), entries);
+      await indexBatch(db, layout, stamps);
       meta.cursor += data.length;
       meta.count += data.length;
       // Persist progress every page so a killed slice resumes instead of restarting.
@@ -148,12 +164,15 @@ export async function runSync(db, key, budgetMs = 260000) {
       }
 
       const entries = {};
+      const stamps = [];
       for (const r of data) {
         entries[r.recordId] = slim(r);
         const ts = fmTs(r.fieldData?.[modField]);
         if (ts > meta.lastModifiedMs) meta.lastModifiedMs = ts;
+        stamps.push({ id: r.recordId, at: ts || Date.now() });
       }
       await redis.hset(rk(db, layout, 'recs'), entries);
+      await indexBatch(db, layout, stamps);
       offset += data.length;
       if (data.length < 100) break;
     }
@@ -184,6 +203,86 @@ export async function scanReplica(db, key, cursor = '0', count = 1500) {
   const nextCursor = String(next);
   const overlay = await readOverlay(db, cfg.layout);
   return { cursor: nextCursor, records: applyOverlay(records, overlay, nextCursor === '0') };
+}
+
+// How much of a layout has to have changed before an incremental refresh stops
+// being worth it. Above this the ZRANGE + HMGET costs more round trips than one
+// clean HSCAN, so we say so and let the caller do a full pull instead.
+const INCREMENTAL_MAX_SHARE = 0.3;
+
+/** What changed in this layout since `sinceMs`.
+ *
+ *  The point of the whole change index: a refresh reads the records that
+ *  actually moved instead of re-reading the entire hash. Contacts is 15,592
+ *  records and 26 MB; on a normal day perhaps a dozen of them changed.
+ *
+ *  Returns `{ mode: 'incremental', records, removed, now }`, or
+ *  `{ mode: 'full' }` when an incremental answer would be wrong or wasteful:
+ *
+ *    - no index yet (nothing has been written since this shipped)
+ *    - `sinceMs` predates the index, so changes before it are unknowable
+ *    - more than INCREMENTAL_MAX_SHARE of the layout changed
+ *
+ *  `removed` carries ids the client must DROP, which is the half an
+ *  "everything that changed" list cannot express on its own: a record deleted
+ *  in FileMaker is gone from the hash, and one tombstoned in Vibe is hidden by
+ *  the overlay. Both are in the index — they changed — so both are detected
+ *  here by their absence from the merged result rather than needing a separate
+ *  deletions feed.
+ */
+export async function changesSince(db, key, sinceMs) {
+  const cfg = REPLICATED[key];
+  if (!cfg) throw new Error('layout not replicated: ' + key);
+  const layout = cfg.layout;
+  const since = Number(sinceMs) || 0;
+  if (!since) return { mode: 'full' };
+
+  const ck = changeKey(db, layout);
+  const now = Date.now();
+
+  // An index that does not exist, or that starts after the client's watermark,
+  // cannot answer the question — anything older than its first entry is
+  // invisible to it, and quietly returning "nothing changed" would strand the
+  // client on stale data forever.
+  let oldest;
+  try {
+    const head = await redis.zrange(ck, 0, 0, { withScores: true });
+    if (!head || !head.length) return { mode: 'full' };
+    oldest = Number(Array.isArray(head[0]) ? head[0][1] : head[1]);
+  } catch { return { mode: 'full' }; }
+  if (!(oldest <= since)) return { mode: 'full' };
+
+  let ids;
+  try {
+    ids = await redis.zrange(ck, `(${since}`, '+inf', { byScore: true });
+  } catch { return { mode: 'full' }; }
+  ids = (ids || []).map(String);
+  if (!ids.length) return { mode: 'incremental', records: [], removed: [], now };
+
+  const total = await redis.hlen(rk(db, layout, 'recs')).catch(() => 0);
+  if (total && ids.length > total * INCREMENTAL_MAX_SHARE) return { mode: 'full' };
+
+  const raw = await redis.hmget(rk(db, layout, 'recs'), ...ids);
+  const present = [];
+  const removed = [];
+  ids.forEach((id, i) => {
+    const v = Array.isArray(raw) ? raw[i] : raw?.[id];
+    if (v == null) removed.push(id);                       // deleted in FileMaker
+    else present.push(typeof v === 'string' ? JSON.parse(v) : v);
+  });
+
+  // isLastPage=true so applyOverlay also appends Vibe-born records — a record
+  // created in Vibe has no replica row, so it can only arrive this way.
+  const overlay = await readOverlay(db, layout);
+  const merged = applyOverlay(present, overlay, true);
+
+  // Anything the overlay hid (a tombstone) is a removal from the client's point
+  // of view, and it is only detectable as "was in the changed set, is not in
+  // the merged result".
+  const survived = new Set(merged.map(r => String(r.recordId)));
+  for (const id of ids) if (!survived.has(id) && !removed.includes(id)) removed.push(id);
+
+  return { mode: 'incremental', records: merged, removed, now };
 }
 
 export async function getMetaPublic(db, key) {

@@ -150,6 +150,34 @@ export const isVibeRecordId = id => /^V-/.test(String(id ?? ''));
 // applyOverlay append it to the last page of a list read and api/record.js
 // serve it when FileMaker has no counterpart — both already built and, until
 // now, unreachable because nothing wrote this flag.
+// ── The change index ──────────────────────────────────────────────
+//
+// One ZSET per layout: score = when the record last changed (ms), member =
+// recordId. It is what makes an incremental refresh possible — without it the
+// only way to answer "what changed since X" is to read the whole hash, which is
+// what put 90 GB through Upstash.
+//
+// BOTH writers maintain it, and that is the point. The replica sync knows when
+// FileMaker last modified a record; the overlay below knows when someone edited
+// one in Vibe. A record can change either way, so an index fed by only one of
+// them would silently miss half the edits — a colleague's change to a record
+// you already have cached would never arrive.
+//
+// Shared with api/_replica.js, which owns the `repl:` half of the same key
+// space, so the name lives here and is imported there.
+export const changeKey = (db, layout) => `repl:${db}:${layout}:bymod`;
+
+/** Note that `ids` changed at `atMs`. Best-effort: an index miss costs a stale
+ *  row until the next full refresh, never a wrong write, so it must never
+ *  break the write it is recording. */
+export async function noteChanged(db, layout, ids, atMs = Date.now()) {
+  const list = (Array.isArray(ids) ? ids : [ids]).map(String).filter(Boolean);
+  if (!list.length) return;
+  try {
+    await redis.zadd(changeKey(db, layout), ...list.map(id => ({ score: atMs, member: id })));
+  } catch { /* index is an optimisation, not a source of truth */ }
+}
+
 export async function createFragment(db, layout, fieldData, by) {
   const pk = VIBE_PK[layout];
   if (!pk) throw new Error(`no primary key known for ${layout}`);
@@ -161,6 +189,7 @@ export async function createFragment(db, layout, fieldData, by) {
     __by: by || null,
   };
   await redis.hset(vibeKey(db, layout), { [id]: JSON.stringify(frag) });
+  await noteChanged(db, layout, id);
   return { recordId: id, fragment: frag };
 }
 
@@ -180,6 +209,7 @@ export async function writeFragment(db, layout, recordId, fieldData, by) {
     __by: by || null,
   };
   await redis.hset(vibeKey(db, layout), { [id]: JSON.stringify(frag) });
+  await noteChanged(db, layout, id);
   return frag;
 }
 
@@ -188,6 +218,9 @@ export async function writeFragment(db, layout, recordId, fieldData, by) {
 // "there was nothing to revert".
 export async function dropFragment(db, layout, recordId) {
   const n = await redis.hdel(vibeKey(db, layout), String(recordId));
+  // Reverting to FileMaker's version is a change too — a client holding the
+  // overridden values needs to hear about it.
+  if (n > 0) await noteChanged(db, layout, recordId);
   return n > 0;
 }
 
@@ -219,6 +252,7 @@ export async function tombstoneFragment(db, layout, recordId, by) {
   }
   const frag = { __deleted: true, __updatedAt: new Date().toISOString(), __by: by || null };
   await redis.hset(vibeKey(db, layout), { [id]: JSON.stringify(frag) });
+  await noteChanged(db, layout, id);
   return { tombstoned: true, bornInVibe: false };
 }
 
