@@ -6,6 +6,7 @@ import {
   TEMPLATES, isTemplateId, readTemplate, readTemplates, writeTemplate,
   pickEmail, render, templateVars, sendAsWorkshops, senderAddress, catalogueForCourse,
   templateFiles, loadAttachments, checkDelegation, replyToAddress, sendTestMessage,
+  templateIsSendable,
 } from './_workshopEmail.js';
 
 // Workshop e-mails — preview, send, and template administration.
@@ -62,6 +63,48 @@ export default async function handler(req, res) {
       return res.status(200).json({ ...sent, note: `Test message sent to ${session.email}.` });
     }
 
+    // ── Clear the e-mail history on ONE registration ───────────────────────
+    //
+    // Exists because a blank e-mail was sent in error on 2026-08-19 and left a
+    // registration claiming a confirmation had gone out. That history is worse
+    // than no history: the next person to look would believe the registrant had
+    // been contacted properly.
+    //
+    // Clears ONLY the four e-mail-tracking fields. Everything else on the row —
+    // fees, dates, the contact, the course — is untouched, and there is
+    // deliberately no general-purpose edit here.
+    if (req.query?.clear === 'email') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'POST' });
+      if (!(await isAdminEmail(session.email))) return res.status(403).json({ error: 'admin only' });
+      const id = String(req.query?.workshopId || '').trim();
+      if (!id) return res.status(400).json({ error: 'workshopId required' });
+      const before = await readWorkshop(db, id);
+      if (!before) return res.status(404).json({ error: 'no such registration' });
+      // undefined rather than '' — JSON.stringify drops undefined keys, so the
+      // fields go away entirely rather than becoming empty strings that still
+      // read as "something was recorded here".
+      const after = await patchWorkshop(db, id, {
+        confirmationSent: undefined, emailVersionSent: undefined,
+        lastEmailTo: undefined, lastEmailBy: undefined,
+      });
+      return res.status(200).json({
+        cleared: id,
+        was: {
+          confirmationSent: before.confirmationSent ?? null,
+          emailVersionSent: before.emailVersionSent ?? null,
+          lastEmailTo: before.lastEmailTo ?? null,
+          lastEmailBy: before.lastEmailBy ?? null,
+        },
+        now: {
+          confirmationSent: after.confirmationSent ?? null,
+          emailVersionSent: after.emailVersionSent ?? null,
+          lastEmailTo: after.lastEmailTo ?? null,
+          lastEmailBy: after.lastEmailBy ?? null,
+        },
+        untouched: { fee: after.feeTotal ?? null, course: after.courseNumber, contact: after.contactName },
+      });
+    }
+
     // ── Templates ──────────────────────────────────────────────────────────
     if (req.query?.templates === '1') {
       if (req.method === 'GET') {
@@ -109,6 +152,10 @@ export default async function handler(req, res) {
         workshopId, version, from: senderAddress(),
         recipient, rendered, vars,
         templateMissing: !tpl,
+        // Distinct from missing on purpose. "Not written" and "written but
+        // empty" look identical to a user and need different fixes, and
+        // conflating them is what let a blank message go out.
+        templateEmpty: !!tpl && !templateIsSendable(tpl),
         alreadySent: workshop.confirmationSent || null,
         lastVersion: workshop.emailVersionSent || null,
       });
@@ -117,7 +164,15 @@ export default async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'GET or POST' });
 
     // ── Send ───────────────────────────────────────────────────────────────
+    // Checks CONTENT, not presence. `if (!tpl)` passed an empty template and a
+    // blank e-mail reached a registrant — subject and body both empty — because
+    // an object had been saved. Existing was never the property that mattered.
     if (!tpl) return res.status(400).json({ error: `The "${version}" template has not been written yet.` });
+    if (!templateIsSendable(tpl)) {
+      return res.status(400).json({
+        error: `The "${version}" template is empty — it has no subject and no body. Nothing was sent.`,
+      });
+    }
     const to = String(req.body?.to || recipient?.address || '').trim();
     if (!to) return res.status(400).json({ error: 'no e-mail address for this registrant' });
 

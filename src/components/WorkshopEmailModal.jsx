@@ -102,6 +102,12 @@ export default function WorkshopEmailModal({ workshop, courseLabel, onClose, onS
                   The <strong>{version}</strong> template has not been written yet.
                   An admin can add it under Admin → Workshop e-mails.
                 </div>
+              ) : preview?.templateEmpty ? (
+                <div className="wem-warn">
+                  The <strong>{version}</strong> template exists but is <strong>empty</strong> —
+                  no subject and no body. Sending it would deliver a blank message.
+                  An admin can write it under Admin → Workshop e-mails.
+                </div>
               ) : preview?.rendered ? (
                 <div className="wem-preview">
                   <div className="wem-preview-head">
@@ -126,7 +132,7 @@ export default function WorkshopEmailModal({ workshop, courseLabel, onClose, onS
             <div className="wem-foot">
               <button className="wem-btn wem-btn--ghost" onClick={onClose} disabled={sending}>Cancel</button>
               <button className="wem-btn wem-btn--go" onClick={send}
-                disabled={sending || loading || !to || preview?.templateMissing}>
+                disabled={sending || loading || !to || preview?.templateMissing || preview?.templateEmpty}>
                 {sending ? 'Sending…' : to ? `Send to ${to}` : 'Send'}
               </button>
             </div>

@@ -298,11 +298,18 @@ function WorkshopEmailTab() {
               <div key={v.id} className="admin-vocab-list">
                 <div className="admin-vocab-head">
                   <code>{v.label}</code>
-                  {tpl ? <span className="admin-vocab-count">saved</span>
-                       : <span className="admin-vocab-count admin-missing">not written</span>}
+                  {!tpl ? <span className="admin-vocab-count admin-missing">not written</span>
+                    : !(String(tpl.subject || '').trim() || String(tpl.body || '').trim())
+                      ? <span className="admin-vocab-count admin-missing">EMPTY — cannot send</span>
+                      : <span className="admin-vocab-count">saved</span>}
                   {isEditing ? (
                     <>
-                      <button className="admin-btn" disabled={busy === v.id} onClick={save}>
+                      <button className="admin-btn"
+                        disabled={busy === v.id || !(editing.subject.trim() || editing.body.trim())}
+                        title={!(editing.subject.trim() || editing.body.trim())
+                          ? 'A template needs at least a subject or a body — an empty one looks written but sends a blank message.'
+                          : undefined}
+                        onClick={save}>
                         {busy === v.id ? 'Saving…' : 'Save'}
                       </button>
                       <button className="admin-btn admin-btn--ghost" onClick={() => setEditing(null)}>Cancel</button>
