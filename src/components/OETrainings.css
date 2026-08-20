@@ -101,3 +101,10 @@
 [data-theme="light"] .oet-email-btn { background: #e2e8f0; color: #1d4ed8; }
 [data-theme="light"] .oet-email-btn:hover { background: #cbd5e1; }
 [data-theme="light"] .oet-no-action { color: #cbd5e1; }
+
+/* The list's own scroller — see OELookup.css for why this is not optional. */
+.oet-list { flex: 1; min-height: 0; overflow-y: auto; }
+.oet-list::-webkit-scrollbar { width: 4px; }
+.oet-list::-webkit-scrollbar-track { background: transparent; }
+.oet-list::-webkit-scrollbar-thumb { background: #2a2f45; border-radius: 2px; }
+[data-theme="light"] .oet-list::-webkit-scrollbar-thumb { background: #cbd5e1; }
