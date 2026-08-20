@@ -1,214 +1,53 @@
-/* ── Base ──────────────────────────────────────────────────────── */
-.oe-container {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  background: #0f1117;
-  font-family: 'Source Sans 3', 'Myriad Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 17px;
-  color: #e2e8f0;
-  overflow: hidden;
+/* OE Lookup — module-specific styling only.
+   Everything structural (module shell, sidebar, list rows, page header, cards,
+   badges, buttons, empty state, skeleton, callout, category dots) now comes from
+   the design system: docs/design-system/components/.
+
+   214 lines to 46, and 89 lines carrying a hardcoded hex to zero. What is left is
+   the read-only field grid, which the system has no component for — it is a
+   display arrangement rather than an input, and .h5-field is for something you
+   type into. */
+
+.oe-container { min-width: 0; }
+
+/* Sidebar heading — a module label above a list, not a record title, so not
+   .h5-page-header. */
+.oe-sidebar-title { display: flex; align-items: center; gap: var(--space-md); margin-bottom: var(--space-md); }
+.oe-sidebar-module { font-family: var(--font-title); font-size: var(--text-body-lg); font-weight: var(--weight-semibold); color: var(--fg); }
+.oe-sidebar-count { font-size: var(--text-caption); color: var(--fg-secondary); }
+
+/* Section header. The card is .h5-card--flush; this is the strip across its top.
+   THE ICON IS NOT RED any more. It was var(--h5-red) on every section heading,
+   which is the accent applied to ordinary chrome — five red marks on one page
+   says nothing about which of them matters. */
+.oe-section-header { display: flex; align-items: center; gap: var(--space-sm); padding: var(--space-md) var(--space-lg) var(--space-sm); border-bottom: 1px solid var(--border); }
+.oe-section-icon { font-size: var(--text-h3); color: var(--fg-secondary); width: 18px; text-align: center; }
+.oe-section-header h3 { margin: 0; font-size: var(--text-body); font-weight: var(--weight-semibold); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--fg-secondary); }
+
+/* Read-only field grid. Deliberately NOT .h5-field: that component is a label
+   plus a control you type into, and these are stored values being displayed. The
+   1px gap plus a bordered container is what draws the hairlines between cells
+   without a border on each one. */
+.oe-field-grid, .oe-fin-grid {
+  display: grid; gap: 1px; background: var(--border);
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
 }
-
-/* ── Sidebar ───────────────────────────────────────────────────── */
-.oe-sidebar {
-  flex-shrink: 0;
-  background: #13151c;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border-right: 1px solid #1e2130;
-}
-/* flex-shrink: 0 is mandatory on a direct child of a scrolling flex column —
-   without it the header shrinks to make room instead of the list scrolling. */
-.oe-sidebar-header { padding: 20px 16px 12px; border-bottom: 1px solid #1e2130; flex-shrink: 0; }
-.oe-sidebar-title { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
-.oe-sidebar-module { font-size: 17px; font-weight: 600; color: #f1f5f9; }
-.oe-sidebar-count { font-size: 14px; color: #8b97aa; margin-top: 1px; }
-
-/* ── List ──────────────────────────────────────────────────────── */
-.oe-list { list-style: none; margin: 0; padding: 8px 0; overflow-y: auto; flex: 1; }
-.oe-list::-webkit-scrollbar { width: 4px; }
-.oe-list::-webkit-scrollbar-track { background: transparent; }
-.oe-list::-webkit-scrollbar-thumb { background: #2a2f45; border-radius: 2px; }
-
-.oe-list-item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 9px 16px; cursor: pointer;
-  transition: background 0.1s;
-  border-left: 2px solid transparent;
-}
-.oe-list-item:hover { background: #1a1d2e; }
-.oe-list-item.active { background: #1e2236; border-left-color: var(--h5-red); }
-
-.oe-item-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; opacity: 0.85; }
-.oe-item-text { min-width: 0; }
-.oe-item-name {
-  font-size: 15px; font-weight: 500; color: #cbd5e1;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.oe-list-item.active .oe-item-name { color: #e2e8f0; }
-.oe-item-sub {
-  font-size: 14px; color: #79859a; margin-top: 1px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-
-/* Skeleton */
-.oe-loading { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
-.oe-skeleton {
-  height: 44px;
-  background: linear-gradient(90deg, #1a1d2e 25%, #1e2236 50%, #1a1d2e 75%);
-  background-size: 200% 100%;
-  border-radius: 8px;
-  animation: oe-shimmer 1.4s infinite;
-}
-@keyframes oe-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-
-/* ── Resize Handle ─────────────────────────────────────────────── */
-.oe-resize-handle { width: 4px; background: #1e2130; cursor: col-resize; flex-shrink: 0; transition: background 0.15s; }
-.oe-resize-handle:hover { background: var(--h5-red); }
-
-/* ── Main ──────────────────────────────────────────────────────── */
-.oe-main { flex: 1; overflow-y: auto; background: #0f1117; display: flex; flex-direction: column; min-width: 0; }
-.oe-main::-webkit-scrollbar { width: 6px; }
-.oe-main::-webkit-scrollbar-track { background: transparent; }
-.oe-main::-webkit-scrollbar-thumb { background: #2a2f45; border-radius: 3px; }
-
-.oe-empty-state {
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  flex: 1; height: 100%; color: #79859a; gap: 12px;
-}
-.oe-empty-icon { font-size: 61px; opacity: 0.3; }
-.oe-empty-state p { font-size: 18px; margin: 0; }
-
-/* ── Top Bar ───────────────────────────────────────────────────── */
-.oe-topbar {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 20px 28px 16px; border-bottom: 1px solid #1e2130;
-  gap: 16px; flex-wrap: wrap; flex-shrink: 0;
-  background: #13151c;
-}
-.oe-topbar-left { display: flex; align-items: center; gap: 16px; min-width: 0; }
-.oe-title {
-  margin: 0 0 6px;
-  font-family: 'Oswald', sans-serif;
-  font-size: 28px; font-weight: 600;
-  color: #f1f5f9; letter-spacing: 0.02em;
-  line-height: 1.2; text-transform: uppercase;
-}
-.oe-meta-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.oe-chip { font-size: 14px; font-weight: 600; padding: 2px 8px; border-radius: 20px; border: 1px solid; }
-.oe-chip.type { background: #1e2130; color: #94a3b8; border-color: #2a2f45; }
-.oe-chip.muted { background: #1e2130; color: #8b97aa; border-color: #2a2f45; }
-.oe-chip.oe { background: #1a2e1a; color: #4ade80; border-color: #166534; }
-.oe-chip.custom { background: #2e1a2e; color: #c084fc; border-color: #6b21a8; }
-
-/* ── Content ───────────────────────────────────────────────────── */
-.oe-content { padding: 20px 28px 40px; display: flex; flex-direction: column; gap: 12px; }
-.oe-section { background: #13151c; border: 1px solid #1e2130; border-radius: 12px; overflow: hidden; transition: border-color 0.15s; }
-.oe-section:hover { border-color: #2a2f45; }
-.oe-section-header { display: flex; align-items: center; gap: 8px; padding: 12px 16px 10px; border-bottom: 1px solid #1e2130; }
-.oe-section-icon { font-size: 18px; color: var(--h5-red); opacity: 0.8; width: 18px; text-align: center; }
-.oe-section h3 { margin: 0; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #79859a; }
-
-/* ── Field Grid ────────────────────────────────────────────────── */
-.oe-field-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 1px; background: #1a1d2e; padding: 0;
-}
-.oe-field { padding: 14px 16px; background: #13151c; display: flex; flex-direction: column; gap: 5px; }
+.oe-field, .oe-fin-cell { display: flex; flex-direction: column; gap: 5px; padding: var(--space-md) var(--space-lg); background: var(--card); }
 .oe-field.wide { grid-column: 1 / -1; }
-.oe-field label { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: #79859a; }
-.oe-value { font-size: 17px; color: #cbd5e1; line-height: 1.4; white-space: pre-wrap; }
+.oe-field label, .oe-fin-cell label { font-size: var(--text-caption); font-weight: var(--weight-semibold); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--fg-secondary); }
+.oe-value { font-size: var(--text-body); color: var(--fg); word-break: break-word; }
+.oe-fin-cell.total { background: var(--surface-sunken); }
+.oe-fin-amount { font-family: var(--font-num); font-size: var(--text-h3); font-weight: var(--weight-bold); color: var(--fg); font-variant-numeric: tabular-nums; }
 
-/* ── Financials Table ──────────────────────────────────────────── */
-.oe-fin-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 1px; background: #1a1d2e;
-}
-.oe-fin-cell { padding: 14px 16px; background: #13151c; display: flex; flex-direction: column; gap: 5px; }
-.oe-fin-cell.total { background: #161926; }
-.oe-fin-cell label { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: #79859a; }
-.oe-fin-amount { font-size: 22px; font-weight: 700; color: #e2e8f0; font-variant-numeric: tabular-nums; }
-.oe-fin-cell.total .oe-fin-amount { color: #4ade80; }
+/* The Program Code preview, inside a callout. Only the code needs emphasis; the
+   callout supplies the rest. */
+.oe-code-preview code { font-family: var(--font-mono); font-size: var(--text-caption); background: var(--surface-sunken); padding: 1px 5px; border-radius: var(--radius-xs); }
+.oe-code-note { color: var(--fg-secondary); }
 
-/* ── Footer ────────────────────────────────────────────────────── */
-.oe-record-footer { font-size: 13px; color: #6b7280; text-align: right; padding: 0 0 8px; font-family: monospace; }
+.oe-record-footer { padding-top: var(--space-md); border-top: 1px solid var(--border); font-size: var(--text-micro); color: var(--fg-secondary); }
 
-/* ── Light Theme ───────────────────────────────────────────────── */
-[data-theme="light"] .oe-container { background: #f8fafc; color: #0f172a; }
-[data-theme="light"] .oe-sidebar { background: #ffffff; border-right-color: #e2e8f0; }
-[data-theme="light"] .oe-sidebar-header { border-bottom-color: #e2e8f0; }
-[data-theme="light"] .oe-sidebar-module { color: #0f172a; }
-[data-theme="light"] .oe-sidebar-count { color: #5e6b7c; }
-[data-theme="light"] .oe-list-item:hover { background: #f1f5f9; }
-[data-theme="light"] .oe-list-item.active { background: #fff1f0; }
-[data-theme="light"] .oe-item-name { color: #334155; }
-[data-theme="light"] .oe-list-item.active .oe-item-name { color: #0f172a; }
-[data-theme="light"] .oe-item-sub { color: #5e6b7c; }
-[data-theme="light"] .oe-resize-handle { background: #e2e8f0; }
-[data-theme="light"] .oe-main { background: #f8fafc; }
-[data-theme="light"] .oe-empty-state { color: #5e6b7c; }
-[data-theme="light"] .oe-topbar { background: #ffffff; border-bottom-color: #e2e8f0; }
-[data-theme="light"] .oe-title { color: #0f172a; }
-[data-theme="light"] .oe-section { background: #ffffff; border-color: #e2e8f0; }
-[data-theme="light"] .oe-section:hover { border-color: #cbd5e1; }
-[data-theme="light"] .oe-section-header { border-bottom-color: #e2e8f0; }
-[data-theme="light"] .oe-section h3 { color: #5e6b7c; }
-[data-theme="light"] .oe-field-grid { background: #f1f5f9; }
-[data-theme="light"] .oe-field { background: #ffffff; }
-[data-theme="light"] .oe-field label { color: #5e6b7c; }
-[data-theme="light"] .oe-value { color: #334155; }
-[data-theme="light"] .oe-chip.type, [data-theme="light"] .oe-chip.muted { background: #f1f5f9; color: #4f5a69; border-color: #e2e8f0; }
-[data-theme="light"] .oe-chip.oe { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
-[data-theme="light"] .oe-chip.custom { background: #faf5ff; color: #7e22ce; border-color: #e9d5ff; }
-[data-theme="light"] .oe-fin-grid { background: #f1f5f9; }
-[data-theme="light"] .oe-fin-cell { background: #ffffff; }
-[data-theme="light"] .oe-fin-cell.total { background: #f8fafc; }
-[data-theme="light"] .oe-fin-cell label { color: #5e6b7c; }
-[data-theme="light"] .oe-fin-amount { color: #0f172a; }
-[data-theme="light"] .oe-fin-cell.total .oe-fin-amount { color: #15803d; }
-[data-theme="light"] .oe-skeleton { background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%); background-size: 200% 100%; }
-[data-theme="light"] .oe-record-footer { color: #6b7280; }
-
-/* ── New program button + code preview (creation, 2026-08-19) ────────────── */
-.oe-new-btn {
-  background: #e8322a; color: #fff; border: none; border-radius: 6px;
-  padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
-  flex-shrink: 0; transition: background 0.15s;
-}
-.oe-new-btn:hover { background: #c9271f; }
-
-.oe-code-preview {
-  margin-top: 14px; padding: 10px 12px; border-radius: 6px;
-  background: #13151c; border: 1px solid #1e2130;
-  font-size: 13px; color: #cbd5e1; line-height: 1.5;
-}
-.oe-code-preview strong { color: #fff; font-weight: 600; }
-.oe-code-preview code {
-  background: #1e2130; padding: 1px 5px; border-radius: 3px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
-}
-.oe-code-preview .oe-code-note { color: #94a3b8; }
-.oe-code-preview.warn { border-color: #b45309; background: #1c1710; color: #fcd34d; }
-
-[data-theme="light"] .oe-code-preview {
-  background: #f8fafc; border-color: #e2e8f0; color: #334155;
-}
-[data-theme="light"] .oe-code-preview strong { color: #0f172a; }
-[data-theme="light"] .oe-code-preview code { background: #e2e8f0; }
-[data-theme="light"] .oe-code-preview .oe-code-note { color: #64748b; }
-[data-theme="light"] .oe-code-preview.warn { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
-
-/* The list's own scroller. ListBody renders a bare array with no wrapper, so
-   without this the sidebar's overflow simply clips everything past the fold.
-   flex: 1 makes it take the space the header leaves; min-height: 0 is what
-   actually lets a flex child shrink enough to scroll. */
-.oe-list { flex: 1; min-height: 0; overflow-y: auto; }
-.oe-list::-webkit-scrollbar { width: 4px; }
-.oe-list::-webkit-scrollbar-track { background: transparent; }
-.oe-list::-webkit-scrollbar-thumb { background: #2a2f45; border-radius: 2px; }
-[data-theme="light"] .oe-list::-webkit-scrollbar-thumb { background: #cbd5e1; }
+/* The skeleton stack while the list loads, and the left half of the page header.
+   Both are containers with no colour of their own — kept because the markup
+   needs something to hang layout on. */
+.oe-loading { padding: var(--space-md); display: flex; flex-direction: column; gap: var(--space-sm); }
+.oe-topbar-left { min-width: 0; }
