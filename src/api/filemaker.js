@@ -269,12 +269,13 @@ const IDB_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 // production: the eight prewarmed layouts are 61 MB, so one page load cost
 // 61 MB of Redis egress, per tab, silently, in the background.
 //
-// Ten minutes rather than something longer, because this does trade freshness:
-// a record another user changes is now up to ten minutes late in a list that
-// was already open. In-app creates and edits still patch the cache live
-// (patchCachedRecord), so this only affects changes made by SOMEONE ELSE or
-// directly in FileMaker — and FileMaker's own sync is manual now anyway.
-const IDB_FRESH_MS = 10 * 60 * 1000;
+// FIVE minutes, down from the ten this shipped with. The window is a freshness
+// trade — a change another user makes is that late in an already-open list —
+// and it was set at ten only because a refresh cost a full 26 MB re-page. Now
+// that a refresh reads just what changed (see fetchChangesFromReplica), the
+// window can be tighter for a fraction of the old cost: half the staleness, and
+// each refresh moves kilobytes instead of megabytes.
+const IDB_FRESH_MS = 5 * 60 * 1000;
 const memCache = {};
 
 // When true, a present (even stale) cache is displayed as-is and NOT bulk-
@@ -367,7 +368,7 @@ export function readCache(layout, cacheVersion) {
   const mk = memKey(layout, cacheVersion);
   const mem = memCache[mk];
   if (mem) {
-    if (Date.now() - mem.ts < MEM_TTL_MS) return { records: mem.records, total: mem.total, fresh: true, complete: mem.complete };
+    if (Date.now() - mem.ts < MEM_TTL_MS) return { records: mem.records, total: mem.total, fresh: true, complete: mem.complete, ts: mem.ts };
     delete memCache[mk];
   }
   return null;
@@ -386,7 +387,7 @@ export async function readCacheAsync(layout, cacheVersion) {
         // The promoted memCache entry keeps the ORIGINAL write time, so this
         // window is measured from when the data was fetched, not from when the
         // tab happened to open.
-        return { records: entry.records, total: entry.total, fresh: age < IDB_FRESH_MS, complete: entry.complete ?? true };
+        return { records: entry.records, total: entry.total, fresh: age < IDB_FRESH_MS, complete: entry.complete ?? true, ts: entry.ts };
       }
       idbDelete(idbKey(layout, cacheVersion)).catch(() => {});
     }
@@ -394,9 +395,13 @@ export async function readCacheAsync(layout, cacheVersion) {
   return null;
 }
 
-async function writeCache(layout, records, total, complete = true, cacheVersion) {
+// `stampMs` lets an incremental refresh record the SERVER's notion of "as of",
+// which is the watermark the next delta request is measured against. Using the
+// browser's clock there would make the query wrong by whatever the two clocks
+// disagree by — and a watermark that runs fast skips changes permanently.
+async function writeCache(layout, records, total, complete = true, cacheVersion, stampMs) {
   const mk = memKey(layout, cacheVersion);
-  const ts = Date.now();
+  const ts = stampMs || Date.now();
   memCache[mk] = { ts, records, total, complete };
   try { await idbSet(idbKey(layout, cacheVersion), { ts, records, total, complete }); } catch { /* ignore */ }
 }
@@ -660,11 +665,76 @@ function notifySubscribers(mk) {
 // that LAZY_REFRESH was protecting against). Deduped so concurrent callers/
 // re-renders trigger at most one refresh in flight per layout/version.
 const revalidating = new Set();
+// Ask the replica what CHANGED rather than re-reading it whole.
+//
+// The server answers `{ mode: 'full' }` whenever an incremental answer would be
+// wrong or wasteful, and that path is not an error — it is the correct
+// fallback, taken the first time a layout is refreshed after this shipped (no
+// index yet), after a long absence (watermark older than the index), and after
+// a big FileMaker import (too much changed to be worth a delta).
+async function fetchChangesFromReplica(layout, sinceMs) {
+  const key = REPLICA_LAYOUTS[layout];
+  if (!key || !sinceMs) return null;
+  const env = getCurrentEnv();
+  try {
+    const r = await fetch(`/api/records?layout=${encodeURIComponent(key)}&db=${encodeURIComponent(env.db)}&since=${encodeURIComponent(sinceMs)}`);
+    if (!r.ok) return null;
+    const data = await r.json();
+    return data?.mode === 'incremental' ? data : null;
+  } catch { return null; }
+}
+
+/** Apply a delta to a cached list: replace what changed, append what is new,
+ *  drop what went away. Order is preserved for everything untouched, so a list
+ *  the user is looking at does not reshuffle under them. */
+function mergeDelta(existing, changed, removed) {
+  const gone = new Set((removed || []).map(String));
+  // A removal beats a change. changesSince keeps the two lists disjoint today,
+  // so this cannot fire from the current server — but without it an id in both
+  // is skipped from `existing` and then re-appended by the tail loop below,
+  // and the symptom is a DELETED RECORD COMING BACK. Cheap to make impossible
+  // rather than rely on a caller staying careful.
+  const byId = new Map((changed || [])
+    .filter(r => !gone.has(String(r.recordId)))
+    .map(r => [String(r.recordId), r]));
+  const out = [];
+  for (const r of existing) {
+    const id = String(r.recordId);
+    if (gone.has(id)) continue;
+    const hit = byId.get(id);
+    if (hit) { out.push(hit); byId.delete(id); } else out.push(r);
+  }
+  for (const r of byId.values()) out.push(r);   // created since the watermark
+  return out;
+}
+
 async function revalidateFromReplica(layout, cacheVersion) {
   const mk = memKey(layout, cacheVersion);
   if (revalidating.has(mk)) return;
   revalidating.add(mk);
   try {
+    const cached = await readCacheAsync(layout, cacheVersion);
+    // The watermark is the cache's own write time. Deliberately rewound by a
+    // minute: the server stamps a change when it WRITES, and a write that
+    // landed between the read and the cache write would otherwise fall in the
+    // gap and never be asked for again.
+    const since = cached?.ts ? cached.ts - 60000 : 0;
+    const delta = since ? await fetchChangesFromReplica(layout, since) : null;
+
+    if (delta) {
+      if (!delta.records.length && !delta.removed?.length) {
+        // Nothing moved. Re-stamp so the next refresh asks from HERE rather
+        // than repeating the same window forever.
+        await writeCache(layout, cached.records, cached.total, true, cacheVersion, delta.now);
+        return;
+      }
+      const merged = applyPendingWrites(mk, mergeDelta(cached.records, delta.records, delta.removed));
+      await writeCache(layout, merged, merged.length, true, cacheVersion, delta.now);
+      notifySubscribers(mk);
+      return;
+    }
+
+    // mode:'full', no index, or no usable cache — re-page the whole layout.
     const repl = await fetchFromReplica(layout, null);
     if (repl) {
       // Keep just-made local edits on top — the replica may not have synced them yet.
