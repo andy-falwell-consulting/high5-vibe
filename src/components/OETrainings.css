@@ -42,10 +42,15 @@
 .oet-loading-body { padding: var(--space-xl) var(--space-2xl); }
 .oet-none { text-align: center; padding: var(--space-xl); }
 
-/* The registrant link and the offering link read as links, not as buttons, even
-   though they carry .h5-btn--ghost for its focus ring and hit area. */
-.oet-link { color: var(--brand); padding-left: 0; padding-right: 0; font-weight: var(--weight-medium); }
-.oet-link:hover { text-decoration: underline; background: transparent; }
+/* The registrant link and the offering link read as links, not buttons, even
+   though they carry .h5-btn--ghost for its focus ring and hit area.
+
+   --link, NOT --brand. This shipped with every registrant name in brand red,
+   which is a whole column of table text in the accent colour — exactly what the
+   accent policy prohibits. Red has to keep meaning "this one matters", and it
+   cannot if it is also the colour of every name on the page. */
+.oet-link { color: var(--link); padding-left: 0; padding-right: 0; font-weight: var(--weight-medium); }
+.oet-link:hover { color: var(--link-hover); text-decoration: underline; background: transparent; }
 
 /* Paperwork flags on a roster row — confirmation sent, invoice sent, QBO link.
    Not .h5-badge: a badge states a fact, and these are a THREE-state set where the

@@ -224,6 +224,8 @@
   --brand: var(--h5-red-700);
   --brand-strong: var(--h5-red-800);
   --focus-ring: var(--h5-red-700);
+  --link: var(--h5-blue-800);
+  --link-hover: var(--h5-blue-900);
   --error-fg: var(--h5-red-800);
   --error-bg: var(--h5-red-100);
   --error-border: var(--h5-red-300);
@@ -268,13 +270,20 @@
 /* --------------------------------------------------------------------------
    DARK THEME — exactly ONE block, by design.
 
-   No @media (prefers-color-scheme: dark) rule here. Vibe's own index.css
-   currently duplicates its dark palette across a [data-theme] block AND a media
-   query, which is a guaranteed drift source. One selector is enough when the
-   app always resolves an explicit data-theme. tests/ fails if a second dark
-   block appears.
+   The selector is ATTRIBUTE-ONLY on purpose. An earlier version scoped it to
+   html[data-theme="dark"] and it never matched: Vibe sets data-theme on a DIV
+   inside the body, not on the document element. The app went dark from its own
+   stylesheets while these tokens stayed light, so every migrated component drew
+   light-theme text on a dark background and the brand red resolved to its
+   light-mode value. Custom properties inherit, so an unqualified attribute
+   selector works wherever the attribute is put — which is not this system's
+   business to dictate.
+
+   No @media (prefers-color-scheme: dark) rule either: one selector is enough
+   when the app always resolves an explicit data-theme, and two blocks is a
+   guaranteed drift source.
    -------------------------------------------------------------------------- */
-html[data-theme="dark"] {
+[data-theme="dark"] {
   --bg: var(--h5-grey-1100);
   --surface: var(--h5-grey-1000);
   --surface-sunken: var(--h5-grey-1100);
@@ -293,6 +302,8 @@ html[data-theme="dark"] {
   --brand: var(--h5-red-600);
   --brand-strong: var(--h5-red-600);
   --focus-ring: var(--h5-red-600);
+  --link: var(--h5-blue-400);
+  --link-hover: var(--h5-blue-300);
   --error-fg: var(--h5-red-400);
   --error-bg: var(--h5-red-1000);
   --error-border: var(--h5-red-900);
