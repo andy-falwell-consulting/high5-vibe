@@ -52,16 +52,20 @@ export function makeVibeAttachments(kind) {
     return (body.files || []).map(toCard);
   }
 
-  async function upload(parentId, file, filename) {
+  // `parentLabel` names the record's Drive folder — "4-H Camp Bristol Hills
+  // (1234)" rather than "1234". Sent from here because the label is already on
+  // screen; the server would otherwise have to find a record by a field that
+  // is not its key. Optional: without it the folder is just the id.
+  async function upload(parentId, file, filename, parentLabel) {
     const name = filename || file.name || 'file';
+    const headers = { 'Content-Type': file.type || 'application/octet-stream', 'x-filename': name };
+    // Header values must be latin-1; an organisation name with an accent or a
+    // dash from a word processor would otherwise throw before the request left
+    // the browser, and the upload would fail for a folder-naming nicety.
+    if (parentLabel) headers['x-parent-label'] = encodeURIComponent(parentLabel);
     const body = await json(await fetch(
       `/api/files-write?${qs(`kind=${kind}&parentId=${encodeURIComponent(parentId)}`)}`,
-      {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': file.type || 'application/octet-stream', 'x-filename': name },
-        body: file,
-      }));
+      { method: 'POST', credentials: 'include', headers, body: file }));
     return toCard(body.file);
   }
 

@@ -583,6 +583,7 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
 
               <AttachmentsPanel
                 parentId={inspId}
+                parentLabel={f.Organization || f['inspt_CNTCT__site::Name_Organization']}
                 api={inspectionAttachments}
                 invoiceDocNumber={selected?.fieldData?._kat__QuickBooks_Invoice_ID}
                 reloadSignal={attReload}
