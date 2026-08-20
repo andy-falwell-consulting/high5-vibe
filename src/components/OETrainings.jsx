@@ -3,6 +3,7 @@ import { readCacheAsync } from '../api/filemaker'
 import ListToolbar, { useListControls, ListBody } from './ListControls'
 import { listCourses, getRoster, courseKey, feeTotal, depositDue, balanceDue, rosterTotals, money } from '../api/oeTrainings'
 import { canonicalEnrollment } from '../config/oeEnrollment'
+import WorkshopEmailModal from './WorkshopEmailModal'
 import './OETrainings.css'
 
 // OE Trainings — the ROSTER side of open-enrollment programs.
@@ -38,6 +39,7 @@ export default function OETrainings({ navTarget, onClearNav, onRecordSelect, onN
   const [lookups, setLookups] = useState(new Map())
   const [selected, setSelected] = useState(null)    // { course, rows } | null
   const [rosterBusy, setRosterBusy] = useState(false)
+  const [emailing, setEmailing] = useState(null)   // the registration being e-mailed
   const [error, setError] = useState(null)
   const [sidebarWidth, setSidebarWidth] = useState(320)
   const dragging = useRef(false)
@@ -225,11 +227,12 @@ export default function OETrainings({ navTarget, onClearNav, onRecordSelect, onN
                         <th className="num">Fee</th><th className="num">Deposit due</th>
                         <th className="num">Received</th><th className="num">Balance</th>
                         <th>Paperwork</th>
+                        <th></th>
                       </tr>
                     </thead>
                     <tbody>
                       {rows.length === 0 ? (
-                        <tr><td colSpan={7} className="oet-none">No registrations recorded.</td></tr>
+                        <tr><td colSpan={8} className="oet-none">No registrations recorded.</td></tr>
                       ) : rows.map(w => {
                         const bal = balanceDue(w)
                         return (
@@ -253,6 +256,16 @@ export default function OETrainings({ navTarget, onClearNav, onRecordSelect, onN
                               <Flag on={!!w.invoiceSent}>invoice</Flag>
                               {w.qboInvoiceId && <span className="oet-flag on">QBO</span>}
                             </td>
+                            <td className="oet-actions">
+                              {w.contactId ? (
+                                <button className="oet-email-btn" onClick={() => setEmailing(w)}
+                                  title={w.emailVersionSent ? `Last sent: ${w.emailVersionSent}` : 'Send a workshop e-mail'}>
+                                  ✉ {w.confirmationSent ? 'Resend' : 'E-mail'}
+                                </button>
+                              ) : (
+                                <span className="oet-no-action" title="No contact on this registration, so there is no address to send to">—</span>
+                              )}
+                            </td>
                           </tr>
                         )
                       })}
@@ -264,6 +277,18 @@ export default function OETrainings({ navTarget, onClearNav, onRecordSelect, onN
           </>
         )}
       </main>
+
+      {emailing && (
+        <WorkshopEmailModal
+          workshop={emailing}
+          courseLabel={cat?.['Program Type'] || selected?.course}
+          onClose={() => setEmailing(null)}
+          onSent={updated => setSelected(prev => prev && ({
+            ...prev,
+            rows: (prev.rows || []).map(r => (r.id === updated.id ? updated : r)),
+          }))}
+        />
+      )}
     </div>
   )
 }

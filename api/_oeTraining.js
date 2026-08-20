@@ -139,6 +139,24 @@ export async function readWorkshops(db, contactId) {
   return Array.isArray(legacy) ? legacy : [];
 }
 
+/** One workshop row by id. */
+export async function readWorkshop(db, id) {
+  const [row] = await readByIds(db, [id]);
+  return row || null;
+}
+
+/** Merge changes into one row, keeping both indexes in step.
+ *
+ *  Read-modify-write rather than blind overwrite, so two people acting on
+ *  different registrations of the same session cannot erase each other. */
+export async function patchWorkshop(db, id, changes) {
+  const row = await readWorkshop(db, id);
+  if (!row) throw new Error(`no workshop ${id}`);
+  const next = { ...row, ...changes };
+  await writeWorkshop(db, next);
+  return next;
+}
+
 /** One course session's roster. Has no legacy fallback by design — the old
  *  store cannot answer this question at all, which is why this exists. */
 export async function readCourse(db, course) {

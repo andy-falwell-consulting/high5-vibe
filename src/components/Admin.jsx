@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import ShopifyConnect from './ShopifyConnect';
 import { getVibeValueLists, seedValueLists, setValueList, compareValueLists } from '../api/valueLists';
+import { getTemplates, saveTemplate, TEMPLATE_VERSIONS, templateAttachments } from '../api/workshopEmail';
+import { getAgentConfig, saveAgentConfig } from '../api/agentConfig';
 import QboConnect from './QboConnect';
 import './Admin.css';
 
@@ -10,7 +12,336 @@ const TABS = [
   { id: 'fmp', label: 'FMP' },
   { id: 'backup', label: 'Backup' },
   { id: 'vocab', label: 'Vocabularies' },
+  { id: 'wsemail', label: 'Workshop e-mails' },
+  { id: 'agent', label: 'Assistant' },
 ];
+
+// Settings for the assistant. See docs/agent-admin-scope.md for why the prompt
+// is split into generated facts and editable guidance rather than made wholly
+// editable.
+function AgentTab() {
+  const [data, setData] = useState(null);
+  const [draft, setDraft] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [showPrompt, setShowPrompt] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try { const d = await getAgentConfig(); if (alive) { setData(d); setDraft(d.config); setError(null); } }
+      catch (e) { if (alive) setError(e.message); }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  async function save(changes) {
+    setBusy(true); setError(null);
+    try { const d = await saveAgentConfig(changes); setData(d); setDraft(d.config); }
+    catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+
+  if (error && !data) return <section className="admin-section"><p className="admin-error">{error}</p></section>;
+  if (!data || !draft) return <section className="admin-section"><p>Loading…</p></section>;
+
+  const { choices, enabledTools, prompt, promptChars, config } = data;
+  const isOff = t => draft.disabled.includes(t);
+  const toggle = t => setDraft(d => ({
+    ...d, disabled: isOff(t) ? d.disabled.filter(x => x !== t) : [...d.disabled, t],
+  }));
+  const dirty = JSON.stringify(draft) !== JSON.stringify(config);
+
+  return (
+    <section className="admin-section">
+      <h2 className="admin-section-title">Assistant</h2>
+      <p className="admin-note">
+        The ✦ assistant runs <strong>{config.model}</strong> with {enabledTools.length} of{' '}
+        {choices.tools.length} tools available. Changes take effect on the next question —
+        no deploy.
+      </p>
+      {error && <p className="admin-error">{error}</p>}
+
+      {/* Safety first, because it is the setting with consequences. */}
+      <div className={`admin-agent-block${draft.readOnly ? ' admin-agent-block--on' : ''}`}>
+        <label className="admin-agent-switch">
+          <input type="checkbox" checked={draft.readOnly} disabled={busy}
+            onChange={e => setDraft({ ...draft, readOnly: e.target.checked })} />
+          <span><strong>Read-only mode</strong> — disable every tool that writes or acts outside Vibe</span>
+        </label>
+        <p className="admin-note">
+          Turns off {choices.writeTools.join(', ')}. Worth knowing what that covers today:
+          the assistant can otherwise <strong>permanently delete</strong> a Gmail message
+          (not trash it), delete a Drive file, and share a Drive file with anyone.
+          Disabled tools are removed from the request, not merely discouraged.
+        </p>
+      </div>
+
+      <div className="admin-agent-grid">
+        <label className="admin-field">
+          <span>Model</span>
+          <select value={draft.model} disabled={busy}
+            onChange={e => setDraft({ ...draft, model: e.target.value })}>
+            {choices.models.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+          </select>
+        </label>
+        <label className="admin-field">
+          <span>Max tool turns (1–30)</span>
+          <input type="number" min={1} max={30} value={draft.maxTurns} disabled={busy}
+            onChange={e => setDraft({ ...draft, maxTurns: e.target.value })} />
+        </label>
+        <label className="admin-field">
+          <span>Max output tokens (512–16384)</span>
+          <input type="number" min={512} max={16384} step={512} value={draft.maxOutputTokens} disabled={busy}
+            onChange={e => setDraft({ ...draft, maxOutputTokens: e.target.value })} />
+        </label>
+      </div>
+
+      <h3 className="admin-agent-h3">Tools</h3>
+      <div className="admin-agent-tools">
+        {choices.tools.map(t => {
+          const writes = choices.writeTools.includes(t);
+          const offByReadOnly = draft.readOnly && writes;
+          return (
+            <label key={t} className={`admin-agent-tool${isOff(t) || offByReadOnly ? ' off' : ''}`}>
+              <input type="checkbox" checked={!isOff(t) && !offByReadOnly}
+                disabled={busy || offByReadOnly} onChange={() => toggle(t)} />
+              <code>{t}</code>
+              {writes && <span className="admin-agent-writes">writes</span>}
+            </label>
+          );
+        })}
+      </div>
+
+      <h3 className="admin-agent-h3">House guidance</h3>
+      <p className="admin-note">
+        Added to the assistant&apos;s standing rules — it does not replace them. The rules
+        already in force (prefer Vibe contacts over the legacy table, confirm before a
+        write, compute real totals rather than one page) stay whatever you put here; each
+        of those exists because it fixed a real mistake.
+      </p>
+      <textarea className="admin-vocab-edit" rows={8} disabled={busy}
+        placeholder="e.g. When asked about a training, always give the course code alongside the name."
+        value={draft.guidance} onChange={e => setDraft({ ...draft, guidance: e.target.value })} />
+
+      <div className="admin-agent-foot">
+        <button className="admin-btn" disabled={busy || !dirty} onClick={() => save(draft)}>
+          {busy ? 'Saving…' : dirty ? 'Save changes' : 'Saved'}
+        </button>
+        <button className="admin-btn admin-btn--ghost" disabled={busy || !dirty}
+          onClick={() => setDraft(config)}>Discard</button>
+        <button className="admin-btn admin-btn--ghost" onClick={() => setShowPrompt(v => !v)}>
+          {showPrompt ? 'Hide' : 'Show'} assembled prompt ({promptChars.toLocaleString()} chars)
+        </button>
+        {config.updatedAt && (
+          <span className="admin-note admin-agent-when">
+            Last changed {String(config.updatedAt).split('T')[0]}
+            {config.updatedBy ? ` by ${config.updatedBy}` : ''}
+          </span>
+        )}
+      </div>
+
+      {showPrompt && (
+        <>
+          <p className="admin-note">
+            Exactly what the model is told, assembled. Read-only — the tool and schema
+            sections are generated from the running code so they cannot drift from it.
+          </p>
+          <pre className="admin-agent-prompt">{prompt}</pre>
+        </>
+      )}
+    </section>
+  );
+}
+
+// The tokens a workshop e-mail body may use. Listed in the UI because a
+// template is written by staff, not by a developer, and an unknown token is
+// left in the message verbatim rather than silently blanked — so knowing the
+// list is the difference between a working merge and "{{frist_name}}" reaching
+// a customer.
+const EMAIL_TOKENS = [
+  'first_name', 'full_name', 'organization', 'course_name', 'course_number',
+  'start_date', 'end_date', 'start_time', 'location', 'instructor', 'hours',
+  'fee_total', 'deposit_due', 'balance_due', 'recipient_email',
+];
+
+const kb = n => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+
+// The files that go out with a template. Uploading here is the whole point of
+// managing e-mails in Vibe rather than Tray: the attachments were previously
+// only visible to whoever could open the Tray workflow.
+function TemplateAttachments({ templateId }) {
+  const [files, setFiles] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  const load = useCallback(async () => {
+    try { setFiles(await templateAttachments.list(templateId)); setError(null); }
+    catch (e) { setError(e.message); }
+  }, [templateId]);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try { const f = await templateAttachments.list(templateId); if (alive) { setFiles(f); setError(null); } }
+      catch (e) { if (alive) setError(e.message); }
+    })();
+    return () => { alive = false; };
+  }, [templateId]);
+
+  async function onPick(e) {
+    const picked = [...(e.target.files || [])];
+    e.target.value = '';
+    if (!picked.length) return;
+    setBusy(true); setError(null);
+    try { for (const f of picked) await templateAttachments.upload(templateId, f); await load(); }
+    catch (err) { setError(err.message); }
+    finally { setBusy(false); }
+  }
+
+  async function drop(id) {
+    setBusy(true); setError(null);
+    try { await templateAttachments.remove(id); await load(); }
+    catch (err) { setError(err.message); }
+    finally { setBusy(false); }
+  }
+
+  const total = (files || []).reduce((n, f) => n + (Number(f.size) || 0), 0);
+
+  return (
+    <div className="admin-tpl-files">
+      <div className="admin-tpl-files-head">
+        <span>Attachments{files?.length ? ` (${files.length}, ${kb(total)})` : ''}</span>
+        <label className={`admin-btn admin-btn--ghost${busy ? ' admin-btn--busy' : ''}`}>
+          {busy ? 'Working…' : '+ Add file'}
+          <input type="file" multiple hidden onChange={onPick} disabled={busy} />
+        </label>
+      </div>
+      {error && <p className="admin-error">{error}</p>}
+      {files === null ? <p className="admin-note">Loading…</p>
+        : files.length === 0 ? <p className="admin-note">No attachments. This template sends the message alone.</p>
+        : (
+          <ul className="admin-tpl-file-list">
+            {files.map(f => (
+              <li key={f.id}>
+                <a href={f.url} target="_blank" rel="noreferrer">{f.name}</a>
+                <span className="admin-vocab-count">{kb(f.size)}</span>
+                <button className="admin-btn admin-btn--ghost" disabled={busy} onClick={() => drop(f.id)}>Remove</button>
+              </li>
+            ))}
+          </ul>
+        )}
+      {total > 18 * 1024 * 1024 && (
+        <p className="admin-error">
+          Over 18 MB — Gmail will reject the message. Remove something before sending.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// PHASE: workshop e-mail. These four templates used to live inside a Tray
+// workflow, which meant nobody at High 5 could read or change them without
+// going into Tray. They are Vibe's now.
+function WorkshopEmailTab() {
+  const [data, setData] = useState(null);
+  const [editing, setEditing] = useState(null);   // { id, subject, body }
+  const [busy, setBusy] = useState(null);
+  const [error, setError] = useState(null);
+
+  const load = useCallback(async () => {
+    try { setData(await getTemplates()); setError(null); }
+    catch (e) { setError(e.message); }
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try { const d = await getTemplates(); if (alive) { setData(d); setError(null); } }
+      catch (e) { if (alive) setError(e.message); }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  async function save() {
+    setBusy(editing.id); setError(null);
+    try {
+      await saveTemplate(editing.id, { subject: editing.subject, body: editing.body, attachments: editing.attachments || [] });
+      setEditing(null);
+      await load();
+    } catch (e) { setError(e.message); }
+    finally { setBusy(null); }
+  }
+
+  const templates = data?.templates || {};
+
+  return (
+    <section className="admin-section">
+      <h2 className="admin-section-title">Workshop e-mails</h2>
+      <p className="admin-note">
+        The four messages staff can send to a registrant from the OE Trainings page.
+        Sent as <strong>{data?.from || 'workshops@high5adventure.org'}</strong>, so replies come
+        back to that mailbox and a copy lands in its Sent folder.
+      </p>
+      <p className="admin-note">
+        Tokens: {EMAIL_TOKENS.map(t => <code key={t} className="admin-token">{`{{${t}}}`}</code>)}
+        {' '}— anything unrecognised is left in the message as written, so check spelling.
+      </p>
+
+      {error && <p className="admin-error">{error}</p>}
+      {!data ? <p>Loading…</p> : (
+        <div className="admin-vocab-lists">
+          {TEMPLATE_VERSIONS.map(v => {
+            const tpl = templates[v.id];
+            const isEditing = editing?.id === v.id;
+            return (
+              <div key={v.id} className="admin-vocab-list">
+                <div className="admin-vocab-head">
+                  <code>{v.label}</code>
+                  {tpl ? <span className="admin-vocab-count">saved</span>
+                       : <span className="admin-vocab-count admin-missing">not written</span>}
+                  {isEditing ? (
+                    <>
+                      <button className="admin-btn" disabled={busy === v.id} onClick={save}>
+                        {busy === v.id ? 'Saving…' : 'Save'}
+                      </button>
+                      <button className="admin-btn admin-btn--ghost" onClick={() => setEditing(null)}>Cancel</button>
+                    </>
+                  ) : (
+                    <button className="admin-btn admin-btn--ghost"
+                      onClick={() => setEditing({ id: v.id, subject: tpl?.subject || '', body: tpl?.body || '', attachments: tpl?.attachments || [] })}>
+                      {tpl ? 'Edit' : 'Write'}
+                    </button>
+                  )}
+                </div>
+                {isEditing ? (
+                  <>
+                    <input className="admin-vocab-edit" placeholder="Subject"
+                      value={editing.subject} onChange={e => setEditing({ ...editing, subject: e.target.value })} />
+                    <textarea className="admin-vocab-edit" rows={12} placeholder="Message body"
+                      value={editing.body} onChange={e => setEditing({ ...editing, body: e.target.value })} />
+                  </>
+                ) : tpl ? (
+                  <div className="admin-vocab-values">
+                    <strong>{tpl.subject || '(no subject)'}</strong>
+                    <div className="admin-tpl-body">{tpl.body.slice(0, 240)}{tpl.body.length > 240 ? '…' : ''}</div>
+                  </div>
+                ) : (
+                  <div className="admin-vocab-values admin-missing">
+                    Nothing here yet — this template still only exists inside the old Tray workflow.
+                  </div>
+                )}
+                {/* Attachments are managed whether or not the body is written —
+                    the files can go up before the wording is settled. */}
+                <TemplateAttachments templateId={v.id} />
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
 
 // The layouts whose value lists drive dropdowns in the app. Adding one here is
 // all it takes to bring its lists under Vibe — the store is keyed by layout
@@ -748,6 +1079,8 @@ export default function Admin() {
       {tab === 'fmp' && <FmpTab />}
       {tab === 'backup' && <><SaTestSection /><BackupTab /><RestoreSection /></>}
       {tab === 'vocab' && <VocabTab />}
+      {tab === 'wsemail' && <WorkshopEmailTab />}
+      {tab === 'agent' && <AgentTab />}
     </main>
   );
 }

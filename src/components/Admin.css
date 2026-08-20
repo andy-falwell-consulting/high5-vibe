@@ -299,3 +299,55 @@
 [data-theme="light"] .admin-vocab-src--filemaker { background: #fef3c7; color: #92400e; }
 .admin-note--warn { border-left: 3px solid #b45309; padding-left: 10px; color: #fcd34d; }
 [data-theme="light"] .admin-note--warn { border-left-color: #f59e0b; color: #92400e; }
+.admin-token { background: #1e2130; padding: 1px 5px; border-radius: 3px; font-size: 11px; margin-right: 4px; display: inline-block; }
+.admin-missing { color: #fcd34d; }
+.admin-tpl-body { white-space: pre-wrap; margin-top: 6px; color: #94a3b8; font-size: 12px; line-height: 1.6; }
+input.admin-vocab-edit { margin-bottom: 8px; }
+[data-theme="light"] .admin-token { background: #e2e8f0; }
+[data-theme="light"] .admin-missing { color: #92400e; }
+[data-theme="light"] .admin-tpl-body { color: #64748b; }
+
+.admin-tpl-files { margin-top: 12px; padding-top: 10px; border-top: 1px solid #1e2130; }
+.admin-tpl-files-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; color: #94a3b8; font-weight: 600; margin-bottom: 8px; }
+.admin-tpl-files-head label { cursor: pointer; }
+.admin-btn--busy { opacity: 0.6; cursor: wait; }
+.admin-tpl-file-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.admin-tpl-file-list li { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.admin-tpl-file-list a { color: #93c5fd; text-decoration: none; }
+.admin-tpl-file-list a:hover { text-decoration: underline; }
+.admin-tpl-file-list .admin-btn { margin-left: auto; padding: 2px 8px; font-size: 12px; }
+[data-theme="light"] .admin-tpl-files { border-top-color: #e2e8f0; }
+[data-theme="light"] .admin-tpl-file-list a { color: #1d4ed8; }
+
+/* ── Assistant tab ───────────────────────────────────────────────────────── */
+.admin-agent-block { border: 1px solid #1e2130; border-left: 3px solid #475569; border-radius: 8px; padding: 12px 14px; margin: 14px 0 18px; background: #13151c; }
+.admin-agent-block--on { border-left-color: #b45309; background: #1c1710; }
+.admin-agent-switch { display: flex; gap: 9px; align-items: flex-start; font-size: 13px; color: #e2e8f0; cursor: pointer; }
+.admin-agent-switch input { margin-top: 2px; }
+
+.admin-agent-grid { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
+.admin-field { display: flex; flex-direction: column; gap: 4px; min-width: 190px; }
+.admin-field > span { font-size: 12px; color: #94a3b8; font-weight: 600; }
+.admin-field select, .admin-field input { background: #0f1117; color: #e2e8f0; border: 1px solid #1e2130; border-radius: 6px; padding: 7px 9px; font-size: 13px; font-family: inherit; }
+
+.admin-agent-h3 { font-size: 13px; font-weight: 700; color: #fff; margin: 18px 0 6px; }
+.admin-agent-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+.admin-agent-tool { display: flex; align-items: center; gap: 6px; background: #13151c; border: 1px solid #1e2130; border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; }
+.admin-agent-tool.off { opacity: 0.45; }
+.admin-agent-tool code { color: #e2e8f0; }
+.admin-agent-writes { font-size: 10px; color: #fcd34d; background: #1c1710; padding: 1px 5px; border-radius: 3px; }
+
+.admin-agent-foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+.admin-agent-when { margin: 0 0 0 auto; }
+.admin-agent-prompt { background: #0f1117; border: 1px solid #1e2130; border-radius: 8px; padding: 12px 14px; font-size: 12px; line-height: 1.6; color: #cbd5e1; white-space: pre-wrap; max-height: 420px; overflow-y: auto; margin-top: 8px; }
+
+[data-theme="light"] .admin-agent-block { background: #fff; border-color: #e2e8f0; }
+[data-theme="light"] .admin-agent-block--on { background: #fffbeb; }
+[data-theme="light"] .admin-agent-switch { color: #0f172a; }
+[data-theme="light"] .admin-field > span { color: #64748b; }
+[data-theme="light"] .admin-field select, [data-theme="light"] .admin-field input { background: #f8fafc; color: #0f172a; border-color: #e2e8f0; }
+[data-theme="light"] .admin-agent-h3 { color: #0f172a; }
+[data-theme="light"] .admin-agent-tool { background: #fff; border-color: #e2e8f0; }
+[data-theme="light"] .admin-agent-tool code { color: #0f172a; }
+[data-theme="light"] .admin-agent-writes { background: #fef3c7; color: #92400e; }
+[data-theme="light"] .admin-agent-prompt { background: #f8fafc; border-color: #e2e8f0; color: #334155; }

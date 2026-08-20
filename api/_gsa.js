@@ -24,6 +24,8 @@ import { createSign } from 'node:crypto';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const SCOPE = 'https://www.googleapis.com/auth/drive';
+export const DRIVE_SCOPE = SCOPE;
+export const GMAIL_SEND_SCOPE = 'https://www.googleapis.com/auth/gmail.send';
 
 const b64url = buf => Buffer.from(buf).toString('base64')
   .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -42,25 +44,33 @@ export function serviceAccountConfigured() {
 
 // Cached until shortly before expiry — a backup run makes ~100 Drive calls and
 // there is no sense minting a token for each.
-let cached = null;
+//
+// Keyed by scope AND subject, because a token is only valid for the pair it was
+// minted with. A single shared slot was fine while Drive was the only caller;
+// once mail-as-a-shared-address is also asking, one cache entry would hand a
+// Drive token to a Gmail call and fail in a way that looks like a permissions
+// problem rather than a caching one.
+const cache = new Map();
 
-export async function getServiceAccountToken({ force = false } = {}) {
-  if (!force && cached && cached.expiresAt - Date.now() > 60_000) return cached.token;
-
+export async function getServiceAccountToken({ force = false, scope = SCOPE, subject } = {}) {
   const email = process.env.GDRIVE_SA_EMAIL;
   const key = normalisePem(process.env.GDRIVE_SA_PRIVATE_KEY);
-  const subject = process.env.GDRIVE_SA_SUBJECT || undefined;
+  const sub = subject || process.env.GDRIVE_SA_SUBJECT || undefined;
+  const slot = `${scope}|${sub || ''}`;
+  const hit = cache.get(slot);
+  if (!force && hit && hit.expiresAt - Date.now() > 60_000) return hit.token;
+
   if (!email || !key) throw new Error('GDRIVE_SA_EMAIL / GDRIVE_SA_PRIVATE_KEY are not set');
 
   const now = Math.floor(Date.now() / 1000);
   const header = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
   const claim = b64url(JSON.stringify({
     iss: email,
-    scope: SCOPE,
+    scope,
     aud: TOKEN_URL,
     iat: now,
     exp: now + 3600,
-    ...(subject ? { sub: subject } : {}),
+    ...(sub ? { sub } : {}),
   }));
 
   let signature;
@@ -85,6 +95,7 @@ export async function getServiceAccountToken({ force = false } = {}) {
     throw new Error(`Service account token request rejected: ${detail}`);
   }
 
-  cached = { token: body.access_token, expiresAt: Date.now() + (body.expires_in || 3600) * 1000 };
-  return cached.token;
+  const entry = { token: body.access_token, expiresAt: Date.now() + (body.expires_in || 3600) * 1000 };
+  cache.set(slot, entry);
+  return entry.token;
 }
