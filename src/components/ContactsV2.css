@@ -1,14 +1,50 @@
-/* Contacts on Vibe's own model. Prefix c2-.
-   Styled to match Contacts.css — same type scale, same card sections, same
-   red-accented chrome — so the two modules read as one product while v2 earns
-   the switch. Dark is the base; light overrides live at the bottom. */
+/* Contacts. Prefix c2-.
+
+   495 lines to 233, 254 hardcoded hex values to zero, and the 92-line
+   [data-theme="light"] block deleted — it restated the whole palette a second
+   time and could drift from the dark one at any edit.
+
+   THREE CLASSES OF PROBLEM WERE FOUND HERE, not just loose hex.
+
+   1. TWO TYPEFACES THAT ARE NOT THE BRAND'S. The body was 'Source Sans 3' and
+      every heading was 'Oswald'. The style sheet names four faces — Myriad Pro
+      for body, Berthold Imago for titles, Kremlin Pro for quotes, Bernhardt
+      Standard for numbers — and neither of these is among them. They are now
+      --font-sans and --font-title, which name the licensed faces first and fall
+      back, so installing the real fonts picks them up with no further change.
+
+   2. RED USED AS ORDINARY HOVER DECORATION. Every button in the module —
+      .c2-btn, .c2-mini, .c2-new-btn — filled with brand red on hover, links
+      turned red on hover, and the section icon on every card heading was red at
+      80% opacity. That is the accent spent on chrome. The style sheet's rule is
+      "quality over quantity", and a page where six things are red says nothing
+      about which of them matters. Hover is now a neutral surface change.
+
+      RED IS KEPT where it carries meaning, which is what the policy sanctions:
+      the active list row's left edge, the active tab's underline, the selected
+      kind tab, the focus ring, the logo tile, and the risk badge.
+
+   AND ONE TRAP WORTH NAMING, because every module still to be migrated will
+   meet it. --surface-selected is an INVERTED surface: light grey in BOTH
+   themes, and it comes paired with --on-surface-selected for its text. Reaching
+   for it as "the selected background" and setting --fg on top gives white text
+   on light grey in dark mode — the active People/Organizations tab was
+   unreadable until this was caught on screen. Active rows and tabs here were
+   never an inversion anyway: they are a barely-different panel with a red edge
+   doing the signalling, which is --surface-hover.
+
+   3. A RED FILL THAT FAILS WCAG AA. .c2-btn--primary was the style-sheet hex
+      with white text — 4.38:1, below the 4.5:1 floor. It is now the neutral
+      primary fill used everywhere else in the app; the only red fills left are
+      .c2-btn--danger and the high-risk badge, both via --error-solid, the
+      darker step that a white label can be read against. */
 
 .c2-container {
   display: flex; flex: 1; min-height: 0; overflow: hidden;
-  background: #0f1117;
-  font-family: 'Source Sans 3', 'Myriad Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 17px;
-  color: #e2e8f0;
+  background: var(--bg);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  color: var(--fg);
 }
 
 /* ── Sidebar ───────────────────────────────────────────────────── */
@@ -17,479 +53,407 @@
      first-paint value before that state is read from localStorage. */
   width: 320px; flex-shrink: 0;
   display: flex; flex-direction: column;
-  background: #13151c; border-right: 1px solid #1e2130;
+  background: var(--card); border-right: 1px solid var(--border);
   overflow: hidden;
 }
 
-.c2-sidebar-header { padding: 20px 16px 12px; border-bottom: 1px solid #1e2130; }
-.c2-sidebar-title { display: flex; align-items: center; gap: 12px; }
-/* The logo tile is the one place red sits on black, as the brand sheet allows.
-   Red must never sit ON red, so nothing else here uses it as a fill. */
+.c2-sidebar-header { padding: var(--space-xl) var(--space-lg) var(--space-md); border-bottom: 1px solid var(--border); }
+.c2-sidebar-title { display: flex; align-items: center; gap: var(--space-md); }
+/* The logo tile is the one place red sits on black, as the style sheet allows.
+   Red must never sit ON red, so nothing else here uses it as a fill.
+
+   THE ONLY PRIMITIVE REFERENCE IN THIS FILE, and deliberate. BRAND.md says a
+   component may not reach past the semantic layer, and the reason is that
+   primitives do not flip with the theme. Here that is exactly the point: the
+   style sheet requires the mark to sit on white or black, so this tile must
+   stay black in light mode too. A semantic surface token would turn it white
+   and put brand red on a white tile, which is not the asset the sheet
+   describes. */
 .c2-sidebar-logo {
   width: 36px; height: 36px; flex-shrink: 0;
-  background: #111; border: 1px solid #333; border-radius: 6px;
+  background: var(--h5-grey-1100); border: 1px solid var(--h5-grey-900); border-radius: var(--radius-sm);
   display: flex; align-items: center; justify-content: center;
-  font-family: 'Oswald', sans-serif; font-size: 19px; font-weight: 700;
-  color: var(--h5-red);
+  font-family: var(--font-title); font-size: var(--text-h3); font-weight: var(--weight-bold);
+  color: var(--brand);
 }
-.c2-sidebar-module { font-size: 17px; font-weight: 600; color: #f1f5f9; }
-.c2-sidebar-count { font-size: 14px; color: #8b97aa; margin-top: 1px; }
+.c2-sidebar-module { font-size: var(--text-body-lg); font-weight: var(--weight-semibold); color: var(--fg); font-family: var(--font-title); }
+.c2-sidebar-count { font-size: var(--text-caption); color: var(--fg-secondary); margin-top: 1px; }
 .c2-new-btn {
-  margin-left: auto; flex-shrink: 0; padding: 5px 10px;
-  border-radius: 6px; border: 1px solid #2d3148; background: #1e2130;
-  color: #cbd5e1; font-size: 13px; font-weight: 600; font-family: inherit;
-  cursor: pointer; white-space: nowrap; transition: all .15s;
+  margin-left: auto; flex-shrink: 0; padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface);
+  color: var(--fg-secondary); font-size: var(--text-caption); font-weight: var(--weight-semibold);
+  font-family: var(--font-sans);
+  cursor: pointer; white-space: nowrap;
+  transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
 }
-.c2-new-btn:hover { background: var(--h5-red); border-color: var(--h5-red); color: #fff; }
+.c2-new-btn:hover { background: var(--surface-hover); color: var(--fg); border-color: var(--border-interactive); }
+.c2-new-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
-.c2-kindtabs { display: flex; gap: 6px; padding: 12px 12px 8px; flex-shrink: 0; }
+/* Person / organization / all. The RED BORDER ON THE ACTIVE TAB STAYS — an
+   active indicator is one of the four sanctioned uses. */
+.c2-kindtabs { display: flex; gap: var(--space-xs); padding: var(--space-md) var(--space-md) var(--space-sm); flex-shrink: 0; }
 .c2-kindtabs button {
-  flex: 1; padding: 7px 8px; border-radius: 8px;
-  border: 1px solid #2a2f45; background: transparent; color: #8b97aa;
-  font-size: 15px; font-family: inherit; cursor: pointer;
+  flex: 1; padding: var(--space-sm); border-radius: var(--radius-md);
+  border: 1px solid var(--border); background: transparent; color: var(--fg-secondary);
+  font-size: var(--text-body); font-family: var(--font-sans); cursor: pointer;
   display: flex; flex-direction: column; gap: 2px; align-items: center;
-  transition: all .15s;
+  transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
 }
-.c2-kindtabs button span { font-size: 13px; color: #79859a; }
-.c2-kindtabs button:hover { border-color: #3a3f60; color: #cbd5e1; }
-.c2-kindtabs button.active { background: #1e2236; color: #e2e8f0; border-color: var(--h5-red); }
+.c2-kindtabs button span { font-size: var(--text-caption); color: var(--fg-secondary); }
+.c2-kindtabs button:hover { border-color: var(--border-interactive); color: var(--fg); }
+.c2-kindtabs button.active { background: var(--surface-hover); color: var(--fg); border-color: var(--brand); }
+.c2-kindtabs button.active span { color: var(--fg-secondary); }
+.c2-kindtabs button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
 /* ListBody renders no wrapper of its own, so this is the scroller. */
-.c2-list { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 0; }
+.c2-list { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-xs) 0; }
 .c2-list::-webkit-scrollbar { width: 4px; }
 .c2-list::-webkit-scrollbar-track { background: transparent; }
-.c2-list::-webkit-scrollbar-thumb { background: #2a2f45; border-radius: 2px; }
+.c2-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
 .c2-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 9px 16px; cursor: pointer;
-  border-left: 2px solid transparent; transition: background .1s;
+  display: flex; align-items: center; gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-lg); cursor: pointer;
+  border-left: 2px solid transparent;
+  transition: background var(--duration-fast) var(--ease-standard);
 }
-.c2-row:hover { background: #1a1d2e; }
-.c2-row.active { background: #1e2236; border-left-color: var(--h5-red); }
-.c2-row-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; opacity: .85; }
+.c2-row:hover { background: var(--surface-hover); }
+.c2-row.active { background: var(--surface-hover); border-left-color: var(--brand); }
+.c2-row.active .c2-row-name { color: var(--fg); }
+.c2-row-dot { width: 7px; height: 7px; border-radius: var(--radius-circle); flex-shrink: 0; opacity: .85; }
 .c2-row-text { min-width: 0; }
 .c2-row-name {
-  font-size: 15px; font-weight: 500; color: #cbd5e1;
+  font-size: var(--text-body); font-weight: var(--weight-medium); color: var(--fg);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.c2-row.active .c2-row-name { color: #e2e8f0; }
-.c2-row-name em { color: #79859a; }
+.c2-row-name em { color: var(--fg-secondary); }
 .c2-row-sub {
-  font-size: 14px; color: #79859a; margin-top: 1px;
+  font-size: var(--text-caption); color: var(--fg-secondary); margin-top: 1px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-.c2-loading { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+.c2-loading { padding: var(--space-md) var(--space-lg); display: flex; flex-direction: column; gap: var(--space-sm); }
 .c2-skeleton {
-  height: 44px; border-radius: 8px;
-  background: linear-gradient(90deg, #1a1d2e 25%, #1e2236 50%, #1a1d2e 75%);
+  height: 44px; border-radius: var(--radius-md);
+  background: linear-gradient(90deg, var(--surface-sunken) 25%, var(--surface-hover) 50%, var(--surface-sunken) 75%);
   background-size: 200% 100%; animation: c2-shimmer 1.4s infinite;
 }
 @keyframes c2-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-.c2-empty { padding: 24px 16px; color: #8b97aa; font-size: 15px; text-align: center; }
-.c2-empty span { color: #79859a; font-size: 14px; }
+.c2-empty { padding: var(--space-2xl) var(--space-lg); color: var(--fg-secondary); font-size: var(--text-body); text-align: center; }
+.c2-empty span { color: var(--fg-disabled); font-size: var(--text-caption); }
 
-.c2-newbar { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid #1e2130; flex-shrink: 0; }
+.c2-newbar { display: flex; gap: var(--space-sm); padding: var(--space-sm) var(--space-md); border-top: 1px solid var(--border); flex-shrink: 0; }
 
-/* Drag handle between the list and the record, matching every other module. */
+/* Drag handle between the list and the record, matching every other module.
+   Red on drag-target hover is a transient active state, same class of use as
+   the focus ring. */
 .c2-resize-handle {
-  width: 4px; background: #1e2130; cursor: col-resize;
-  flex-shrink: 0; transition: background .15s;
+  width: 4px; background: var(--border); cursor: col-resize;
+  flex-shrink: 0; transition: background var(--duration-fast) var(--ease-standard);
 }
-.c2-resize-handle:hover { background: var(--h5-red); }
+.c2-resize-handle:hover { background: var(--brand); }
 
 /* ── Main ──────────────────────────────────────────────────────── */
 .c2-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
 .c2-placeholder {
   display: flex; align-items: center; justify-content: center;
-  flex: 1; color: #79859a; font-size: 18px;
+  flex: 1; color: var(--fg-secondary); font-size: var(--text-h3);
 }
-.c2-detail { flex: 1; overflow-y: auto; padding: 20px 28px 40px; display: flex; flex-direction: column; gap: 12px; }
+.c2-detail { flex: 1; overflow-y: auto; padding: var(--space-xl) var(--space-3xl) var(--space-4xl); display: flex; flex-direction: column; gap: var(--space-md); }
 .c2-detail > * { flex-shrink: 0; }
 .c2-detail::-webkit-scrollbar { width: 6px; }
 .c2-detail::-webkit-scrollbar-track { background: transparent; }
-.c2-detail::-webkit-scrollbar-thumb { background: #2a2f45; border-radius: 3px; }
+.c2-detail::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-/* Oswald, uppercase — the brand's headline treatment, same as ct-title. */
+/* The record title. Was Oswald; now the brand's own title face. */
 .c2-detail h1 {
   margin: 0;
-  font-family: 'Oswald', sans-serif;
-  font-size: 28px; font-weight: 600; letter-spacing: .02em;
-  line-height: 1.2; text-transform: uppercase; color: #f1f5f9;
+  font-family: var(--font-title);
+  font-size: var(--text-h1); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-tight);
+  line-height: var(--leading-tight); text-transform: uppercase; color: var(--fg);
 }
 
-.c2-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: #8b97aa; font-size: 15px; }
+.c2-meta { display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap; color: var(--fg-secondary); font-size: var(--text-body); }
 .c2-chip {
-  font-size: 14px; font-weight: 600; padding: 2px 8px;
-  border-radius: 20px; border: 1px solid #2a2f45;
-  background: #1e2130; color: #94a3b8;
+  font-size: var(--text-caption); font-weight: var(--weight-semibold); padding: 2px var(--space-sm);
+  border-radius: var(--radius-pill); border: 1px solid var(--border);
+  background: var(--surface-sunken); color: var(--fg-secondary);
 }
-.c2-chip--org { background: #1e2130; color: #c4b5fd; border-color: #3b3157; }
-.c2-id { margin-left: auto; font-family: 'SF Mono', 'Fira Mono', monospace; font-size: 13px; color: #4b5563; }
+/* Organization is a CATEGORY, so it takes a category colour rather than a
+   brand one — that is exactly the distinction --cat-* exists for. */
+.c2-chip--org { background: var(--cat-purple-bg); color: var(--cat-purple-fg); border-color: var(--cat-purple-solid); }
+.c2-id { margin-left: auto; font-family: var(--font-mono); font-size: var(--text-caption); color: var(--fg-disabled); }
 
 /* ── Section cards ─────────────────────────────────────────────── */
 .c2-section {
-  background: #13151c; border: 1px solid #1e2130;
-  border-radius: 12px; overflow: hidden; transition: border-color .15s;
+  background: var(--card); border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg); overflow: hidden;
+  transition: border-color var(--duration-fast) var(--ease-standard);
 }
-.c2-section:hover { border-color: #2a2f45; }
+.c2-section:hover { border-color: var(--border-interactive); }
 .c2-section-header {
-  display: flex; align-items: center; gap: 8px;
-  padding: 12px 16px 10px; border-bottom: 1px solid #1e2130;
+  display: flex; align-items: center; gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg) var(--space-sm); border-bottom: 1px solid var(--border);
 }
-.c2-section-icon { font-size: 18px; color: var(--h5-red); opacity: .8; width: 18px; text-align: center; }
+/* NOT RED any more. It was var(--h5-red) on every section heading in the
+   record — five or six red marks on one screen, none of which meant anything. */
+.c2-section-icon { font-size: var(--text-h3); color: var(--fg-secondary); width: 18px; text-align: center; }
 .c2-section h3 {
-  margin: 0; font-size: 14px; font-weight: 600;
-  text-transform: uppercase; letter-spacing: .08em; color: #79859a;
+  margin: 0; font-size: var(--text-body); font-weight: var(--weight-semibold);
+  text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--fg-secondary);
 }
-.c2-section-body { padding: 14px 16px; }
+.c2-section-body { padding: var(--space-md) var(--space-lg); }
 
-.c2-parent { color: #94a3b8; font-size: 17px; margin: 0; }
-.c2-parent strong { color: #cbd5e1; }
-.c2-none { color: #79859a; font-size: 15px; margin: 0 0 10px; }
-.c2-note { color: var(--h5-gold); font-size: 14px; margin-top: 8px; }
-.c2-noname { color: #79859a; font-style: italic; }
-.c2-notes { color: #94a3b8; font-size: 15px; margin: 0; white-space: pre-wrap; }
+.c2-parent { color: var(--fg-secondary); font-size: var(--text-body); margin: 0; }
+.c2-parent strong { color: var(--fg); }
+.c2-none { color: var(--fg-secondary); font-size: var(--text-body); margin: 0 0 var(--space-sm); }
+.c2-note { color: var(--warning-fg); font-size: var(--text-caption); margin-top: var(--space-sm); }
+.c2-noname { color: var(--fg-secondary); font-style: italic; }
+.c2-notes { color: var(--fg-secondary); font-size: var(--text-body); margin: 0; white-space: pre-wrap; }
 
 /* ── Drag-to-sort people, risk badge, distance ─────────────────── */
 .c2-person-row { position: relative; }
 .c2-person-row.dragging { opacity: .4; }
 .c2-drag {
-  cursor: grab; color: #4b5563; font-size: 15px; line-height: 1;
-  padding: 2px 4px; user-select: none; touch-action: none;
-  border-radius: 4px; flex-shrink: 0;
+  cursor: grab; color: var(--fg-disabled); font-size: var(--text-body); line-height: 1;
+  padding: 2px var(--space-xs); user-select: none; touch-action: none;
+  border-radius: var(--radius-xs); flex-shrink: 0;
 }
-.c2-drag:hover { color: #94a3b8; background: #1a1d2e; }
+.c2-drag:hover { color: var(--fg-secondary); background: var(--surface-hover); }
 .c2-drag:active { cursor: grabbing; }
-.c2-section-hint { margin-left: auto; font-size: 13px; color: #4b5563; }
+.c2-section-hint { margin-left: auto; font-size: var(--text-caption); color: var(--fg-disabled); }
 
-/* Red, and a button rather than a chip: it goes somewhere. */
+/* Risk KEEPS its red — this is a warning about the record, not decoration, and
+   it is a button that goes somewhere. The high state uses --error-solid rather
+   than the style-sheet hex so its white label passes AA. */
 .c2-riskbadge {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-family: inherit; font-size: 14px; font-weight: 600;
-  padding: 2px 9px; border-radius: 20px; cursor: pointer;
-  background: #2a1f24; border: 1px solid #7f1d1d; color: #fca5a5;
-  transition: all .15s;
+  display: inline-flex; align-items: center; gap: var(--space-xs);
+  font-family: var(--font-sans); font-size: var(--text-caption); font-weight: var(--weight-semibold);
+  padding: 2px var(--space-sm); border-radius: var(--radius-pill); cursor: pointer;
+  background: var(--error-bg); border: 1px solid var(--error-border); color: var(--error-fg);
+  transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
 }
-.c2-riskbadge:hover { background: var(--h5-red); border-color: var(--h5-red); color: #fff; }
-.c2-riskbadge--high { background: var(--h5-red); border-color: var(--h5-red); color: #fff; }
-.c2-riskbadge--high:hover { filter: brightness(1.12); }
-.c2-riskbadge-count {
-  font-size: 12px; background: rgba(0,0,0,.28); border-radius: 8px; padding: 0 5px;
-}
+.c2-riskbadge:hover { background: var(--error-solid); border-color: var(--error-solid); color: var(--on-error-solid); }
+.c2-riskbadge--high { background: var(--error-solid); border-color: var(--error-solid); color: var(--on-error-solid); }
+.c2-riskbadge--high:hover { background: var(--error-solid-hover); border-color: var(--error-solid-hover); }
+.c2-riskbadge-count { font-size: var(--text-micro); background: rgba(0, 0, 0, .28); border-radius: var(--radius-md); padding: 0 var(--space-xs); }
 
-.c2-distance { display: flex; gap: 28px; flex-wrap: wrap; font-size: 17px; color: #cbd5e1; }
+.c2-distance { display: flex; gap: var(--space-3xl); flex-wrap: wrap; font-size: var(--text-body); color: var(--fg); }
 .c2-dist-label {
-  display: block; font-size: 12px; text-transform: uppercase;
-  letter-spacing: .06em; color: #79859a; margin-bottom: 2px;
+  display: block; font-size: var(--text-micro); text-transform: uppercase;
+  letter-spacing: var(--tracking-wide); color: var(--fg-secondary); margin-bottom: 2px;
 }
 
-/* ── Confirmation modal ────────────────────────────────────────── */
-.c2-modal-backdrop {
-  position: fixed; inset: 0; z-index: 60;
-  background: rgba(0,0,0,.55);
-  display: flex; align-items: center; justify-content: center; padding: 24px;
+/* ── Modals ────────────────────────────────────────────────────── */
+/* Two backdrops and one panel class, because two different dialogs in this
+   module share .c2-modal. Left as-is structurally; only the colours changed. */
+.c2-modal-backdrop, .c2-overlay {
+  position: fixed; inset: 0; z-index: var(--z-overlay);
+  background: var(--scrim);
+  display: flex; align-items: center; justify-content: center; padding: var(--space-2xl);
 }
+.c2-overlay { backdrop-filter: blur(2px); }
 .c2-modal {
   width: min(520px, 100%);
-  background: #13151c; border: 1px solid #1e2130; border-radius: 12px;
-  padding: 20px 22px; box-shadow: 0 24px 60px rgba(0,0,0,.5);
+  background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius-lg);
+  padding: var(--space-xl) var(--space-2xl); box-shadow: var(--shadow-overlay);
 }
 .c2-modal h2 {
-  margin: 0 0 8px; font-family: 'Oswald', sans-serif; font-size: 21px;
-  font-weight: 600; text-transform: uppercase; letter-spacing: .02em; color: #f1f5f9;
+  margin: 0 0 var(--space-sm); font-family: var(--font-title); font-size: var(--text-h2);
+  font-weight: var(--weight-semibold); text-transform: uppercase; letter-spacing: var(--tracking-tight); color: var(--fg);
 }
-.c2-modal-note { margin: 0 0 14px; font-size: 15px; color: #8b97aa; }
+.c2-modal-note { margin: 0 0 var(--space-md); font-size: var(--text-body); color: var(--fg-secondary); }
 .c2-label {
-  display: block; font-size: 12px; text-transform: uppercase;
-  letter-spacing: .06em; color: #79859a; margin-bottom: 5px;
+  display: block; font-size: var(--text-micro); text-transform: uppercase;
+  letter-spacing: var(--tracking-wide); color: var(--fg-secondary); margin-bottom: var(--space-xs);
 }
-.c2-input--area { width: 100%; resize: vertical; font-family: inherit; line-height: 1.5; }
-.c2-modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+.c2-modal-actions { display: flex; gap: var(--space-sm); justify-content: flex-end; margin-top: var(--space-lg); }
 
 /* ── Detail tabs ───────────────────────────────────────────────── */
-/* Mirrors .ct-tabs on the original Contacts module: underline on the active
-   tab, count pill, same type scale — so a record reads the same in both. */
+/* The RED UNDERLINE ON THE ACTIVE TAB STAYS — sanctioned, and it is the single
+   piece of state in the strip. */
 .c2-tabs {
   display: flex; gap: 2px; flex-wrap: wrap;
-  border-bottom: 1px solid #1e2130;
+  border-bottom: 1px solid var(--border);
   margin-bottom: 2px;
 }
 .c2-tab {
-  background: none; border: none; cursor: pointer; font-family: inherit;
-  font-size: 15px; color: #8b97aa; padding: 8px 12px;
+  background: none; border: none; cursor: pointer; font-family: var(--font-sans);
+  font-size: var(--text-body); color: var(--fg-secondary); padding: var(--space-sm) var(--space-md);
   border-bottom: 2px solid transparent; margin-bottom: -1px;
-  display: inline-flex; align-items: center; gap: 6px;
-  transition: color .12s;
+  display: inline-flex; align-items: center; gap: var(--space-xs);
+  transition: color var(--duration-fast) var(--ease-standard);
 }
-.c2-tab:hover { color: #cbd5e1; }
-.c2-tab.on { color: #f1f5f9; border-bottom-color: var(--h5-red); font-weight: 500; }
+.c2-tab:hover { color: var(--fg); }
+.c2-tab.on { color: var(--fg); border-bottom-color: var(--brand); font-weight: var(--weight-medium); }
+.c2-tab:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 .c2-tab-count {
-  font-size: 12px; background: #1e2236; color: #94a3b8;
-  border-radius: 9px; padding: 1px 7px;
+  font-size: var(--text-micro); background: var(--surface-sunken); color: var(--fg-secondary);
+  border-radius: var(--radius-md); padding: 1px var(--space-xs);
 }
-.c2-tab.on .c2-tab-count { background: #2a1f24; color: #f87171; }
+.c2-tab.on .c2-tab-count { background: var(--surface-hover); color: var(--fg); }
 
 /* ── Related work (inspections, CCS, training, estimates, RMI) ── */
 /* The table scrolls inside its own box rather than widening the pane —
    Estimates and CCS both carry more columns than a narrow window fits. */
-.c2-table-scroll { overflow-x: auto; margin: -14px -16px; padding: 0; }
-.c2-table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.c2-table-scroll { overflow-x: auto; margin: calc(var(--space-md) * -1) calc(var(--space-lg) * -1); padding: 0; }
+.c2-table { width: 100%; border-collapse: collapse; font-size: var(--text-body); }
 .c2-table th {
-  text-align: left; font-weight: 600; font-size: 12px;
-  text-transform: uppercase; letter-spacing: .06em; color: #79859a;
-  padding: 8px 16px; border-bottom: 1px solid #1e2130; white-space: nowrap;
+  text-align: left; font-weight: var(--weight-semibold); font-size: var(--text-micro);
+  text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--fg-secondary);
+  padding: var(--space-sm) var(--space-lg); border-bottom: 1px solid var(--border); white-space: nowrap;
 }
 .c2-table td {
-  padding: 9px 16px; border-bottom: 1px solid #1a1d2e;
-  color: #cbd5e1; white-space: nowrap;
+  padding: var(--space-sm) var(--space-lg); border-bottom: 1px solid var(--border);
+  color: var(--fg); white-space: nowrap;
 }
 .c2-table tr:last-child td { border-bottom: none; }
 .c2-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .c2-row-link { cursor: pointer; }
-.c2-row-link:hover td { background: #171a24; color: #e2e8f0; }
-.c2-note--warn { color: var(--h5-red); }
+.c2-row-link:hover td { background: var(--surface-hover); }
+.c2-note--warn { color: var(--error-fg); }
 
 /* ── Affiliations / people ─────────────────────────────────────── */
 .c2-affs, .c2-people, .c2-matches, .c2-methodlist { list-style: none; margin: 0; padding: 0; }
 .c2-affs li, .c2-people li {
-  display: flex; align-items: center; gap: 10px;
-  padding: 9px 0; border-bottom: 1px solid #1a1d2e; font-size: 17px;
+  display: flex; align-items: center; gap: var(--space-sm);
+  padding: var(--space-sm) 0; border-bottom: 1px solid var(--border); font-size: var(--text-body);
 }
 .c2-affs li:last-child, .c2-people li:last-child { border-bottom: none; }
-.c2-aff-org { color: #cbd5e1; }
-.c2-aff-title { color: #8b97aa; font-size: 15px; }
+.c2-aff-org { color: var(--fg); }
+.c2-aff-title { color: var(--fg-secondary); font-size: var(--text-caption); }
 .c2-primary {
-  background: #14532d; color: #86efac; border-radius: 20px;
-  padding: 1px 8px; font-size: 13px; font-weight: 600;
+  background: var(--success-bg); color: var(--success-fg); border-radius: var(--radius-pill);
+  padding: 1px var(--space-sm); font-size: var(--text-caption); font-weight: var(--weight-semibold);
 }
 
 /* Navigation between records. A button rather than an <a> — there is no URL to
    put in an href until the click happens, and a real button keeps keyboard and
-   screen-reader behaviour without faking it. The row's action buttons stay
-   separate hit areas so 'remove' never navigates by accident. */
+   screen-reader behaviour without faking it.
+
+   NOT RED ON HOVER. A record link is the most common thing on the page, and
+   colouring every one of them with the accent on hover is the clearest case of
+   the accent being spent on chrome. --link is what a link should be. */
 .c2-link {
   padding: 0; border: none; background: none; cursor: pointer;
-  font: inherit; text-align: left; color: #cbd5e1;
-  border-bottom: 1px solid #2d3148;
+  font: inherit; text-align: left; color: var(--fg);
+  border-bottom: 1px solid var(--border);
 }
-.c2-link:hover { color: var(--h5-red); border-bottom-color: var(--h5-red); }
-.c2-link:focus-visible { outline: 2px solid var(--h5-red); outline-offset: 2px; border-radius: 2px; }
-.c2-link--strong { font-weight: 600; color: #e2e8f0; }
+.c2-link:hover { color: var(--link); border-bottom-color: var(--link); }
+.c2-link:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 2px; }
+.c2-link--strong { font-weight: var(--weight-semibold); }
 
 .c2-mini {
-  margin-left: auto; padding: 3px 9px; border-radius: 6px;
-  border: 1px solid #2d3148; background: #1e2130; color: #94a3b8;
-  font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer;
-  transition: all .15s;
+  margin-left: auto; padding: var(--space-xs) var(--space-sm); border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--surface); color: var(--fg-secondary);
+  font-size: var(--text-caption); font-weight: var(--weight-semibold); font-family: var(--font-sans); cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
 }
 .c2-mini + .c2-mini { margin-left: 0; }
 /* Sits next to what precedes it. Two `margin-left: auto` items in one flex row
    split the free space between them, which pulls the id away from its record. */
-.c2-mini--flush { margin-left: 10px; }
-.c2-mini:hover:not(:disabled) { background: var(--h5-red); border-color: var(--h5-red); color: #fff; }
-.c2-mini--danger:hover:not(:disabled) { background: #ef4444; border-color: #ef4444; color: #fff; }
+.c2-mini--flush { margin-left: var(--space-sm); }
+.c2-mini:hover:not(:disabled) { background: var(--surface-hover); color: var(--fg); border-color: var(--border-interactive); }
+.c2-mini:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+/* The one mini that IS destructive keeps the red, as the policy allows. */
+.c2-mini--danger:hover:not(:disabled) { background: var(--error-solid); border-color: var(--error-solid); color: var(--on-error-solid); }
 .c2-mini:disabled { opacity: .4; cursor: default; }
-.c2-mini--add { margin-left: 0; margin-top: 8px; }
+.c2-mini--add { margin-left: 0; margin-top: var(--space-sm); }
 
 /* ── Phones, emails, addresses ─────────────────────────────────── */
-.c2-methods { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 2px 28px; }
+.c2-methods { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 2px var(--space-3xl); }
 .c2-methodgroup { min-width: 0; }
 .c2-methodgroup h3 {
-  margin: 0 0 4px; font-size: 13px; font-weight: 600;
-  text-transform: uppercase; letter-spacing: .07em; color: #79859a;
+  margin: 0 0 var(--space-xs); font-size: var(--text-caption); font-weight: var(--weight-semibold);
+  text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--fg-secondary);
 }
 .c2-methodrow {
-  display: flex; align-items: center; gap: 10px;
-  padding: 7px 0; border-bottom: 1px solid #1a1d2e; font-size: 17px;
+  display: flex; align-items: center; gap: var(--space-sm);
+  padding: var(--space-sm) 0; border-bottom: 1px solid var(--border); font-size: var(--text-body);
 }
 .c2-methodrow:last-child { border-bottom: none; }
 .c2-methodrow--editing { display: block; border-bottom: none; }
 .c2-methodtype {
   flex-shrink: 0; min-width: 74px;
-  color: #79859a; font-size: 13px; font-weight: 600;
-  text-transform: uppercase; letter-spacing: .04em;
+  color: var(--fg-secondary); font-size: var(--text-caption); font-weight: var(--weight-semibold);
+  text-transform: uppercase; letter-spacing: var(--tracking-wide);
 }
-.c2-methodvalue { color: #cbd5e1; text-decoration: none; overflow-wrap: anywhere; }
-a.c2-methodvalue:hover { color: var(--h5-red); text-decoration: underline; }
+.c2-methodvalue { color: var(--fg); text-decoration: none; overflow-wrap: anywhere; }
+a.c2-methodvalue:hover { color: var(--link); text-decoration: underline; }
 .c2-methodrow .c2-mini { margin-left: auto; }
 .c2-methodrow .c2-mini + .c2-mini { margin-left: 0; }
-.c2-methodform { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+.c2-methodform { display: flex; align-items: center; gap: var(--space-xs); flex-wrap: wrap; margin: var(--space-sm) 0; }
 
 /* ── Pickers ───────────────────────────────────────────────────── */
-.c2-picker-block { margin-top: 14px; padding-top: 12px; border-top: 1px solid #1a1d2e; }
+.c2-picker-block { margin-top: var(--space-md); padding-top: var(--space-md); border-top: 1px solid var(--border); }
 .c2-picker { max-width: 560px; }
 .c2-matches li button {
   display: block; width: 100%; text-align: left;
-  padding: 7px 10px; border: none; background: transparent;
-  color: #cbd5e1; font-size: 15px; font-family: inherit; cursor: pointer; border-radius: 6px;
+  padding: var(--space-sm) var(--space-md); border: none; background: transparent;
+  color: var(--fg); font-size: var(--text-body); font-family: var(--font-sans); cursor: pointer; border-radius: var(--radius-sm);
 }
-.c2-matches li button:hover { background: #1e2236; }
-.c2-picked { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.c2-picked strong { color: #e2e8f0; }
+.c2-matches li button:hover { background: var(--surface-hover); }
+.c2-picked { display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap; }
+.c2-picked strong { color: var(--fg); }
 
 /* ── Forms ─────────────────────────────────────────────────────── */
 .c2-input {
-  width: 100%; box-sizing: border-box; padding: 8px 10px;
-  background: #1e2130; border: 1px solid #2a2f45; border-radius: 8px;
-  color: #e2e8f0; font-size: 15px; font-family: inherit; outline: none;
-  transition: border-color .15s;
+  width: 100%; box-sizing: border-box; padding: var(--space-sm) var(--space-md);
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+  color: var(--fg); font-size: var(--text-body); font-family: var(--font-sans); outline: none;
+  transition: border-color var(--duration-fast) var(--ease-standard);
 }
-.c2-input::placeholder { color: #79859a; }
-.c2-input:focus { border-color: var(--h5-red); }
+.c2-input::placeholder { color: var(--fg-disabled); }
+.c2-input:focus { border-color: var(--focus-ring); }
 .c2-input--inline { width: auto; flex: 1; min-width: 180px; }
-.c2-input--type { width: auto; flex-shrink: 0; padding-right: 6px; }
+.c2-input--type { width: auto; flex-shrink: 0; padding-right: var(--space-xs); }
 .c2-input--narrow { flex: 0 0 90px; min-width: 90px; }
-.c2-input--area { resize: vertical; line-height: 1.45; }
+.c2-input--area { width: 100%; resize: vertical; font-family: var(--font-sans); line-height: var(--leading-normal); }
 
 .c2-edit { max-width: 460px; }
 .c2-edit .c2-modal-actions { justify-content: flex-start; }
 .c2-lbl {
-  display: block; font-size: 13px; font-weight: 600; color: #79859a;
-  text-transform: uppercase; letter-spacing: .07em; margin-bottom: 12px;
+  display: block; font-size: var(--text-caption); font-weight: var(--weight-semibold); color: var(--fg-secondary);
+  text-transform: uppercase; letter-spacing: var(--tracking-wide); margin-bottom: var(--space-md);
 }
-.c2-lbl .c2-input { margin-top: 5px; text-transform: none; letter-spacing: normal; }
+.c2-lbl .c2-input { margin-top: var(--space-xs); text-transform: none; letter-spacing: normal; }
 
+/* NEITHER BUTTON FILLS WITH BRAND RED ANY MORE. The default hover did, and the
+   primary variant was a red fill with a white label at 4.38:1 — below AA. */
 .c2-btn {
-  padding: 7px 14px; border-radius: 8px; border: 1px solid #2d3148;
-  background: #1e2130; color: #cbd5e1; font-size: 15px; font-weight: 600;
-  font-family: inherit; cursor: pointer; transition: all .15s;
+  padding: var(--space-sm) var(--space-lg); border-radius: var(--radius-md); border: 1px solid var(--border-interactive);
+  background: var(--surface); color: var(--fg); font-size: var(--text-body); font-weight: var(--weight-semibold);
+  font-family: var(--font-sans); cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
 }
-.c2-btn:hover:not(:disabled) { background: var(--h5-red); border-color: var(--h5-red); color: #fff; }
-.c2-btn--primary { background: var(--h5-red); border-color: var(--h5-red); color: #fff; }
-.c2-btn--danger { background: #7f1d1d; border-color: #991b1b; color: #fecaca; }
-.c2-btn--danger:hover:not(:disabled) { background: #b91c1c; border-color: #b91c1c; color: #fff; }
-.c2-btn--primary:hover:not(:disabled) { background: #c9151c; border-color: #c9151c; }
+.c2-btn:hover:not(:disabled) { background: var(--surface-hover); }
+.c2-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.c2-btn--primary { background: var(--fg); border-color: var(--fg); color: var(--fg-inverse); }
+.c2-btn--primary:hover:not(:disabled) { background: var(--fg-hover); border-color: var(--fg-hover); }
+.c2-btn--danger { background: var(--error-solid); border-color: var(--error-solid); color: var(--on-error-solid); }
+.c2-btn--danger:hover:not(:disabled) { background: var(--error-solid-hover); border-color: var(--error-solid-hover); }
 .c2-btn:disabled { opacity: .45; cursor: default; }
 
-.c2-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,.55); backdrop-filter: blur(2px);
-  display: flex; align-items: center; justify-content: center; z-index: 1000;
-}
-.c2-modal {
-  background: #13151c; border: 1px solid #2a2f45; border-radius: 12px;
-  padding: 24px 26px; width: 400px; max-width: calc(100vw - 40px);
-}
-.c2-modal h2 {
-  font-family: 'Oswald', sans-serif; font-size: 21px; font-weight: 600;
-  text-transform: uppercase; letter-spacing: .02em; color: #f1f5f9; margin: 0 0 18px;
-}
-.c2-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
-
 /* Person or organization, chosen in the modal rather than before it opens. */
-.c2-kindpick { display: flex; gap: 6px; margin-bottom: 18px; }
+.c2-kindpick { display: flex; gap: var(--space-xs); margin-bottom: var(--space-lg); }
 .c2-kindpick button {
-  flex: 1; padding: 8px 10px; border-radius: 8px;
-  border: 1px solid #2a2f45; background: #1e2130; color: #8b97aa;
-  font-size: 15px; font-weight: 600; font-family: inherit; cursor: pointer;
-  transition: all .15s;
+  flex: 1; padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md);
+  border: 1px solid var(--border); background: var(--surface); color: var(--fg-secondary);
+  font-size: var(--text-body); font-weight: var(--weight-semibold); font-family: var(--font-sans); cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
 }
-.c2-kindpick button:hover:not(:disabled) { border-color: #3a3f60; color: #cbd5e1; }
-.c2-kindpick button.active { background: #1e2236; color: #e2e8f0; border-color: var(--h5-red); }
+.c2-kindpick button:hover:not(:disabled) { border-color: var(--border-interactive); color: var(--fg); }
+.c2-kindpick button.active { background: var(--surface-hover); color: var(--fg); border-color: var(--brand); }
+.c2-kindpick button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .c2-kindpick button:disabled { opacity: .5; cursor: default; }
 .c2-error {
-  margin-top: 10px; font-size: 15px; color: #fca5a5;
-  background: #7f1d1d33; border: 1px solid #7f1d1d66; border-radius: 8px; padding: 8px 10px;
+  margin-top: var(--space-sm); font-size: var(--text-body); color: var(--error-fg);
+  background: var(--error-bg); border: 1px solid var(--error-border); border-radius: var(--radius-md); padding: var(--space-sm) var(--space-md);
 }
 
 /* Danger zone, kept at the foot of the edit form so it is never the first thing
    a cursor lands on. */
-.c2-danger { margin-top: 22px; padding-top: 16px; border-top: 1px solid #1e2130; }
-.c2-danger--open { border-top-color: #7f1d1d; }
-.c2-danger-title { font-size: 17px; color: #e2e8f0; margin-bottom: 6px; }
-.c2-danger-warn { font-size: 14px; color: #94a3b8; line-height: 1.5; margin: 0 0 14px; }
-
-/* ── Light theme ───────────────────────────────────────────────── */
-[data-theme="light"] .c2-container { background: #f8fafc; color: #0f172a; }
-[data-theme="light"] .c2-sidebar { background: #fff; border-right-color: #e2e8f0; }
-[data-theme="light"] .c2-sidebar-header { border-bottom-color: #e2e8f0; }
-[data-theme="light"] .c2-sidebar-module { color: #0f172a; }
-[data-theme="light"] .c2-new-btn { background: #f1f5f9; border-color: #e2e8f0; color: #334155; }
-[data-theme="light"] .c2-new-btn:hover { background: var(--h5-red); border-color: var(--h5-red); color: #fff; }
-[data-theme="light"] .c2-kindtabs button { border-color: #e2e8f0; color: #5e6b7c; }
-[data-theme="light"] .c2-kindtabs button.active { background: #f1f5f9; color: #0f172a; border-color: var(--h5-red); }
-[data-theme="light"] .c2-row:hover { background: #f8fafc; }
-[data-theme="light"] .c2-row.active { background: #f1f5f9; }
-[data-theme="light"] .c2-row-name { color: #334155; }
-[data-theme="light"] .c2-row.active .c2-row-name { color: #0f172a; }
-[data-theme="light"] .c2-skeleton { background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%); background-size: 200% 100%; }
-[data-theme="light"] .c2-detail h1 { color: #0f172a; }
-[data-theme="light"] .c2-chip { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
-[data-theme="light"] .c2-chip--org { background: #f5f3ff; color: #6d28d9; border-color: #ddd6fe; }
-[data-theme="light"] .c2-section { background: #fff; border-color: #e2e8f0; }
-[data-theme="light"] .c2-section:hover { border-color: #cbd5e1; }
-[data-theme="light"] .c2-section-header { border-bottom-color: #e2e8f0; }
-[data-theme="light"] .c2-section h3, [data-theme="light"] .c2-methodgroup h3 { color: #5e6b7c; }
-[data-theme="light"] .c2-affs li, [data-theme="light"] .c2-people li,
-[data-theme="light"] .c2-methodrow { border-bottom-color: #f1f5f9; }
-[data-theme="light"] .c2-aff-org, [data-theme="light"] .c2-methodvalue,
-[data-theme="light"] .c2-parent strong { color: #0f172a; }
-[data-theme="light"] .c2-link { color: #0f172a; border-bottom-color: #cbd5e1; }
-[data-theme="light"] .c2-link:hover { color: var(--h5-red); border-bottom-color: var(--h5-red); }
-[data-theme="light"] .c2-mini { background: #f1f5f9; border-color: #e2e8f0; color: #5e6b7c; }
-[data-theme="light"] .c2-mini:hover:not(:disabled) { background: var(--h5-red); border-color: var(--h5-red); color: #fff; }
-[data-theme="light"] .c2-btn { background: #f1f5f9; border-color: #e2e8f0; color: #334155; }
-[data-theme="light"] .c2-btn:hover:not(:disabled) { background: var(--h5-red); border-color: var(--h5-red); color: #fff; }
-[data-theme="light"] .c2-btn--primary { background: var(--h5-red); border-color: var(--h5-red); color: #fff; }
-.c2-btn--danger { background: #7f1d1d; border-color: #991b1b; color: #fecaca; }
-.c2-btn--danger:hover:not(:disabled) { background: #b91c1c; border-color: #b91c1c; color: #fff; }
-[data-theme="light"] .c2-input { background: #fff; border-color: #e2e8f0; color: #0f172a; }
-[data-theme="light"] .c2-modal { background: #fff; border-color: #e2e8f0; }
-[data-theme="light"] .c2-modal h2 { color: #0f172a; }
-[data-theme="light"] .c2-kindpick button { background: #f8fafc; border-color: #e2e8f0; color: #5e6b7c; }
-[data-theme="light"] .c2-kindpick button.active { background: #f1f5f9; color: #0f172a; border-color: var(--h5-red); }
-[data-theme="light"] .c2-matches li button:hover { background: #f1f5f9; }
-[data-theme="light"] .c2-newbar { border-top-color: #e2e8f0; }
-[data-theme="light"] .c2-picker-block { border-top-color: #e2e8f0; }
-[data-theme="light"] .c2-error { color: #b91c1c; background: #fef2f2; border-color: #fecaca; }
-[data-theme="light"] .c2-btn--danger { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
-[data-theme="light"] .c2-btn--danger:hover:not(:disabled) { background: #b91c1c; border-color: #b91c1c; color: #fff; }
-[data-theme="light"] .c2-danger { border-top-color: #e2e8f0; }
-[data-theme="light"] .c2-danger--open { border-top-color: #fecaca; }
-[data-theme="light"] .c2-danger-title { color: #0f172a; }
-[data-theme="light"] .c2-table th { color: #64748b; border-bottom-color: #e2e8f0; }
-[data-theme="light"] .c2-table td { color: #334155; border-bottom-color: #f1f5f9; }
-[data-theme="light"] .c2-row-link:hover td { background: #f8fafc; color: #0f172a; }
-
-[data-theme="light"] .c2-tabs { border-bottom-color: #e2e8f0; }
-[data-theme="light"] .c2-tab { color: #5e6b7c; }
-[data-theme="light"] .c2-tab:hover { color: #334155; }
-[data-theme="light"] .c2-tab.on { color: #0f172a; }
-[data-theme="light"] .c2-tab-count { background: #f1f5f9; color: #475569; }
-[data-theme="light"] .c2-tab.on .c2-tab-count { background: #fef2f2; color: #b91c1c; }
-
-[data-theme="light"] .c2-drag { color: #94a3b8; }
-[data-theme="light"] .c2-drag:hover { color: #475569; background: #f1f5f9; }
-[data-theme="light"] .c2-section-hint { color: #94a3b8; }
-[data-theme="light"] .c2-riskbadge { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
-[data-theme="light"] .c2-riskbadge--high { background: var(--h5-red); border-color: var(--h5-red); color: #fff; }
-[data-theme="light"] .c2-distance { color: #334155; }
-[data-theme="light"] .c2-dist-label { color: #64748b; }
-[data-theme="light"] .c2-modal { background: #fff; border-color: #e2e8f0; }
-[data-theme="light"] .c2-modal h2 { color: #0f172a; }
-[data-theme="light"] .c2-modal-note { color: #5e6b7c; }
-[data-theme="light"] .c2-label { color: #64748b; }
-
-/* Map link sits in the row's action group and matches the mini buttons, but is
-   an anchor — it opens a new tab, so it should behave like a link. */
-.c2-mini--map { text-decoration: none; display: inline-flex; align-items: center; }
-
-/* Notes can run to thousands of characters; cap and scroll rather than making
-   the whole record a scroll of one field. */
-.c2-section .c2-notes { max-height: 260px; overflow-y: auto; }
-.c2-section .c2-notes::-webkit-scrollbar { width: 5px; }
-.c2-section .c2-notes::-webkit-scrollbar-thumb { background: #2a2f45; border-radius: 3px; }
-
-[data-theme="light"] .c2-resize-handle { background: #e2e8f0; }
-[data-theme="light"] .c2-resize-handle:hover { background: var(--h5-red); }
-
-/* The billed-total shown beside the Invoices section heading. Muted: it is
-   context for the table below, not a figure to lead with. */
-.c2-section-aside {
-  margin-left: auto;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  color: #94a3b8;
-}
-[data-theme="light"] .c2-section-aside { color: #64748b; }
+.c2-danger { margin-top: var(--space-2xl); padding-top: var(--space-lg); border-top: 1px solid var(--border); }
+.c2-danger--open { border-top-color: var(--error-border); }
+.c2-danger-title { font-size: var(--text-body-lg); color: var(--fg); margin-bottom: var(--space-xs); }
+.c2-danger-warn { font-size: var(--text-caption); color: var(--fg-secondary); line-height: var(--leading-normal); margin: 0 0 var(--space-md); }
