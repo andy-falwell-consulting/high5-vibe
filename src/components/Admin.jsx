@@ -1,8 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import ShopifyConnect from './ShopifyConnect';
 import { getVibeValueLists, seedValueLists, setValueList, compareValueLists } from '../api/valueLists';
 import { getTemplates, saveTemplate, TEMPLATE_VERSIONS, templateAttachments, sendTestEmail } from '../api/workshopEmail';
 import { getAgentConfig, saveAgentConfig } from '../api/agentConfig';
+import { getDriftReport, runReconcile, BUCKET_LABEL, linkRecord, isLinkable, needsJudgement, compareValues } from '../api/productDrift';
+import { updateVibeRecord } from '../api/vibeRecords';
+import { pushToShopify, pushToQBO } from '../api/integrations';
 import MarkdownEditor from './MarkdownEditor';
 import QboConnect from './QboConnect';
 import './Admin.css';
@@ -15,7 +18,282 @@ const TABS = [
   { id: 'vocab', label: 'Vocabularies' },
   { id: 'wsemail', label: 'Workshop e-mails' },
   { id: 'agent', label: 'Assistant' },
+  { id: 'drift', label: 'Product drift' },
 ];
+
+const ago = iso => {
+  if (!iso) return 'never';
+  const h = Math.floor((Date.now() - new Date(iso).getTime()) / 3600000);
+  return h < 1 ? 'just now' : h < 24 ? `${h}h ago` : `${Math.floor(h / 24)}d ago`;
+};
+
+const PRODUCTS_LAYOUT = 'Products & Services_New';
+const money = v => (v == null ? '—' : Number(v).toLocaleString('en-US', { style: 'currency', currency: 'USD' }));
+
+// One bucket, unfolded.
+//
+// THE ACTION MATCHES THE RISK, which is why there is not one "Fix" button:
+//
+//   linkable  the product and the item already share a SKU, so storing the id
+//             changes nothing in either external system. Safe, and it clears 73
+//             of 157 records with no judgement required.
+//   drift     pushing OUR value OVERWRITES theirs. Shown side by side and
+//             opt-in per row, because sometimes QuickBooks is the one that is
+//             right and a blanket push would destroy that silently.
+//   dupes     which product owns a SKU is a business question. Listed, with a
+//             link through to each product, and no bulk action at all.
+function DriftBucket({ bucket, rows, truncated, onDone }) {
+  const [sel, setSel] = useState(() => new Set());
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const linkable = isLinkable(bucket);
+  const judgement = needsJudgement(bucket);
+  const target = bucket.startsWith('qbo') ? 'qbo' : 'shopify';
+  const actionable = !judgement;
+
+  const toggle = id => setSel(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const allOn = rows.length > 0 && sel.size === rows.length;
+
+  async function apply() {
+    setBusy(true); setResult(null);
+    const chosen = rows.filter(r => sel.has(r.recordId));
+    let ok = 0; const failed = [];
+    for (const row of chosen) {
+      try {
+        if (linkable) {
+          await linkRecord(updateVibeRecord, PRODUCTS_LAYOUT, row, target);
+        } else {
+          // Re-push through the SAME path the per-product sync button uses.
+          const f = { Name: row.name, Unit_Price: row.price, SKU: row.sku, Description: '' };
+          if (target === 'qbo') await pushToQBO(f, row.qboId || null, null);
+          else await pushToShopify(f, row.recordId, row.productId || null);
+        }
+        ok++;
+      } catch (e) { failed.push(`${row.sku || row.recordId}: ${e.message}`); }
+    }
+    setResult({ ok, failed });
+    setBusy(false);
+    setSel(new Set());
+    if (ok) onDone?.();
+  }
+
+  return (
+    <div className="admin-drift-detail">
+      {truncated && (
+        <p className="admin-note admin-missing">
+          Showing the first {rows.length} of {truncated}. Run the reconciliation again after
+          fixing these to see the rest.
+        </p>
+      )}
+      <table className="h5-table">
+        <thead>
+          <tr>
+            {actionable && (
+              <th style={{ width: 30 }}>
+                <input type="checkbox" checked={allOn} disabled={busy}
+                  onChange={() => setSel(allOn ? new Set() : new Set(rows.map(r => r.recordId)))} />
+              </th>
+            )}
+            <th>SKU</th><th>Product</th>
+            <th>{linkable ? 'Matches' : 'In Vibe'}</th>
+            <th>{linkable ? '' : `In ${target === 'qbo' ? 'QuickBooks' : 'Shopify'}`}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(r => {
+            const cmp = compareValues(bucket, r);
+            const cand = linkable ? (r.qboCandidates?.[0] || r.shopCandidates?.[0]) : null;
+            return (
+              <tr key={r.recordId || r.sku}>
+                {actionable && (
+                  <td><input type="checkbox" checked={sel.has(r.recordId)} disabled={busy}
+                    onChange={() => toggle(r.recordId)} /></td>
+                )}
+                <td className="admin-drift-sku">{r.sku || <em>none</em>}</td>
+                <td>{r.name || (r.recordIds ? `${r.recordIds.length} products` : '—')}</td>
+                <td>{cmp ? (cmp.money ? money(cmp.ours) : String(cmp.ours ?? '—')) : (cand ? cand.name || cand.title : '—')}</td>
+                <td className={cmp ? 'admin-drift-theirs' : undefined}>
+                  {cmp ? (cmp.money ? money(cmp.theirs) : String(cmp.theirs ?? '—')) : (cand ? money(cand.price) : '')}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      {judgement ? (
+        <p className="admin-note">
+          Which product should own a shared SKU is a business decision, so there is no bulk
+          action here. Open each product to resolve it.
+        </p>
+      ) : (
+        <div className="admin-agent-foot">
+          <button className="admin-btn" disabled={busy || sel.size === 0} onClick={apply}>
+            {busy ? 'Working…'
+              : linkable ? `Link ${sel.size || ''} selected`
+              : `Push Vibe's value to ${target === 'qbo' ? 'QuickBooks' : 'Shopify'} (${sel.size || 0})`}
+          </button>
+          {!linkable && (
+            <span className="admin-note" style={{ margin: 0 }}>
+              This <strong>overwrites</strong> the value on the right.
+            </span>
+          )}
+          {linkable && (
+            <span className="admin-note" style={{ margin: 0 }}>
+              Stores the id only — nothing in {target === 'qbo' ? 'QuickBooks' : 'Shopify'} is changed.
+            </span>
+          )}
+        </div>
+      )}
+      {result && (
+        <p className={result.failed.length ? 'admin-error' : 'admin-testsend-ok'}>
+          {result.ok} done{result.failed.length ? `, ${result.failed.length} failed: ${result.failed.slice(0, 3).join('; ')}` : ''}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// Product drift between Vibe, QuickBooks and Shopify — see
+// docs/product-sync-audit.md.
+//
+// THE DELTA LEADS, not the total. 71 QuickBooks name mismatches is today's
+// normal; what warrants attention is the day it becomes 74. A dashboard whose
+// headline is a big number that never moves gets ignored within a week, which is
+// the same as not having one.
+function DriftTab() {
+  const [data, setData] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [open, setOpen] = useState(null);   // the unfolded bucket
+
+  const load = useCallback(async () => {
+    try { setData(await getDriftReport()); setError(null); }
+    catch (e) { setError(e.message); }
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try { const d = await getDriftReport(); if (alive) { setData(d); setError(null); } }
+      catch (e) { if (alive) setError(e.message); }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  async function runNow() {
+    setBusy(true); setError(null);
+    try { await runReconcile(); await load(); }
+    catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+
+  const last = data?.last;
+  const drift = last?.drift ?? null;
+  const dd = last?.driftDelta;
+  const changed = Object.entries(last?.delta || {});
+
+  return (
+    <section className="admin-section">
+      <h2 className="admin-section-title">Product drift</h2>
+      <p className="admin-note">
+        Vibe, QuickBooks and Shopify compared on SKU. Runs nightly at 05:00; this reads
+        the stored result rather than re-running, because a reconciliation pages all
+        three systems and takes up to two minutes.
+      </p>
+      {error && <p className="admin-error">{error}</p>}
+
+      {!data ? <p>Loading…</p> : !last ? (
+        <p className="admin-note admin-missing">
+          No run recorded yet. The nightly job will populate this, or run it now.
+        </p>
+      ) : (
+        <>
+          <div className="admin-drift-head">
+            <div className={`admin-drift-total${drift > 0 ? ' bad' : ''}`}>
+              <span>{drift}</span><label>records drifted</label>
+            </div>
+            {dd !== null && dd !== undefined && (
+              <div className={`admin-drift-delta${dd > 0 ? ' worse' : dd < 0 ? ' better' : ''}`}>
+                {dd > 0 ? `▲ ${dd} since last run` : dd < 0 ? `▼ ${Math.abs(dd)} since last run` : 'unchanged since last run'}
+              </div>
+            )}
+            <div className="admin-drift-when">
+              checked {ago(last.at)}{last.previousAt ? ` · previous ${ago(last.previousAt)}` : ''}
+            </div>
+          </div>
+
+          {changed.length > 0 && (
+            <div className="admin-callout-warn">
+              <strong>Changed since the last run</strong>
+              <ul>
+                {changed.map(([k, v]) => (
+                  <li key={k}>{BUCKET_LABEL[k] || k}: <strong>{v > 0 ? `+${v}` : v}</strong></li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <table className="h5-table admin-drift-table">
+            <thead><tr><th>What</th><th className="h5-table__num">Count</th><th /></tr></thead>
+            <tbody>
+              {[...(data.buckets?.drift || []), ...(data.buckets?.linkable || [])].map(k => {
+                const n = last.summary?.[k] ?? 0;
+                const rows = last.rows?.[k] || [];
+                const isOpen = open === k;
+                const link = (data.buckets?.linkable || []).includes(k);
+                return (
+                  <Fragment key={k}>
+                    {/* The whole row opens it. A count with nothing behind it is
+                        not worth a click, so a zero row is inert and says so by
+                        not offering the affordance. */}
+                    <tr className={`admin-drift-row${n ? ' clickable' : ''}${isOpen ? ' open' : ''}`}
+                      onClick={() => n && setOpen(isOpen ? null : k)}>
+                      <td>
+                        {n > 0 && <span className="admin-drift-caret">{isOpen ? '▾' : '▸'}</span>}
+                        {BUCKET_LABEL[k] || k}
+                        {link && <span className="admin-vocab-count">not drift</span>}
+                      </td>
+                      <td className="h5-table__num">{n}</td>
+                      <td className="h5-table__num admin-drift-hint">
+                        {n > 0 ? (isOpen ? 'hide' : 'show') : ''}
+                      </td>
+                    </tr>
+                    {isOpen && (
+                      <tr className="admin-drift-expanded">
+                        <td colSpan={3}>
+                          <DriftBucket bucket={k} rows={rows} truncated={last.truncated?.[k]}
+                            onDone={load} />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+
+          <p className="admin-note">
+            {last.linkable > 0 && (
+              <>
+                <strong>{last.linkable}</strong> products match a QuickBooks item or Shopify
+                variant by SKU but have no id stored. Not drift — a link waiting to be made.{' '}
+              </>
+            )}
+            Products with no SKU cannot be linked to anything: SKU is the join key.
+          </p>
+        </>
+      )}
+
+      <div className="admin-agent-foot">
+        <button className="admin-btn" disabled={busy} onClick={runNow}>
+          {busy ? 'Reconciling… (up to 2 min)' : 'Run now'}
+        </button>
+      </div>
+    </section>
+  );
+}
 
 // Settings for the assistant. See docs/agent-admin-scope.md for why the prompt
 // is split into generated facts and editable guidance rather than made wholly
@@ -1154,6 +1432,7 @@ export default function Admin() {
       {tab === 'vocab' && <VocabTab />}
       {tab === 'wsemail' && <WorkshopEmailTab />}
       {tab === 'agent' && <AgentTab />}
+      {tab === 'drift' && <DriftTab />}
     </main>
   );
 }
