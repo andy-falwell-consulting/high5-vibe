@@ -4,7 +4,6 @@ import { createVibeRecord } from '../api/vibeRecords'
 import { getCurrentEnv } from '../config/fmpEnvironments'
 import RecordFormModal from './RecordFormModal'
 import { canonicalEnrollment, ENROLLMENT_OPTIONS, OPEN_ENROLLMENT } from '../config/oeEnrollment'
-import { BRAND } from '../config/brandColors'
 import { useAllRecords } from '../hooks/useAllRecords'
 import ListToolbar, { useListControls, ListBody } from './ListControls'
 import './OELookup.css'
@@ -13,15 +12,16 @@ import DeleteRecordButton from './DeleteRecordButton'
 const LAYOUT = 'OELookup_New'
 const CACHE_VERSION = 1
 
-const TYPE_COLOR = {
-  'Open Enrollment': BRAND.blue,
-  'Custom': BRAND.purple,
-}
-
 // Look the colour up by the CANONICAL value, not the raw one — 44 records are
 // stored as "OPEN ENROLLMENT", "Open Enrollment " or "Open Enrollement" and
 // used to fall through to the neutral grey as if they had no type at all.
-const typeColor = raw => TYPE_COLOR[canonicalEnrollment(raw)] ?? '#4a5568'
+// A class rather than an inline colour: .h5-dot--* resolves to the category
+// -solid token, which is what keeps the two kinds apart in dark mode. An inline
+// hex cannot switch with the theme.
+const dotClass = raw => {
+  const v = canonicalEnrollment(raw)
+  return v === OPEN_ENROLLMENT ? 'h5-dot--blue' : v === 'Custom' ? 'h5-dot--purple' : ''
+}
 
 function fmtDate(val) {
   if (!val) return '—'
@@ -73,14 +73,14 @@ function CodePreview({ programType, prefix, startDate }) {
 
   if (!info) return null
   if (info.newType) return (
-    <div className="oe-code-preview warn">
+    <div className="h5-callout h5-callout--warning oe-code-preview">
       No existing program uses that type, so there is no code prefix to follow.
       Enter one above (e.g. <code>AB</code>) and the first code will be
       <code>{` AB-${info.year}-1`}</code>.
     </div>
   )
   return (
-    <div className="oe-code-preview">
+    <div className="h5-callout h5-callout--info oe-code-preview">
       Program Code will be <strong>{info.preview}</strong>
       <span className="oe-code-note">
         {' '}— the {info.year} series for {info.prefix}. Assigned on save, so it cannot
@@ -227,37 +227,37 @@ export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {})
   const totalCost = tuition + food + lodging
 
   return (
-    <div className="oe-container">
+    <div className="h5-module oe-container">
       {/* Sidebar */}
-      <aside className="oe-sidebar" style={{ width: sidebarWidth }}>
-        <div className="oe-sidebar-header">
+      <aside className="h5-sidebar" style={{ width: sidebarWidth }}>
+        <div className="h5-sidebar__head">
           <div className="oe-sidebar-title">
             <div>
               <div className="oe-sidebar-module">OE Lookup</div>
               <div className="oe-sidebar-count">{loading ? 'Loading…' : `${total.toLocaleString()} programs`}</div>
             </div>
-            <button className="oe-new-btn" onClick={() => setShowNew(true)}>＋ New</button>
+            <button className="h5-btn h5-btn--primary h5-btn--sm" onClick={() => setShowNew(true)}>＋ New</button>
           </div>
           <ListToolbar c={controls} />
         </div>
 
         {loading && controls.processed.length === 0 ? (
-          <div className="oe-loading">{Array.from({ length: 12 }, (_, i) => <div key={i} className="oe-skeleton" />)}</div>
+          <div className="oe-loading">{Array.from({ length: 12 }, (_, i) => <div key={i} className="h5-skeleton h5-skeleton--row" />)}</div>
         ) : error ? (
-          <div className="oe-empty-state"><p>Failed to load records.</p></div>
+          <div className="h5-empty h5-empty--error"><div className="h5-empty__icon">×</div><p className="h5-empty__title">Failed to load</p><p className="h5-empty__body">The program list could not be read.</p></div>
         ) : (
           // ListBody returns a bare ARRAY with no wrapper, so the scrolling
           // container comes from here — otherwise the sidebar clips the list at
           // the fold with no way to reach the rest.
-          <div className="oe-list">
+          <div className="h5-sidebar__list h5-scroll">
             <ListBody c={controls} activeId={selected?.recordId} renderItem={r => (
             <div key={r.recordId}
-              className={`oe-list-item ${selected?.recordId === r.recordId ? 'active' : ''}`}
+              className={`h5-list-item${selected?.recordId === r.recordId ? ' h5-list-item--active' : ''}`}
               onClick={() => { handleSelect(r); onRecordSelect?.(r.recordId, r.fieldData?.['Program Type']); }}>
-              <div className="oe-item-dot" style={{ background: typeColor(r.fieldData?.['Open Enrollment or Custom']) }} />
-              <div className="oe-item-text">
-                <div className="oe-item-name">{r.fieldData?.['Program Type'] || '—'}</div>
-                <div className="oe-item-sub">{r.fieldData?.['Program Code']} · {fmtDate(r.fieldData?.['Program Start Date'])}</div>
+              <span className={`h5-dot ${dotClass(r.fieldData?.['Open Enrollment or Custom'])}`} />
+              <div className="h5-list-item__body">
+                <div className="h5-list-item__title">{r.fieldData?.['Program Type'] || '—'}</div>
+                <div className="h5-list-item__sub">{r.fieldData?.['Program Code']} · {fmtDate(r.fieldData?.['Program Start Date'])}</div>
               </div>
             </div>
             )} />
@@ -265,38 +265,39 @@ export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {})
         )}
       </aside>
 
-      <div className="oe-resize-handle" onMouseDown={onMouseDown} />
+      <div className="h5-resize" onMouseDown={onMouseDown} />
 
       {/* Main */}
-      <main className="oe-main">
+      <main className="h5-detail">
         {!selected ? (
-          <div className="oe-empty-state">
-            <div className="oe-empty-icon">◎</div>
-            <p>Select a program</p>
+          <div className="h5-empty">
+            <div className="h5-empty__icon">◎</div>
+            <p className="h5-empty__title">Select a program</p>
+            <p className="h5-empty__body">Choose one from the list to see its details.</p>
           </div>
         ) : (
           <>
             {/* Top bar */}
-            <div className="oe-topbar">
+            <div className="h5-page-header">
               <div className="oe-topbar-left">
                 <div>
-                  <h1 className="oe-title">{val(f, 'Program Type')}</h1>
-                  <div className="oe-meta-row">
-                    <span className="oe-chip type">{val(f, 'Program Code')}</span>
+                  <h1 className="h5-page-header__title">{val(f, 'Program Type')}</h1>
+                  <div className="h5-page-header__meta">
+                    <span className="h5-badge h5-badge--blue">{val(f, 'Program Code')}</span>
                     {oeType && (
-                      <span className={`oe-chip ${oeType === OPEN_ENROLLMENT ? 'oe' : 'custom'}`}>
+                      <span className={`h5-badge ${oeType === OPEN_ENROLLMENT ? 'h5-badge--blue' : 'h5-badge--purple'}`}>
                         {oeType}
                       </span>
                     )}
                     {f['Program Start Date'] && (
-                      <span className="oe-chip muted">
+                      <span className="h5-badge">
                         {fmtDate(f['Program Start Date'])} – {fmtDate(f['Program End Date'])}
                       </span>
                     )}
                   </div>
                 </div>
               </div>
-              <div className="oe-topbar-actions">
+              <div className="h5-page-header__actions">
                 <DeleteRecordButton
                   layout={LAYOUT} cacheVersion={CACHE_VERSION}
                   recordId={selected.recordId}
@@ -307,10 +308,10 @@ export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {})
             </div>
 
             {/* Content */}
-            <div className="oe-content">
+            <div className="h5-detail__body h5-scroll">
 
               {/* Program */}
-              <div className="oe-section">
+              <div className="h5-card h5-card--flush oe-section">
                 <div className="oe-section-header">
                   <span className="oe-section-icon">◎</span>
                   <h3>Program</h3>
@@ -356,7 +357,7 @@ export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {})
               </div>
 
               {/* Staff */}
-              <div className="oe-section">
+              <div className="h5-card h5-card--flush oe-section">
                 <div className="oe-section-header">
                   <span className="oe-section-icon">◉</span>
                   <h3>Staff</h3>
@@ -378,7 +379,7 @@ export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {})
               </div>
 
               {/* Financials */}
-              <div className="oe-section">
+              <div className="h5-card h5-card--flush oe-section">
                 <div className="oe-section-header">
                   <span className="oe-section-icon">$</span>
                   <h3>Financials</h3>
@@ -405,7 +406,7 @@ export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {})
 
               {/* Notes */}
               {f["Facilitator's Notes"] && (
-                <div className="oe-section">
+                <div className="h5-card h5-card--flush oe-section">
                   <div className="oe-section-header">
                     <span className="oe-section-icon">✎</span>
                     <h3>Facilitator's Notes</h3>

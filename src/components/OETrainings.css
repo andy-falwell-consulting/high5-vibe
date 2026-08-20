@@ -66,3 +66,18 @@
    something it cannot do. */
 .oet-actions { text-align: right; white-space: nowrap; }
 .oet-no-action { color: var(--fg-disabled); }
+
+/* Column sizing. The system's .h5-table sets none, correctly — how wide a column
+   should be is a property of what is IN it, not of tables in general.
+
+   Measured at 1440px before fixing: Registrant took 264px while Organization was
+   crushed to 118px and wrapped to three lines. The money columns are nowrap, so
+   they take what they need and the two free-text columns fight over the rest —
+   and the longest single name ("Alejandra Del Campo De Campomanes") set the
+   Registrant width. A floor on the organization stops it losing that fight. */
+.oet-org { min-width: 15ch; }
+
+/* Three flags on one line. They were wrapping into a vertical stack because the
+   column was only as wide as the header word, which made a row three times
+   taller than it needed to be. */
+.oet-flags { flex-wrap: nowrap; }
