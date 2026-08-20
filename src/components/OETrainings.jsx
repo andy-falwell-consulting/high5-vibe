@@ -156,7 +156,13 @@ export default function OETrainings({ navTarget, onClearNav, onRecordSelect, onN
         {courses === null ? (
           <div className="oet-loading">{Array.from({ length: 12 }, (_, i) => <div key={i} className="oet-skeleton" />)}</div>
         ) : (
-          <ListBody c={controls} activeId={selected?.course} renderItem={r => {
+          // ListBody returns a bare ARRAY of items with no wrapper of its own,
+          // so the scrolling container has to come from here. Without it the
+          // sidebar's `overflow: hidden` simply clips everything past the fold
+          // and there is no way to reach it — the exact trap CLAUDE.md warns
+          // about, and the one this module walked straight into.
+          <div className="oet-list">
+            <ListBody c={controls} activeId={selected?.course} renderItem={r => {
             const f = r.fieldData
             return (
               <div key={r.recordId}
@@ -171,7 +177,8 @@ export default function OETrainings({ navTarget, onClearNav, onRecordSelect, onN
                 <span className="oet-count" title="registrants">{f.count}</span>
               </div>
             )
-          }} />
+            }} />
+          </div>
         )}
       </aside>
 
