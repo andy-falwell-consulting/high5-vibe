@@ -66,16 +66,83 @@ export async function fkIsReadable(host, db, layout, fk, token) {
   return (m?.response?.fieldMetaData || []).some(f => f.name === fk);
 }
 
-const DEFAULT_PARENT = '1xW3xXxRzUnSGKM5pG1dCibFAEQUyHLsi';   // the shared backup folder
-const parentFolder = () => process.env.BACKUP_DRIVE_FOLDER_ID || DEFAULT_PARENT;
+// ── Where the bytes go ────────────────────────────────────────────
+//
+// A FOLDER PER PAGE, THEN A FOLDER PER RECORD, mirroring how the backup lays
+// out a folder per day:
+//
+//   <root>/CCS/4-H Camp Bristol Hills (1234)/site photo.jpg
+//   <root>/Trainings/Brattleboro Union HS (5493)/roster.xlsx
+//
+// This used to be ONE FLAT FOLDER with the identity encoded in the filename —
+// `ccs-1234-a7f3-site photo.jpg`. That is findable by a machine and not by a
+// person, which defeats the reason the bytes are in Drive at all: the point of
+// retiring FileMaker is that nothing ends up somewhere only Vibe can reach, and
+// a folder of 130 prefixed filenames is only nominally reachable.
+//
+// The path now carries the identity, so the file keeps its own plain name.
+const ATTACH_ROOT = process.env.FILES_DRIVE_FOLDER_ID || '19WTb3X2HrNW78X6uWLgsqMQtWkptLz7F';
 
-// One folder, reused. `ensureFolder` looks the name up before creating, so a
-// second run doesn't leave two folders called the same thing.
-export async function filesFolder(token) {
-  const name = process.env.FILES_DRIVE_FOLDER_NAME || 'Vibe attachments';
-  if (process.env.FILES_DRIVE_FOLDER_ID) return process.env.FILES_DRIVE_FOLDER_ID;
-  const folder = await ensureFolder(token, name, parentFolder());
-  return folder.id;
+// Page names as a person knows them, not the internal kind. `wsemail` is the
+// odd one: its "records" are the four e-mail templates rather than rows on a
+// page, which is a slight stretch of the pattern but reads correctly.
+export const PAGE_FOLDER = {
+  ccs: 'CCS',
+  inspection: 'Inspections',
+  training: 'Trainings',
+  wsemail: 'Workshop e-mails',
+};
+
+// Drive tolerates most characters, but a slash reads as a path separator in
+// enough clients to be worth removing, and a leading dot hides the folder.
+const safeName = s => String(s ?? '')
+  .replace(/[/\\]/g, '-')                       // reads as a path separator
+  .split('').filter(c => c.charCodeAt(0) > 31).join('')   // control chars
+  .replace(/^\.+/, '')                           // a leading dot hides the folder
+  .trim().slice(0, 120);
+
+/** `Label (id)` — readable at a glance and still unique.
+ *  Name alone would merge two records that share an organisation name, and
+ *  there are already duplicates in the data. Id alone is stable but no more
+ *  navigable than the flat filenames this replaces. */
+export const recordFolderName = (label, parentId) => {
+  const l = safeName(label);
+  return l ? `${l} (${parentId})` : String(parentId);
+};
+
+// Resolved folder ids, cached in Redis. Without this every upload costs two
+// Drive lookups; the ids never change once created.
+const folderCacheKey = db => `vibe:${db}:file:folders`;
+
+async function cachedFolder(db, cacheField, resolve) {
+  const key = folderCacheKey(db);
+  try {
+    const hit = await redis.hget(key, cacheField);
+    if (hit) return String(hit);
+  } catch { /* cache miss is not fatal */ }
+  const id = await resolve();
+  try { await redis.hset(key, { [cacheField]: id }); } catch { /* ignore */ }
+  return id;
+}
+
+/** The root every attachment lives under. Takes no token: it is a fixed folder
+ *  now rather than one looked up by name each time. Kept async, and kept in
+ *  place, because files-migrate.js calls it. */
+export async function filesFolder() {
+  return ATTACH_ROOT;
+}
+
+/** `<root>/<Page>/<Label (id)>` — created on demand, then remembered. */
+export async function recordFolder(db, token, kind, parentId, label) {
+  const page = PAGE_FOLDER[kind] || safeName(kind) || 'Other';
+  const pageId = await cachedFolder(db, `page:${kind}`, async () =>
+    (await ensureFolder(token, page, ATTACH_ROOT)).id);
+  const folderName = recordFolderName(label, parentId);
+  // Keyed on the NAME, not just the id: if a record is renamed the label
+  // changes, and a stale cache entry would keep filing new uploads into the
+  // old folder while the app showed the new name.
+  return cachedFolder(db, `rec:${kind}:${parentId}:${folderName}`, async () =>
+    (await ensureFolder(token, folderName, pageId)).id);
 }
 
 export const driveToken = () => getServiceAccountToken();
@@ -111,13 +178,21 @@ function dispositionName(res) {
 // Drive is happy to hold two files with the same name, and these often have
 // none worth keeping, so the stored name is what a person sees while the Drive
 // name carries the ids that make a stray file identifiable.
+// The old flat-folder name. No longer used for new uploads — kept because the
+// re-foldering migration has to recognise the files it is moving.
 export const driveName = (meta) =>
   `${meta.parentKind}-${meta.parentId}-${meta.id}-${(meta.name || 'file').replace(/[/\\]/g, '_')}`;
 
 export async function putFile(db, token, meta, bytes) {
-  const folderId = await filesFolder(token);
+  const folderId = await recordFolder(db, token, meta.parentKind, meta.parentId, meta.parentLabel);
   const up = await uploadFile(token, {
-    name: driveName(meta), parentId: folderId, bytes, mimeType: meta.mime || 'application/octet-stream',
+    // The plain filename: the PATH carries the identity now. overwrite:false
+    // because two files legitimately called "photo.jpg" on one record must stay
+    // two files — Drive allows duplicate names, and overwriting would leave one
+    // metadata row pointing at bytes belonging to the other.
+    name: safeName(meta.name) || 'file',
+    parentId: folderId, bytes, mimeType: meta.mime || 'application/octet-stream',
+    overwrite: false,
   });
   const record = { ...meta, driveId: up.id, size: bytes.byteLength };
   await redis.hset(FK.file(db), { [record.id]: JSON.stringify(record) });

@@ -60,14 +60,26 @@ export default async function handler(req, res) {
     if (!bytes.length) return res.status(400).json({ error: 'no file received' });
 
     const name = String(req.headers['x-filename'] || 'file').slice(0, 200);
+    // What the record is CALLED, for the Drive folder name. Sent by the client
+    // because it is already on screen there; looking it up here would mean
+    // finding a record by a field that is not its key, across eight layouts.
+    // Optional — without it the folder falls back to the bare id, which is
+    // still correct, just less readable.
+    let parentLabel = '';
+    try { parentLabel = decodeURIComponent(String(req.headers['x-parent-label'] || '')).slice(0, 120); }
+    catch { parentLabel = ''; }   // a malformed header must not fail the upload
     const record = await putFile(db, await driveToken(), {
       id: await nextFileId(db),
-      parentKind: kind, parentId, name,
+      parentKind: kind, parentId, name, parentLabel,
       mime: req.headers['content-type'] || 'application/octet-stream',
       source: 'vibe',
       createdAt: new Date().toISOString(), createdBy: session.email,
     }, bytes);
-    const { driveId, ...safe } = record;
+    // driveId and parentLabel are internal: the client gets neither. Drive ids
+    // would let a browser bypass the app's auth, and the label was only ever
+    // for naming the folder.
+    // eslint-disable-next-line no-unused-vars
+    const { driveId, parentLabel: _folderLabel, ...safe } = record;
     return res.status(200).json({ file: safe });
   } catch (e) {
     const msg = String(e?.message || e);

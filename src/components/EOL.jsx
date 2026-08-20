@@ -362,7 +362,7 @@ export default function EOL({ navTarget, onClearNav, onRecordSelect } = {}) {
               </Section>
 
               <div className="eol-section eol-section-att">
-                <AttachmentsPanel parentId={f._kpt__TrainingProposal_ID} api={trainingAttachments} title="Photos" invoiceDocNumber={f._kat__QuickBooks_Invoice_ID} readOnly={RECORDS_LOCKED} />
+                <AttachmentsPanel parentId={f._kpt__TrainingProposal_ID} parentLabel={f.zz__Display_Organization__ct} api={trainingAttachments} title="Photos" invoiceDocNumber={f._kat__QuickBooks_Invoice_ID} readOnly={RECORDS_LOCKED} />
               </div>
 
               <div className="eol-record-footer">

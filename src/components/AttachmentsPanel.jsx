@@ -13,7 +13,11 @@ import './AttachmentsPanel.css';
 // `actions` (optional): module-specific buttons rendered alongside the built-in
 // ones (e.g. Inspections' report generation). `reloadSignal`: bump it to make
 // the panel re-list (so an external action like "generate report" shows up).
-export default function AttachmentsPanel({ parentId, api, title = 'Attachments', invoiceDocNumber = null, actions = null, reloadSignal = 0, readOnly = false }) {
+// `parentLabel` is what the record is CALLED. It never appears in this panel —
+// it names the record's folder in Drive, so an attachment lands in
+// "CCS/4-H Camp Bristol Hills (1234)/" rather than a folder called "1234".
+// Optional everywhere; without it the folder is the bare id.
+export default function AttachmentsPanel({ parentId, parentLabel = '', api, title = 'Attachments', invoiceDocNumber = null, actions = null, reloadSignal = 0, readOnly = false }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(null); // 'upload' | recordId being deleted
@@ -39,7 +43,7 @@ export default function AttachmentsPanel({ parentId, api, title = 'Attachments',
     setBusy('upload'); setError(null);
     try {
       for (const file of files) {
-        const card = await api.upload(parentId, file);
+        const card = await api.upload(parentId, file, undefined, parentLabel);
         setItems(a => [card, ...a]);
       }
     } catch (e) { setError(e.message || 'Upload failed'); }
@@ -61,7 +65,7 @@ export default function AttachmentsPanel({ parentId, api, title = 'Attachments',
       if (existing) {
         try { await api.remove(existing.recordId); setItems(a => a.filter(x => x.recordId !== existing.recordId)); } catch { /* ignore */ }
       }
-      const card = await api.upload(parentId, file);
+      const card = await api.upload(parentId, file, undefined, parentLabel);
       setItems(a => [card, ...a]);
     } catch (e) { setError(e.message || 'Could not fetch invoice'); }
     finally { setBusy(null); }

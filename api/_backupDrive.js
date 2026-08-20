@@ -67,8 +67,18 @@ export async function ensureFolder(token, name, parentId) {
 // Asks for md5Checksum in the response: Drive computes it from what it actually
 // received, so comparing it to a locally computed md5 is a genuine end-to-end
 // integrity check rather than us marking our own homework.
-export async function uploadFile(token, { name, parentId, bytes, mimeType = 'application/gzip' }) {
-  const existing = await findByName(token, name, parentId);
+// `overwrite` defaults TRUE because the backup depends on it: a second run on
+// the same day replaces that day's files rather than doubling them, which is
+// what makes a re-run idempotent.
+//
+// Attachments need the opposite. Once files live in a folder per record their
+// Drive names are the plain filenames, so two photos both called "photo.jpg"
+// on one record would silently overwrite each other in Drive while Redis still
+// believed there were two — one metadata row pointing at bytes that are no
+// longer its own. Drive allows duplicate names in a folder; this lets a caller
+// use that.
+export async function uploadFile(token, { name, parentId, bytes, mimeType = 'application/gzip', overwrite = true }) {
+  const existing = overwrite ? await findByName(token, name, parentId) : null;
 
   const url = existing
     ? `${UPLOAD}/files/${existing.id}?uploadType=resumable&fields=id,name,size,md5Checksum&${ALL_DRIVES}`
@@ -154,4 +164,28 @@ export async function trashFileById(token, fileId) {
     body: JSON.stringify({ trashed: true }),
   });
   return driveJson(res, 'trash');
+}
+
+// Move a file between folders. Drive has no "move" — a file's location IS its
+// parents list, so a move is an update that adds one and removes the others.
+//
+// It looks the CURRENT parents up rather than being told them. Drive v3 has
+// allowed a file only one parent since 2020, so addParents without a matching
+// removeParents is rejected — and the caller usually does not know where a file
+// is, only where it should end up. One extra GET makes the call correct
+// regardless.
+export async function moveFile(token, fileId, addParentId) {
+  const cur = await fetch(`${DRIVE}/files/${fileId}?fields=parents&${ALL_DRIVES}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const { parents = [] } = await driveJson(cur, 'file parents');
+  if (parents.length === 1 && parents[0] === addParentId) return { id: fileId, parents, moved: false };
+  const qs = new URLSearchParams({ addParents: addParentId, fields: 'id,parents' });
+  if (parents.length) qs.set('removeParents', parents.join(','));
+  const res = await fetch(`${DRIVE}/files/${fileId}?${qs}&${ALL_DRIVES}`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: '{}',
+  });
+  return { ...(await driveJson(res, 'file move')), moved: true };
 }

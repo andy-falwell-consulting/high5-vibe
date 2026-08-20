@@ -1097,7 +1097,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
                 </div>
               )}
 
-              <AttachmentsPanel parentId={f._kpt__RCD_ID} api={CCS_ATT_API} invoiceDocNumber={f['_kat__QuickBooks_Invoice_ID(1)']} />
+              <AttachmentsPanel parentId={f._kpt__RCD_ID} parentLabel={org} api={CCS_ATT_API} invoiceDocNumber={f['_kat__QuickBooks_Invoice_ID(1)']} />
 
               <div className="cv2-meta">
                 ID {f._kpt__RCD_ID} · Record {selected.recordId} · Created {f.zz__Created_On?.split(' ')[0] || '—'} by {f.zz__Created_By} · Modified {f.zz__Modified_On?.split(' ')[0] || '—'} by {f.zz__Modified_By}
