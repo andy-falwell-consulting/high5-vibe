@@ -6,7 +6,7 @@ import ListToolbar, { useListControls, ListBody } from './ListControls';
 import RecordSaveBar from './RecordSaveBar';
 import AttachmentsPanel from './AttachmentsPanel';
 import { trainingAttachments } from '../api/trainingAttachments';
-import { generateAndAttachWorkOrder, downloadWorkOrder } from '../api/trainingWorkOrder';
+import { downloadWorkOrder } from '../api/trainingWorkOrder';
 import { LayoutCard, StatTiles, Pipeline, FinancialRows, NotesPair, ThirdsRow, ContactDetails } from './RecordLayout';
 import { PIPELINE_STAGES, PIPELINE_SHORT, ALL_STATUSES, stageIndex, statusColor as trnStatusColor } from '../config/trainingStatus';
 import { contactDetails } from '../api/contactLookup';
@@ -257,10 +257,9 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
   const [saveStatus, setSaveStatus] = useState(null);
   const [saveErrorMsg, setSaveErrorMsg] = useState(null);
   const [tab, setTab] = useState('info');
-  const [woBusy, setWoBusy] = useState(null);   // 'attach' | 'download' | null
+  const [woBusy, setWoBusy] = useState(null);   // 'download' | null
   const [woStage, setWoStage] = useState(null);
   const [woError, setWoError] = useState(null);
-  const [attReload, setAttReload] = useState(0); // bump to make AttachmentsPanel re-list
   const [orgPicker, setOrgPicker] = useState(false);
   const [contactPicker, setContactPicker] = useState(false);
   const trainingOrgs = useCcsOrgs(getCurrentEnv().db, 'trainings');
@@ -357,21 +356,20 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
     });
   }, [selected]);
 
-  // Work order PDF — prints the Notes field as its body, attached (or
-  // downloaded) via the same pipeline training photos already use.
-  async function handleGenerateWorkOrder(attach) {
+  // Work order PDF — prints the Notes field as its body, downloaded through the
+  // same pipeline training photos already use.
+  //
+  // Download only. There was a second button that generated the same PDF and
+  // attached it to the record; it is gone, along with the branch that served
+  // it. The generator itself is untouched — one PDF, one path to it.
+  async function handleGenerateWorkOrder() {
     if (!selected) return;
-    setWoBusy(attach ? 'attach' : 'download');
+    setWoBusy('download');
     setWoStage('Building PDF…'); setWoError(null);
     // Merge pending edits so the PDF matches what's on screen, not the last save.
     const rec = { ...selected, fieldData: { ...selected.fieldData, ...edits } };
     try {
-      if (attach) {
-        await generateAndAttachWorkOrder(rec, setWoStage);
-        setAttReload(n => n + 1);
-      } else {
-        await downloadWorkOrder(rec, setWoStage);
-      }
+      await downloadWorkOrder(rec, setWoStage);
     } catch (e) { setWoError(e.message || 'Work order failed'); }
     finally { setWoBusy(null); setWoStage(null); }
   }
@@ -812,11 +810,8 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
                         Include trainer costs
                       </label>
                       <div className="cv2-wo-actions">
-                        <button type="button" className="cv2-wo-btn" disabled={!!woBusy} onClick={() => handleGenerateWorkOrder(true)}>
-                          {woBusy === 'attach' ? (woStage || 'Working…') : '＋ Generate work order & attach'}
-                        </button>
-                        <button type="button" className="cv2-wo-btn" disabled={!!woBusy} onClick={() => handleGenerateWorkOrder(false)}>
-                          {woBusy === 'download' ? (woStage || 'Working…') : '⤓ Download work order'}
+                        <button type="button" className="cv2-wo-btn" disabled={!!woBusy} onClick={handleGenerateWorkOrder}>
+                          {woBusy ? (woStage || 'Working…') : '⤓ Download work order'}
                         </button>
                       </div>
                       {woError && <p className="cv2-wo-error">{woError}</p>}
@@ -894,7 +889,7 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
 
               {tab === 'attachments' && (
               <div className="trn-section trn-section-att">
-                <AttachmentsPanel parentId={f._kpt__TrainingProposal_ID} api={trainingAttachments} title="Photos" invoiceDocNumber={f._kat__QuickBooks_Invoice_ID} reloadSignal={attReload} />
+                <AttachmentsPanel parentId={f._kpt__TrainingProposal_ID} api={trainingAttachments} title="Photos" invoiceDocNumber={f._kat__QuickBooks_Invoice_ID} />
               </div>
               )}
 
