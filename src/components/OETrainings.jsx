@@ -190,6 +190,9 @@ export default function OETrainings({ navTarget, onClearNav, onRecordSelect, onN
         ) : (
           <>
             <div className="h5-page-header">
+              {/* See OELookup.jsx: without __row the actions stack below the
+                  title rather than sitting top-right. */}
+              <div className="h5-page-header__row">
               <div>
                 <h1 className="h5-page-header__title">{cat?.['Program Type'] || selected.course}</h1>
                 <div className="h5-page-header__meta">
@@ -218,6 +221,7 @@ export default function OETrainings({ navTarget, onClearNav, onRecordSelect, onN
                   </button>
                 )}
                 <button className="h5-btn h5-btn--quiet h5-btn--sm" onClick={() => setRemindOpen(true)}>⏰ Remind</button>
+              </div>
               </div>
             </div>
 

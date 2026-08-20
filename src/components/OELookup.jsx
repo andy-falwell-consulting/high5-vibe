@@ -281,6 +281,12 @@ export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {})
           <>
             {/* Top bar */}
             <div className="h5-page-header">
+              {/* __row is what makes this a ROW. .h5-page-header on its own is
+                  just a padded block, so an actions div inside it stacks under
+                  the title at full width instead of sitting top-right. Both OE
+                  pages were missing this wrapper, which is the whole difference
+                  from every other record page. */}
+              <div className="h5-page-header__row">
               <div className="oe-topbar-left">
                 <div>
                   <h1 className="h5-page-header__title">{val(f, 'Program Type')}</h1>
@@ -307,6 +313,7 @@ export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {})
                   name={val(f, 'Program Type')}
                   onDeleted={() => setSelected(null)}
                 />
+              </div>
               </div>
             </div>
 
