@@ -84,8 +84,23 @@ export async function readTemplates(db) {
   return out;
 }
 
+/** A template that exists but says nothing is not a sendable message.
+ *
+ *  This is the check whose absence let a BLANK e-mail reach a registrant on
+ *  2026-08-19: an empty template had been saved, `if (!tpl)` saw an object and
+ *  let it through, and Gmail delivered a message with no subject and no body to
+ *  a customer. Presence was never the property that mattered. */
+export const templateIsSendable = tpl =>
+  !!tpl && (String(tpl.subject ?? '').trim().length > 0 || String(tpl.body ?? '').trim().length > 0);
+
 export async function writeTemplate(db, id, { subject, body, attachments }, by) {
   if (!isTemplateId(id)) throw new Error(`unknown template: ${id}`);
+  if (!String(subject ?? '').trim() && !String(body ?? '').trim()) {
+    // Saving nothing is never intentional, and an empty saved template reads to
+    // every downstream check as "written". Refusing here means the send guard is
+    // the last line of defence rather than the only one.
+    throw new Error('A template needs at least a subject or a body. Saving an empty one would make it look written when it has nothing to send.');
+  }
   const tpl = {
     subject: String(subject ?? '').trim(),
     body: String(body ?? ''),

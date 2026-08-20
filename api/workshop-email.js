@@ -6,6 +6,7 @@ import {
   TEMPLATES, isTemplateId, readTemplate, readTemplates, writeTemplate,
   pickEmail, render, templateVars, sendAsWorkshops, senderAddress, catalogueForCourse,
   templateFiles, loadAttachments, checkDelegation, replyToAddress, sendTestMessage,
+  templateIsSendable,
 } from './_workshopEmail.js';
 
 // Workshop e-mails — preview, send, and template administration.
@@ -109,6 +110,10 @@ export default async function handler(req, res) {
         workshopId, version, from: senderAddress(),
         recipient, rendered, vars,
         templateMissing: !tpl,
+        // Distinct from missing on purpose. "Not written" and "written but
+        // empty" look identical to a user and need different fixes, and
+        // conflating them is what let a blank message go out.
+        templateEmpty: !!tpl && !templateIsSendable(tpl),
         alreadySent: workshop.confirmationSent || null,
         lastVersion: workshop.emailVersionSent || null,
       });
@@ -117,7 +122,15 @@ export default async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'GET or POST' });
 
     // ── Send ───────────────────────────────────────────────────────────────
+    // Checks CONTENT, not presence. `if (!tpl)` passed an empty template and a
+    // blank e-mail reached a registrant — subject and body both empty — because
+    // an object had been saved. Existing was never the property that mattered.
     if (!tpl) return res.status(400).json({ error: `The "${version}" template has not been written yet.` });
+    if (!templateIsSendable(tpl)) {
+      return res.status(400).json({
+        error: `The "${version}" template is empty — it has no subject and no body. Nothing was sent.`,
+      });
+    }
     const to = String(req.body?.to || recipient?.address || '').trim();
     if (!to) return res.status(400).json({ error: 'no e-mail address for this registrant' });
 
