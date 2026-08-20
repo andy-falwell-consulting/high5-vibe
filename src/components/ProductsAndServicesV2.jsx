@@ -200,6 +200,7 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
   const [navWidth, setNavWidth] = useState(300);
   const [showNewItem, setShowNewItem] = useState(false);
   const [syncStatus, setSyncStatus] = useState({});
+  const [syncError, setSyncError] = useState({});
   const [showLightbox, setShowLightbox] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imgBust, setImgBust] = useState(null);
@@ -314,10 +315,33 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
         // pre-edit fieldData back over the list cache on re-select.
         patchCachedRecord(LAYOUT, CACHE_VERSION, selected.recordId, edits);
         invalidateRecord(LAYOUT, selected.recordId);
+        // FIRE AND REPORT, not fire and forget.
+        //
+        // These were called without `await`, so the save reported "saved"
+        // whether or not the push landed. The local edit is already committed by
+        // this point and is not in doubt — what was in doubt was whether the
+        // other two systems heard about it, and the answer was being thrown
+        // away. Awaiting them means the save's own status can tell the truth
+        // about the whole operation rather than about its first third.
         const syncFields = Object.keys(edits).filter(k => AUTO_SYNC_FIELDS.has(k));
         if (syncFields.length) {
-          if (merged._kat__Item_ID_Shopify) handleSyncPush('shopify');
-          if (merged._kat__Item_ID_QuickBooks) handleSyncPush('qbo');
+          const pushed = await Promise.all([
+            merged._kat__Item_ID_Shopify ? handleSyncPush('shopify') : null,
+            merged._kat__Item_ID_QuickBooks ? handleSyncPush('qbo') : null,
+          ]);
+          const failed = pushed.filter(r => r === false).length;
+          if (failed) {
+            // Saved locally, did not propagate. Both halves are stated, because
+            // "failed" alone would suggest the edit was lost — it was not.
+            setEdits({}); setBomOps([]); setDataEditing(false);
+            setSaveStatus('error');
+            setSaveErrorMsg(
+              `Saved here, but ${failed === 2 ? 'neither QuickBooks nor Shopify' : failed === 1 && pushed[0] === false ? 'Shopify' : 'QuickBooks'} could be updated. The channel below shows why; press it to retry.`
+            );
+            if (hasBomOps) await applyBomOps(selected.recordId, selected.fieldData?._kpt__Item_ID, bomOps);
+            setSaving(false);
+            return;
+          }
         }
       }
       if (hasBomOps) await applyBomOps(selected.recordId, selected.fieldData?._kpt__Item_ID, bomOps);
@@ -356,11 +380,22 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
         }
       }
       setSyncStatus(s => ({ ...s, [target]: 'ok' }));
+      setSyncError(e => ({ ...e, [target]: null }));
+      // Success clears itself; a failure does NOT. See below.
       setTimeout(() => setSyncStatus(s => ({ ...s, [target]: null })), 3000);
+      return true;
     } catch (e) {
+      // A FAILED PUSH STAYS ON SCREEN until the next attempt.
+      //
+      // This used to clear after five seconds, which meant a push that failed
+      // while nobody was looking left no trace anywhere — not on the record, not
+      // in the UI, nowhere. The record then read as saved while QuickBooks or
+      // Shopify still held the old values, and the only way to discover it was a
+      // three-way reconciliation nobody runs.
       console.error(`${target} sync error:`, e);
       setSyncStatus(s => ({ ...s, [target]: 'error' }));
-      setTimeout(() => setSyncStatus(s => ({ ...s, [target]: null })), 5000);
+      setSyncError(er => ({ ...er, [target]: e?.message || 'Push failed' }));
+      return false;
     }
   };
 
@@ -769,14 +804,21 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
               <div className="v2-channels">
                 {channels.map(({ key, label, id }) => {
                   const st = syncStatus[key];
+                  const err = syncError[key];
                   return (
                     <button key={key} className={`v2-channel${st === 'error' ? ' err' : id || st === 'ok' ? ' linked' : ''}`}
-                      onClick={() => handleSyncPush(key)} disabled={st === 'pushing'}>
+                      onClick={() => handleSyncPush(key)} disabled={st === 'pushing'}
+                      title={err || undefined}>
                       <span className="v2-channel-name">{label}</span>
                       <span className="v2-channel-id">{id ? `#${String(id).slice(-8)}` : 'Not linked'}</span>
                       <span className="v2-channel-badge">
                         {st === 'pushing' ? 'Syncing…' : st === 'error' ? '✗ Failed' : st === 'ok' ? '✓ Synced' : id ? '↻ Re-sync' : 'Sync now →'}
                       </span>
+                      {/* The reason, on the channel that failed. A red badge says
+                          something went wrong; it does not say the token expired,
+                          or the SKU collided, or the item is inactive in QBO —
+                          which is the difference between retrying and fixing. */}
+                      {err && <span className="v2-channel-err">{err}</span>}
                     </button>
                   );
                 })}

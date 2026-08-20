@@ -893,3 +893,11 @@
 [data-theme="light"] .v2-bom-qty:focus { border-color: var(--h5-red); }
 [data-theme="light"] .v2-bom-remove { color: #94a3b8; }
 [data-theme="light"] .v2-bom-remove:hover { color: #fff; background: #ef4444; }
+
+/* Why a push failed, on the channel that failed it. Persists until the next
+   attempt — the previous behaviour cleared after five seconds, which meant a
+   failure nobody happened to be watching left no trace at all. */
+.v2-channel-err {
+  display: block; margin-top: 6px; font-size: 11px; line-height: 1.45;
+  color: var(--error-fg); white-space: normal; text-align: left;
+}
