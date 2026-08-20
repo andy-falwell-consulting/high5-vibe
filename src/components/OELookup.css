@@ -28,11 +28,23 @@
    plus a control you type into, and these are stored values being displayed. The
    1px gap plus a bordered container is what draws the hairlines between cells
    without a border on each one. */
+/* Hairlines come from BORDERS ON THE CELLS, not from a 1px gap over a coloured
+   container. The gap trick is neater to write and has a visible flaw: when the
+   item count does not fill the last row, the empty remainder shows the container
+   colour as a solid slab. Seven fields in a four-column grid left three-quarters
+   of a row rendering as a block of border colour beside "Hours".
+   Per-cell borders leave that space card-coloured, which is what it should be.
+   The trailing right border on the last column sits under the card's own border,
+   which is why the card is --flush. */
 .oe-field-grid, .oe-fin-grid {
-  display: grid; gap: 1px; background: var(--border);
+  display: grid; background: var(--card);
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
 }
-.oe-field, .oe-fin-cell { display: flex; flex-direction: column; gap: 5px; padding: var(--space-md) var(--space-lg); background: var(--card); }
+.oe-field, .oe-fin-cell {
+  display: flex; flex-direction: column; gap: 5px;
+  padding: var(--space-md) var(--space-lg); background: var(--card);
+  border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
+}
 .oe-field.wide { grid-column: 1 / -1; }
 .oe-field label, .oe-fin-cell label { font-size: var(--text-caption); font-weight: var(--weight-semibold); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--fg-secondary); }
 .oe-value { font-size: var(--text-body); color: var(--fg); word-break: break-word; }
