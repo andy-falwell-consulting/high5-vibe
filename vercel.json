@@ -19,10 +19,6 @@
   ],
   "crons": [
     {
-      "path": "/api/sync?db=High5_Core4",
-      "schedule": "*/5 * * * *"
-    },
-    {
       "path": "/api/qbo-invoice-sync?db=High5_Core4",
       "schedule": "*/15 * * * *"
     },

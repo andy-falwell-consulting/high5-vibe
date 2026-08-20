@@ -6,17 +6,40 @@
 // GET/POST /api/sync?db=High5_Core4&layout=contacts
 // GET/POST /api/sync?db=…&layout=estimates&full=1 → re-page that layout in full
 //
+// NO LONGER ON A CRON. It ran every five minutes — 288 invocations a day, 54%
+// of the whole cron schedule and the largest single draw on the Redis command
+// budget — which made sense when FileMaker was the system of record. It is not
+// any more: Vibe owns its records, and pulling FileMaker's copy 288 times a day
+// to find nothing changed is spend without a reader. It is now driven by the
+// button in Admin → FMP.
+//
 // `full=1` is what you want after adding a FIELD to a replicated layout: the
 // incremental sync keys on each record's modification date, which a schema
 // change does not touch, so the new field would otherwise never reach the app.
 // It requires an explicit `layout` — re-paging all eight at once would be a
 // large, unintended spend against the Redis command budget.
 import { runSync, resetReplica, REPLICATED } from './_replica.js';
+import { getGoogleSession } from './_googleSession.js';
+
+// GATED, which it was not before. This endpoint had no auth check at all: any
+// caller could start a full re-page of eight layouts and spend the Redis budget
+// on demand. That was survivable while nothing pointed at it; putting a button
+// on it makes it reachable and worth closing. Same three ways in as
+// replica-reconcile, so scripts and any future cron keep working.
+const SYNC_KEY = process.env.REPLICA_SYNC_KEY || process.env.QBO_SYNC_KEY;
+
+async function authorized(req) {
+  if (SYNC_KEY && (req.headers['x-sync-key'] === SYNC_KEY || req.query?.key === SYNC_KEY)) return true;
+  const cron = process.env.CRON_SECRET;
+  if (cron && req.headers.authorization === `Bearer ${cron}`) return true;
+  return !!(await getGoogleSession(req));
+}
 
 // Pro plan: allow a long slice so each run makes real progress on the backfill.
 export const config = { maxDuration: 300 };
 
 export default async function handler(req, res) {
+  if (!(await authorized(req))) return res.status(401).json({ error: 'unauthorized' });
   const db = req.query.db || 'High5_Core4';
   const only = req.query.layout;
   const keys = only ? [only] : Object.keys(REPLICATED);

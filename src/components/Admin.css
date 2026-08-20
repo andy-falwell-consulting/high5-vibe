@@ -246,6 +246,12 @@
 .admin-vocab-values { font-size: 12px; color: var(--fg); line-height: 1.7; }
 .admin-vocab-edit { width: 100%; background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 13px; font-family: inherit; resize: vertical; }
 .admin-btn--ghost { background: transparent; border: 1px solid var(--border); color: var(--fg); }
+/* THE BASE CLASS WAS NEVER DEFINED. Only the --warn modifier existed, while 25
+   places in Admin.jsx use plain .admin-note for their explanatory paragraph —
+   so every one of them rendered at inherited body size instead of as a muted
+   note, and --warn's colour and rule sat on nothing. Same shape as .admin-sub,
+   which is what these were always meant to look like. */
+.admin-note { margin: 4px 0 12px; font-size: var(--text-body); color: var(--fg-secondary); line-height: var(--leading-normal); max-width: 70ch; }
 .admin-note--warn { border-left: 3px solid var(--warning-fg); padding-left: 10px; color: var(--warning-fg); }
 .admin-token { background: var(--surface-sunken); padding: 1px 5px; border-radius: 3px; font-size: 11px; margin-right: 4px; display: inline-block; }
 .admin-missing { color: var(--warning-fg); }

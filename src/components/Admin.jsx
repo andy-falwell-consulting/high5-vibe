@@ -1005,6 +1005,83 @@ function PreviewAccessTab() {
 
 // Manage which emails are allowed to see the Admin panel. Backed by
 // /api/admin-users (GET status/list, POST add/remove).
+
+// Sync from FileMaker, on demand. This used to be a cron every five minutes —
+// 288 invocations a day, more than half the whole schedule — which made sense
+// while FileMaker was the system of record and does not now that Vibe owns its
+// records. See api/sync.js.
+//
+// ONE PRESS IS ONE SLICE, not necessarily a whole sync. The endpoint works to a
+// 270-second deadline shared across the eight replicated layouts, so a layout
+// still doing its initial backfill can come back mid-way. That is reported
+// rather than hidden: any layout whose phase is 'backfill' still has pages to
+// fetch, and pressing again resumes exactly where it stopped.
+function FmpSyncSection() {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+
+  async function run() {
+    setBusy(true); setError(null); setResult(null);
+    try {
+      const db = getCurrentEnv().db;
+      const r = await fetch(`/api/sync?db=${encodeURIComponent(db)}`, {
+        method: 'POST', credentials: 'include',
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+      setResult(body.result || {});
+    } catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+
+  const rows = result ? Object.entries(result) : [];
+  const stillGoing = rows.filter(([, v]) => v.phase === 'backfill');
+
+  return (
+    <section className="admin-section">
+      <h2 className="admin-section-title">Sync from FileMaker</h2>
+      <p className="admin-note">
+        Pulls FileMaker&apos;s current records into Vibe&apos;s replica. This no longer runs on a
+        schedule — Vibe owns its own records, so the copy is only worth refreshing when
+        someone has been working in FileMaker Pro. Nothing here writes TO FileMaker.
+      </p>
+      <p className="admin-note">
+        A run can take up to five minutes. It is safe to press again — the sync resumes
+        where it left off rather than starting over.
+      </p>
+      <button className="h5-btn h5-btn--primary h5-btn--sm" disabled={busy} onClick={run}>
+        {busy ? 'Syncing… (up to 5 min)' : 'Sync now'}
+      </button>
+      {error && <p className="admin-error">{error}</p>}
+      {rows.length > 0 && (
+        <>
+          <table className="admin-drift-table">
+            <thead><tr><th>Layout</th><th>State</th><th className="num">Records</th><th>Last sync</th></tr></thead>
+            <tbody>
+              {rows.map(([layout, v]) => (
+                <tr key={layout}>
+                  <td>{layout}</td>
+                  <td>{v.error ? <span className="admin-error">{v.error}</span>
+                     : v.phase === 'backfill' ? 'still backfilling' : 'up to date'}</td>
+                  <td className="num">{v.total != null ? `${v.count ?? 0} / ${v.total}` : (v.count ?? '—')}</td>
+                  <td>{v.lastSync ? new Date(v.lastSync).toLocaleString() : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {stillGoing.length > 0 && (
+            <p className="admin-note admin-missing">
+              {stillGoing.length} layout{stillGoing.length > 1 ? 's are' : ' is'} still backfilling —
+              press Sync now again to continue.
+            </p>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
 function FmpTab() {
   const [data, setData] = useState(undefined); // undefined = loading
   const [input, setInput] = useState('');
@@ -1474,7 +1551,7 @@ export default function Admin() {
 
       {tab === 'integrations' && <IntegrationsTab />}
       {tab === 'preview' && <PreviewAccessTab />}
-      {tab === 'fmp' && <FmpTab />}
+      {tab === 'fmp' && <><FmpSyncSection /><FmpTab /></>}
       {tab === 'backup' && <><SaTestSection /><BackupTab /><RestoreSection /></>}
       {tab === 'vocab' && <VocabTab />}
       {tab === 'wsemail' && <WorkshopEmailTab />}
