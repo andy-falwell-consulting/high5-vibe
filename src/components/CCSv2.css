@@ -85,8 +85,22 @@
 .cv2-crumb-sep { color: var(--cv2-text-4); }
 .cv2-crumb-spacer { flex: 1; }
 .cv2-crumb-id { font-family: monospace; font-size: 14px; color: var(--cv2-text-4); }
-.cv2-ghost-btn { background: transparent; border: 1px solid var(--cv2-border-2); border-radius: 7px; color: var(--cv2-text-2); font-size: 14px; padding: 4px 10px; cursor: pointer; }
-.cv2-ghost-btn:hover { color: var(--cv2-text); border-color: var(--cv2-text-3); }
+/* Same shape and same rows as .h5-btn--quiet, so it is that button rather than
+   a fifth near-miss of it. Kept as a name because CCSv2 and Trainings use it in
+   several places; the values come from the system. */
+.cv2-ghost-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-sm);
+  box-sizing: border-box; padding: var(--space-xs) var(--space-md);
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: transparent; color: var(--fg-secondary);
+  font-family: var(--font-sans); font-size: var(--text-caption); font-weight: var(--weight-medium);
+  line-height: var(--leading-snug); cursor: pointer; white-space: nowrap;
+  transition: background var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard),
+              color var(--duration-fast) var(--ease-standard);
+}
+.cv2-ghost-btn:hover { background: var(--surface-hover); color: var(--fg); border-color: var(--border-interactive); }
+.cv2-ghost-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .cv2-add-board { color: var(--fg-secondary); border-color: var(--error-border); }
 .cv2-add-board:hover { color: var(--fg-secondary); border-color: var(--fg-secondary); }
 

@@ -16,19 +16,13 @@
    destructive label can be read. This is the one place in the app where a red
    fill is sanctioned, so it is worth it being the right red. */
 
-.drb-btn {
-  padding: var(--space-xs) var(--space-md);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--fg-secondary);
-  font-family: var(--font-sans); font-size: var(--text-caption);
-  cursor: pointer; white-space: nowrap;
-}
+/* The trigger is .h5-btn--quiet, shared with Remind so the two read as a pair.
+   All this class adds is the red on intent — the control is not destructive
+   until it is clicked, and the accent arriving on hover is what separates it
+   from its neighbours. */
 /* Red on hover only. The control is not destructive until it is clicked, and
    the accent arriving on intent is what distinguishes it from the neighbours. */
-.drb-btn:hover { border-color: var(--error-fg); color: var(--error-fg); }
-.drb-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.drb-btn.h5-btn--quiet:hover { border-color: var(--error-fg); color: var(--error-fg); background: var(--error-bg); }
 
 /* The dialog is narrower than the system's default modal: it holds one sentence
    and one input, and 680px of empty width would read as a bigger decision than

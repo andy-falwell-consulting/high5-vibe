@@ -530,7 +530,7 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
                 </div>
               </div>
               <div className="insp-topbar-actions">
-                <button className="insp-ghost-btn" onClick={() => setRemindOpen(true)}>⏰ Remind</button>
+                <button className="h5-btn h5-btn--quiet h5-btn--sm" onClick={() => setRemindOpen(true)}>⏰ Remind</button>
                 <DeleteRecordButton
                   layout={LAYOUT} cacheVersion={CACHE_VERSION}
                   recordId={selected.recordId}

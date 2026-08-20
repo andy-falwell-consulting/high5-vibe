@@ -75,7 +75,7 @@ export default function DeleteRecordButton({
 
   return (
     <>
-      <button className="drb-btn" onClick={() => setOpen(true)} title="Delete this record">🗑 {label}</button>
+      <button className="h5-btn h5-btn--quiet h5-btn--sm drb-btn" onClick={() => setOpen(true)} title="Delete this record">🗑 {label}</button>
 
       {open && (
         <div className="h5-scrim" onClick={e => e.target === e.currentTarget && !busy && close()}>

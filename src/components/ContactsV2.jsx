@@ -1234,7 +1234,7 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
                   <RiskBadge active={activeRmi} high={highRisk} onOpen={() => setTab('rmi')} />
                   <span className="c2-id">{person.id}</span>
                   <button className="c2-mini c2-mini--flush" onClick={() => setEditing(true)}>Edit</button>
-                  <button className="c2-mini c2-mini--flush" onClick={() => setRemindOpen(true)}>⏰ Remind</button>
+                  <button className="h5-btn h5-btn--quiet h5-btn--sm" onClick={() => setRemindOpen(true)}>⏰ Remind</button>
                   {quickAddContact && <QuickAddFromContact contact={quickAddContact} onNavigateTo={onNavigateTo} />}
                   {!highRisk && (
                     <button className="c2-mini c2-mini--danger c2-mini--flush"
@@ -1346,7 +1346,7 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
                   <RiskBadge active={activeRmi} high={highRisk} onOpen={() => setTab('rmi')} />
                   <span className="c2-id">{org.id}</span>
                   <button className="c2-mini c2-mini--flush" onClick={() => setEditing(true)}>Edit</button>
-                  <button className="c2-mini c2-mini--flush" onClick={() => setRemindOpen(true)}>⏰ Remind</button>
+                  <button className="h5-btn h5-btn--quiet h5-btn--sm" onClick={() => setRemindOpen(true)}>⏰ Remind</button>
                   {quickAddContact && <QuickAddFromContact contact={quickAddContact} onNavigateTo={onNavigateTo} />}
                   {!highRisk && (
                     <button className="c2-mini c2-mini--danger c2-mini--flush"

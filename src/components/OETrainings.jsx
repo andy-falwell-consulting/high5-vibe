@@ -199,13 +199,25 @@ export default function OETrainings({ navTarget, onClearNav, onRecordSelect, onN
                   )}
                   {cat?.['Lead Facilitator'] && <span className="h5-badge">{cat['Lead Facilitator']}</span>}
                   {!cat && <span className="h5-badge h5-badge--warning">Not in the OE Lookup catalogue</span>}
-                  {hit?.recordId && (
-                    <button className="oet-link h5-btn h5-btn--ghost h5-btn--sm" onClick={() => onNavigateTo?.('oe-lookup', hit.recordId)}>
-                      View offering →
-                    </button>
-                  )}
-                  <button className="oet-link h5-btn h5-btn--ghost h5-btn--sm" onClick={() => setRemindOpen(true)}>⏰ Remind</button>
                 </div>
+              </div>
+              {/* Actions live in their own row, as on every other record page.
+                  They were previously mixed in among the badges, which put a
+                  thing you DO in a row that states FACTS.
+
+                  NO DELETE HERE, and that is not an oversight. A row on this
+                  page is a course, assembled from registrations in Vibe's own
+                  store — Workshops_New is not in VIBE_OWNED, there is no delete
+                  endpoint for it, and "the course" is not a record that could
+                  be deleted even if there were. A button that cannot work is
+                  worse than a missing one. */}
+              <div className="h5-page-header__actions">
+                {hit?.recordId && (
+                  <button className="h5-btn h5-btn--quiet h5-btn--sm" onClick={() => onNavigateTo?.('oe-lookup', hit.recordId)}>
+                    View offering →
+                  </button>
+                )}
+                <button className="h5-btn h5-btn--quiet h5-btn--sm" onClick={() => setRemindOpen(true)}>⏰ Remind</button>
               </div>
             </div>
 
