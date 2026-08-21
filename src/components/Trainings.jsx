@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { BRAND, UI } from '../config/brandColors'
 import { getRecord, invalidateRecord, patchCachedRecord } from '../api/filemaker';
 import { useAllRecords } from '../hooks/useAllRecords';
@@ -25,6 +25,7 @@ import DeleteRecordButton from './DeleteRecordButton'
 import ReminderModal from './ReminderModal'
 import { TRAININGS_LAYOUT as LAYOUT, TRAININGS_CACHE_VERSION as CACHE_VERSION, TRAINER_SLOTS } from '../config/trainingsCache';
 import RecordFooter from './RecordFooter';
+import { useRecordPanel } from '../hooks/useRecordPanel';
 
 const STATUS_COLOR = {
   'Final Invoiced': UI.success,
@@ -253,7 +254,9 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
   const { records, total } = useAllRecords(LAYOUT, { cacheVersion: CACHE_VERSION });
   const [selected, setSelected] = useState(null);
   const [remindOpen, setRemindOpen] = useState(false)
-  const [navWidth, setNavWidth] = useState(300);
+  // Width, drag and memory come from useRecordPanel — see the hook for what
+  // the twelve hand-rolled copies had drifted into.
+  const { width: navWidth, onPointerDown: startPanelResize } = useRecordPanel('trainings', 300);
   const [edits, setEdits] = useState({});
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
@@ -295,7 +298,6 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
   // Which of the Invoices/Payments tabs is showing, in the Contract and
   // financials card — same control CCS's own card uses.
   const [finTab, setFinTab] = useState('invoices');
-  const isResizing = useRef(false);
 
   const orgName = f => f.zz__Display_Organization__ct || '';
 
@@ -393,28 +395,6 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
     } catch (e) { setSaveStatus('error'); setSaveErrorMsg(e?.message || null); }
     finally { setSaving(false); }
   }
-
-  const startResize = useCallback((e) => {
-    e.preventDefault();
-    isResizing.current = true;
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-    const startX = e.clientX;
-    const startW = navWidth;
-    const onMove = (e) => {
-      if (!isResizing.current) return;
-      setNavWidth(Math.min(520, Math.max(200, startW + (e.clientX - startX))));
-    };
-    const onUp = () => {
-      isResizing.current = false;
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-  }, [navWidth]);
 
   const f = selected?.fieldData;
   const dirtyCount = Object.keys(edits).length;
@@ -522,7 +502,7 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
         )}
       </aside>
 
-      <div className="trn-resize-handle" onMouseDown={startResize} />
+      <div className="trn-resize-handle" onPointerDown={startPanelResize} />
 
       <main className="trn-main">
         {!selected && (

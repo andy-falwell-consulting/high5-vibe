@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -21,6 +21,7 @@ import ReminderModal from './ReminderModal';
 import QuickAddFromContact from './QuickAddFromContact';
 import './ContactsV2.css';
 import RecordFooter from './RecordFooter';
+import { useRecordPanel } from '../hooks/useRecordPanel';
 
 // Contacts, on Vibe's own model — organizations, people and affiliations as
 // three separate things (docs/contacts-model.md).
@@ -767,37 +768,10 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
   // reminder on a contact stops being possible at all.
   const [remindOpen, setRemindOpen] = useState(false);
   // Sidebar width, dragged by the handle between the list and the record.
-  // Persisted, unlike the other modules': the width someone picks is a
-  // preference, and losing it on every reload is the reason nobody adjusts it.
-  const [navWidth, setNavWidth] = useState(() => {
-    const saved = Number(localStorage.getItem('contacts-v2-nav-width'));
-    return saved >= 220 && saved <= 560 ? saved : 320;
-  });
-  const isResizing = useRef(false);
-
-  const startResize = useCallback(e => {
-    e.preventDefault();
-    isResizing.current = true;
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-    const startX = e.clientX;
-    const startW = navWidth;
-    const onMove = ev => {
-      if (!isResizing.current) return;
-      setNavWidth(Math.min(560, Math.max(220, startW + (ev.clientX - startX))));
-    };
-    const onUp = () => {
-      isResizing.current = false;
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-  }, [navWidth]);
-
-  useEffect(() => { localStorage.setItem('contacts-v2-nav-width', String(navWidth)); }, [navWidth]);
+  // Contacts was the only module that persisted this; useRecordPanel does it
+  // for everything now. The old key is passed so nobody's chosen width is lost
+  // to the rename.
+  const { width: navWidth, onPointerDown: startPanelResize } = useRecordPanel('contacts', 320, 'contacts-v2-nav-width');
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState(null);
   const selectedId = useRef(null);
@@ -1203,7 +1177,7 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
         </div>
       </aside>
 
-      <div className="c2-resize-handle" onMouseDown={startResize} title="Drag to resize" />
+      <div className="c2-resize-handle" onPointerDown={startPanelResize} title="Drag to resize" />
 
       <main className="c2-main">
         {!selected ? (

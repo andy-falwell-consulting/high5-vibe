@@ -24,6 +24,7 @@ import ReminderModal from './ReminderModal';
 import RecordFooter from './RecordFooter';
 import { StatTiles } from './RecordLayout';
 import { financialTiles } from '../config/financialTiles';
+import { useRecordPanel } from '../hooks/useRecordPanel';
 
 const LAYOUT = RCD_LAYOUT;
 const CCS_ATT_API = { list: listCcsAttachments, upload: uploadCcsAttachment, remove: deleteCcsAttachment, freshUrl: ccsAttachmentUrl };
@@ -298,7 +299,9 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
   const [remindOpen, setRemindOpen] = useState(false);
 
   const naFlags = useNaFlags(selected?.recordId);
-  const [navWidth, setNavWidth] = useState(300);
+  // Width, drag and memory come from useRecordPanel — see the hook for what
+  // the twelve hand-rolled copies had drifted into.
+  const { width: navWidth, onPointerDown: startPanelResize } = useRecordPanel('ccs', 300);
   const [edits, setEdits]       = useState({});
   const [saving, setSaving]     = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
@@ -320,7 +323,6 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
   // Phone and e-mail for the project's contact. Keyed by contact id so switching
   // records cannot land a slow answer on the wrong project.
   const [contactInfo, setContactInfo] = useState(null);
-  const isResizing = useRef(false);
   const selectedRef = useRef(null); // guards async estimate fetch against stale selections
 
   const f = useMemo(() => selected?.fieldData || EMPTY_FIELDS, [selected]);
@@ -561,16 +563,6 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
     finally { setSaving(false); }
   };
 
-  const startResize = useCallback((e) => {
-    e.preventDefault();
-    isResizing.current = true;
-    document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';
-    const startX = e.clientX, startW = navWidth;
-    const onMove = ev => { if (isResizing.current) setNavWidth(Math.min(460, Math.max(220, startW + (ev.clientX - startX)))); };
-    const onUp = () => { isResizing.current = false; document.body.style.cursor = ''; document.body.style.userSelect = ''; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-    window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
-  }, [navWidth]);
-
   // ── List filtering / sorting ──
   const parseTs = v => { const dt = parseFmDate(v); return dt ? dt.getTime() : 0; };
   const projStatus = t => { t = (t || '').toLowerCase(); if (t.includes('complet')) return 'done'; if (t.includes('no go') || t.includes('cancel')) return 'nogo'; return t ? 'active' : null; };
@@ -675,7 +667,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
         </div>
       </nav>
 
-      <div className="cv2-resize" onMouseDown={startResize} />
+      <div className="cv2-resize" onPointerDown={startPanelResize} />
 
       <main className="cv2-main">
         {!selected ? (

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { BRAND, UI } from '../config/brandColors'
 import { getRecord, prefetchRecord, invalidateRecord, patchCachedRecord } from '../api/filemaker';
 import { updateVibeRecord } from '../api/vibeRecords';
@@ -8,6 +8,7 @@ import AttachmentsPanel from './AttachmentsPanel';
 import { trainingAttachments } from '../api/trainingAttachments';
 import './EOL.css';
 import RecordFooter from './RecordFooter';
+import { useRecordPanel } from '../hooks/useRecordPanel';
 
 const LAYOUT = 'trainings_New'; // TEMP placeholder — net-new module; swap to the real EOL layout once created in FileMaker
 const CACHE_VERSION = 1;
@@ -108,12 +109,13 @@ export default function EOL({ navTarget, onClearNav, onRecordSelect } = {}) {
   // don't fetch or show them. Skips a second fetch of the same layout too.
   const records = [];
   const [selected, setSelected] = useState(null);
-  const [navWidth, setNavWidth] = useState(300);
+  // Width, drag and memory come from useRecordPanel — see the hook for what
+  // the twelve hand-rolled copies had drifted into.
+  const { width: navWidth, onPointerDown: startPanelResize } = useRecordPanel('eol', 300);
   const [edits, setEdits] = useState({});
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
   const [saveErrorMsg, setSaveErrorMsg] = useState(null);
-  const isResizing = useRef(false);
 
   const orgName = f => f.zz__Display_Organization__ct || '';
 
@@ -183,28 +185,6 @@ export default function EOL({ navTarget, onClearNav, onRecordSelect } = {}) {
     finally { setSaving(false); }
   }
 
-  const startResize = useCallback((e) => {
-    e.preventDefault();
-    isResizing.current = true;
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-    const startX = e.clientX;
-    const startW = navWidth;
-    const onMove = (e) => {
-      if (!isResizing.current) return;
-      setNavWidth(Math.min(520, Math.max(200, startW + (e.clientX - startX))));
-    };
-    const onUp = () => {
-      isResizing.current = false;
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-  }, [navWidth]);
-
   const f = selected?.fieldData;
   const dirtyCount = Object.keys(edits).length;
   const status = f ? (val(f, edits, 'Status') || '') : '';
@@ -259,7 +239,7 @@ export default function EOL({ navTarget, onClearNav, onRecordSelect } = {}) {
         )}
       </aside>
 
-      <div className="eol-resize-handle" onMouseDown={startResize} />
+      <div className="eol-resize-handle" onPointerDown={startPanelResize} />
 
       <main className="eol-main">
         {!selected && (

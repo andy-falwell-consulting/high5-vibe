@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { readCacheAsync } from '../api/filemaker'
 import ListToolbar, { useListControls, ListBody } from './ListControls'
 import { listCourses, getRoster, courseKey, feeTotal, depositDue, balanceDue, rosterTotals, money } from '../api/oeTrainings'
@@ -6,6 +6,7 @@ import { canonicalEnrollment } from '../config/oeEnrollment'
 import WorkshopEmailModal from './WorkshopEmailModal'
 import ReminderModal from './ReminderModal'
 import './OETrainings.css'
+import { useRecordPanel } from '../hooks/useRecordPanel';
 
 // OE Trainings — the ROSTER side of open-enrollment programs.
 //
@@ -43,8 +44,9 @@ export default function OETrainings({ navTarget, onClearNav, onRecordSelect, onN
   const [emailing, setEmailing] = useState(null)   // the registration being e-mailed
   const [remindOpen, setRemindOpen] = useState(false)
   const [error, setError] = useState(null)
-  const [sidebarWidth, setSidebarWidth] = useState(320)
-  const dragging = useRef(false)
+  // Width, drag and memory come from useRecordPanel — see the hook for what
+  // the twelve hand-rolled copies had drifted into.
+  const { width: sidebarWidth, onPointerDown: startPanelResize } = useRecordPanel('oe-trainings', 320);
 
   // Sessions from Vibe, catalogue detail from the OE Lookup replica.
   useEffect(() => {
@@ -127,14 +129,6 @@ export default function OETrainings({ navTarget, onClearNav, onRecordSelect, onN
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navTarget])
 
-  const onMouseDown = useCallback(e => {
-    dragging.current = true
-    const startX = e.clientX, startW = sidebarWidth
-    const onMove = ev => { if (dragging.current) setSidebarWidth(Math.max(240, Math.min(560, startW + ev.clientX - startX))) }
-    const onUp = () => { dragging.current = false; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
-    window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp)
-  }, [sidebarWidth])
-
   const rows = selected?.rows
   const hit = selected ? lookups.get(selected.course) : null
   const cat = hit?.f || null
@@ -182,7 +176,7 @@ export default function OETrainings({ navTarget, onClearNav, onRecordSelect, onN
         )}
       </aside>
 
-      <div className="h5-resize" onMouseDown={onMouseDown} />
+      <div className="h5-resize" onPointerDown={startPanelResize} />
 
       <main className="h5-detail">
         {!selected ? (

@@ -20,6 +20,7 @@ import './Inspections.css';
 import DeleteRecordButton from './DeleteRecordButton'
 import ReminderModal from './ReminderModal'
 import RecordFooter from './RecordFooter';
+import { useRecordPanel } from '../hooks/useRecordPanel';
 
 const LAYOUT = 'Inspections_New';
 const CACHE_VERSION = 1;
@@ -140,7 +141,9 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
   const { records, total } = useAllRecords(LAYOUT, { cacheVersion: CACHE_VERSION });
   const [selected, setSelected] = useState(null);
   const [remindOpen, setRemindOpen] = useState(false)
-  const [navWidth, setNavWidth] = useState(300);
+  // Width, drag and memory come from useRecordPanel — see the hook for what
+  // the twelve hand-rolled copies had drifted into.
+  const { width: navWidth, onPointerDown: startPanelResize } = useRecordPanel('inspections', 300);
   const [edits, setEdits] = useState({});
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
@@ -150,7 +153,6 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
   const [attError, setAttError] = useState(null);
   const [attReload, setAttReload] = useState(0); // bump to make AttachmentsPanel re-list
   const [showNew, setShowNew] = useState(false);
-  const isResizing = useRef(false);
 
   const parseFmDate = v => {
     if (!v) return 0;
@@ -424,28 +426,6 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
     finally { setSaving(false); }
   }
 
-  const startResize = useCallback((e) => {
-    e.preventDefault();
-    isResizing.current = true;
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-    const startX = e.clientX;
-    const startW = navWidth;
-    const onMove = (e) => {
-      if (!isResizing.current) return;
-      setNavWidth(Math.min(520, Math.max(200, startW + (e.clientX - startX))));
-    };
-    const onUp = () => {
-      isResizing.current = false;
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-  }, [navWidth]);
-
   const f = selected?.fieldData;
 
   // What the editor renders: saved rows with any staged edits applied and
@@ -503,7 +483,7 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
         )}
       </aside>
 
-      <div className="insp-resize-handle" onMouseDown={startResize} />
+      <div className="insp-resize-handle" onPointerDown={startPanelResize} />
 
       <main className="insp-main">
         {!selected && (
