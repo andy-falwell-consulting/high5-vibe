@@ -6,6 +6,7 @@ import { useAllRecords } from '../hooks/useAllRecords'
 import ListToolbar, { useListControls, ListBody } from './ListControls'
 import RecordSaveBar from './RecordSaveBar'
 import RecordFormModal from './RecordFormModal'
+import ContactPicker from './ContactPicker'
 import CreateInQBO from './CreateInQBO'
 import EstimateLines from './EstimateLines'
 import BomPickerModal from './BomPickerModal'
@@ -200,8 +201,74 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
     setSelected(r)
     getRecord(LAYOUT, r.recordId).then(d => {
       const fresh = d?.response?.data?.[0]
-      if (fresh) setSelected(fresh)
+      if (fresh) { setSelected(fresh); healContactName(fresh) }
     }).catch(() => {})
+  }
+
+  // Fill in a missing Contact / Organization from the record's own contact id.
+  //
+  // zz__Display_Contact__ct is a DENORMALISED COPY of the contact's name,
+  // written when the record is created. Estimates created from an ORGANISATION
+  // before v1.0.497 got no copy at all — the layout has no organisation field,
+  // so the resolver had nowhere to put the name and wrote nothing. Those
+  // records still carry a perfectly good `_kft__Contact_ID`; only the copy is
+  // missing.
+  //
+  // v1.0.497 fixed the create path, which does nothing for a record already
+  // made. And the field is `editable={false}`, so there was no way to repair one
+  // by hand either. This derives it from the id the record already has.
+  //
+  // It WRITES THE VALUE BACK, once. That is not inventing data: it is filling a
+  // cache from the record's own foreign key, which is exactly what create
+  // should have written. Doing it on view means the affected set heals itself
+  // and shrinks to nothing, instead of needing a migration somebody has to
+  // remember to run. Guarded per record per session, and silent on failure —
+  // a blank name is the status quo, not a regression.
+  const healed = useRef(new Set())
+  async function healContactName(rec) {
+    const fd = rec?.fieldData || {}
+    const id = String(fd._kft__Contact_ID ?? '').trim()
+    const key = String(rec.recordId)
+    if (!id || String(fd.zz__Display_Contact__ct ?? '').trim() || healed.current.has(key)) return
+    healed.current.add(key)
+    try {
+      const { fields } = await displayFieldsForContact(LAYOUT, id)
+      const name = fields?.zz__Display_Contact__ct
+      if (!name) return
+      setSelected(cur => (cur && String(cur.recordId) === key
+        ? { ...cur, fieldData: { ...cur.fieldData, ...fields } } : cur))
+      patchCachedRecord(LAYOUT, CACHE_VERSION, key, fields)
+      await updateVibeRecord(LAYOUT, key, fields)
+    } catch { /* the name stays blank, as it already was */ }
+  }
+
+  // Assigning the contact AFTER creation, which was not possible at all.
+  //
+  // The Contact / Organization field was read-only and only ever written at
+  // create time, so a record with a missing or wrong contact could not be
+  // repaired in the app. healContactName above covers the case where the id is
+  // present and only the name is missing; this covers the rest — including
+  // estimates created before _kft__Contact_ID existed on the layout at all
+  // (2026-08-17), which carry no id for anything to derive a name from.
+  const [contactPicker, setContactPicker] = useState(false)
+
+  async function assignContact(contactId) {
+    setContactPicker(false)
+    if (!selected || !contactId) return
+    setSaving(true); setSaveStatus(null); setSaveErrorMsg(null)
+    try {
+      // clearAddress, as CCS does on a reassignment: the block on the record
+      // belongs to the previous contact, and a real address for the wrong
+      // organisation on a quote is worse than a blank one.
+      const { fields: display } = await displayFieldsForContact(LAYOUT, contactId, { clearAddress: true })
+      const next = { _kft__Contact_ID: String(contactId), ...display }
+      await updateVibeRecord(LAYOUT, selected.recordId, next)
+      patchCachedRecord(LAYOUT, CACHE_VERSION, selected.recordId, next)
+      setSelected(prev => ({ ...prev, fieldData: { ...prev.fieldData, ...next } }))
+      setSaveStatus('saved')
+    } catch (e) {
+      setSaveStatus('error'); setSaveErrorMsg(e.message || 'Could not set the contact')
+    } finally { setSaving(false) }
   }
 
   // Editing a line marks it dirty so the save bar and the live total react.
@@ -505,7 +572,19 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
 
               <Section title="Client" icon="◉">
                 <div className="est-field-grid">
-                  <Field label="Contact / Organization" fk="zz__Display_Contact__ct" f={f} edits={edits} onChange={handleChange} editing={true} editable={false} wide />
+                  {/* Read-only, but now REPAIRABLE. The value is a copy of the
+                      contact's name; the button is the only way to fix a record
+                      whose copy is missing or whose contact is wrong. */}
+                  <div className="est-field wide">
+                    <label>Contact / Organization</label>
+                    <div className="est-contact-row">
+                      <span className="est-value">{f.zz__Display_Contact__ct || 'not set'}</span>
+                      <button type="button" className="h5-btn h5-btn--quiet h5-btn--sm" disabled={saving}
+                        onClick={() => setContactPicker(true)}>
+                        {f.zz__Display_Contact__ct ? 'Change' : 'Assign'}
+                      </button>
+                    </div>
+                  </div>
                   {f.Address_Block_Billing && (
                     <Field label="Billing Address" fk="Address_Block_Billing" f={f} edits={edits} onChange={handleChange} editing={true} editable={false} wide />
                   )}
@@ -558,6 +637,19 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
           </>
         )}
       </main>
+
+      {contactPicker && (
+
+        <ContactPicker
+
+          title="Assign this estimate to a contact or organization"
+
+          onSelect={c => assignContact(c?.fieldData?._kpt__Contact_ID ?? c?.recordId)}
+
+          onClose={() => setContactPicker(false)} />
+
+      )}
+
 
       {remindOpen && selected && (
         <ReminderModal
