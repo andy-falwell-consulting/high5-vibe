@@ -29,3 +29,7 @@ dist-ssr
 .claude/settings.local.json
 reference/
 HANDOFF.md
+
+# Throwaway probe scripts. Several read-only measurement scripts get written
+# against production during a session; one reached a commit in v1.0.497.
+.tmp-*
