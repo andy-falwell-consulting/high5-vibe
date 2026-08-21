@@ -8,6 +8,7 @@ import AttachmentsPanel from './AttachmentsPanel';
 import { trainingAttachments } from '../api/trainingAttachments';
 import { downloadWorkOrder } from '../api/trainingWorkOrder';
 import { LayoutCard, StatTiles, Pipeline, FinancialRows, NotesPair, ThirdsRow, ContactDetails } from './RecordLayout';
+import { financialTiles } from '../config/financialTiles';
 import { PIPELINE_STAGES, PIPELINE_SHORT, statusOptionsFor, stageIndex, statusColor as trnStatusColor } from '../config/trainingStatus';
 import { contactDetails } from '../api/contactLookup';
 import { updateVibeRecord } from '../api/vibeRecords';
@@ -624,13 +625,17 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
                 />
               )}
 
-              <StatTiles tiles={[
-                { label: 'Estimated', value: money(qb?.totals?.estimated) },
-                { label: 'Invoiced', value: money(qb?.totals?.invoiced) },
-                { label: 'Received', value: money(qb?.totals?.received) },
-                { label: 'Balance due', value: money(qb?.totals?.balanceDue),
-                  tone: qb?.totals?.balanceDue > 0 ? statusColor : undefined },
-              ]} />
+              {/* The same four tiles CCS shows, from the same builder — see
+                  financialTiles in src/config/financialTiles.js. Invoiced is gone: CCS does
+                  not show it, and matching meant matching the set, not just the
+                  styling. Event date takes its place. */}
+              <StatTiles tiles={financialTiles({
+                estimated: qb?.totals?.estimated,
+                received: qb?.totals?.received,
+                balanceDue: qb?.totals?.balanceDue,
+                eventDate: val(f, edits, 'Start Date'),
+                live: !!qb,
+              })} />
 
               <ThirdsRow
                 left={<>
