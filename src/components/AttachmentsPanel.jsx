@@ -17,7 +17,22 @@ import './AttachmentsPanel.css';
 // it names the record's folder in Drive, so an attachment lands in
 // "CCS/4-H Camp Bristol Hills (1234)/" rather than a folder called "1234".
 // Optional everywhere; without it the folder is the bare id.
-export default function AttachmentsPanel({ parentId, parentLabel = '', api, title = 'Attachments', invoiceDocNumber = null, actions = null, reloadSignal = 0, readOnly = false }) {
+// `reportFlag` (optional): show an "In report" tick on image attachments.
+// Inspections only — a photo of a frayed cable belongs in the inspection report,
+// where a photo attached to a CCS project or a training has nowhere to go. It is
+// a prop rather than a default because this panel serves five modules, and a
+// tick that does nothing on four of them is worse than no tick at all.
+// FileMaker writes '01/28/2026 09:52:54' and Vibe writes an ISO string. Only
+// the date is worth showing, and splitting on a space alone left every
+// Vibe-born file displaying its full timestamp down to the milliseconds —
+// which photographs, all of them Vibe-born, would have made the common case.
+const justDate = v => {
+  const t = String(v ?? '').trim();
+  if (!t) return 'Just now';
+  return t.includes(' ') ? t.split(' ')[0] : t.split('T')[0];
+};
+
+export default function AttachmentsPanel({ parentId, parentLabel = '', api, title = 'Attachments', invoiceDocNumber = null, actions = null, reloadSignal = 0, readOnly = false, reportFlag = false }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(null); // 'upload' | recordId being deleted
@@ -49,6 +64,16 @@ export default function AttachmentsPanel({ parentId, parentLabel = '', api, titl
     } catch (e) { setError(e.message || 'Upload failed'); }
     finally { setBusy(null); }
   }
+  async function toggleReport(a) {
+    if (!api.setFlags) return;
+    setBusy(`flag:${a.recordId}`); setError(null);
+    try {
+      const updated = await api.setFlags(a.recordId, { inReport: !a.inReport });
+      setItems(list => list.map(x => (x.recordId === a.recordId ? updated : x)));
+    } catch (e) { setError(e.message || 'Could not change whether this is in the report'); }
+    finally { setBusy(null); }
+  }
+
   async function handleDelete(recordId) {
     setBusy(recordId); setError(null);
     try { await api.remove(recordId); setItems(a => a.filter(x => x.recordId !== recordId)); }
@@ -161,7 +186,23 @@ export default function AttachmentsPanel({ parentId, parentLabel = '', api, titl
                 </a>
                 <div className="att-meta">
                   <a className="att-name" href={a.url || undefined} onClick={e => { e.preventDefault(); if (a.hasFile) handleOpen(a); }} title={a.name}>{a.name}</a>
-                  <span className="att-sub">{a.created ? a.created.split(' ')[0] : 'Just now'}{a.by ? ` · ${a.by}` : ''}</span>
+                  <span className="att-sub">{justDate(a.created)}{a.by ? ` · ${a.by}` : ''}</span>
+                  {reportFlag && a.isImage && !readOnly && (
+                    <label
+                      className="att-report"
+                      title={a.pending
+                        ? 'Include this photo in the report — it will be marked as soon as it syncs'
+                        : 'Include this photo in the generated report'}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={!!a.inReport}
+                        disabled={busy === `flag:${a.recordId}`}
+                        onChange={() => toggleReport(a)}
+                      />
+                      In report
+                    </label>
+                  )}
                 </div>
                 {!readOnly && (
                   <button className="att-del" title="Delete attachment" disabled={busy === a.recordId} onClick={() => handleDelete(a.recordId)}>

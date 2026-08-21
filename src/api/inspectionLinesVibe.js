@@ -23,6 +23,7 @@
 //     there is nothing to read back.
 import { getCurrentEnv } from '../config/fmpEnvironments';
 import { CATEGORIES, categoryRank } from '../config/inspectionCopy';
+import { pinnedByInspectionId } from './offlineStore';
 
 export const LAYOUT = 'Inspections_New';
 export const PORTAL = 'inspt_INSPLI';   // kept: the report still reads portalData for legacy records
@@ -91,28 +92,59 @@ const post = (inspectionId, payload) =>
     body: JSON.stringify(payload),
   }).then(json);
 
-/** Read one inspection's lines. */
+/**
+ * Read one inspection's lines, falling back to the offline copy.
+ *
+ * The fallback is not a nicety. Without it an inspection taken offline opens in
+ * the field showing its header and the words "No line items" — which is not
+ * "we couldn't load them", it is a positive claim that the course has nothing
+ * on it. A 44-row inspection reading as empty is the worst possible failure
+ * here, so a network error consults what "Take offline" downloaded before it
+ * reports anything at all.
+ */
 export async function listLines(inspectionId) {
   if (!inspectionId) return [];
-  const body = await json(await fetch(`/api/inspection-lines?${qs(inspectionId)}`, { credentials: 'include' }));
+  try {
+    const body = await json(await fetch(`/api/inspection-lines?${qs(inspectionId)}`, { credentials: 'include' }));
+    return (body.lines || []).map(toLine);
+  } catch (e) {
+    const pin = await pinnedByInspectionId(getCurrentEnv().db, LAYOUT, inspectionId).catch(() => null);
+    // Already in UI shape — pinning stores what listLines returned.
+    if (pin?.lines) return pin.lines;
+    throw e;
+  }
+}
+
+/**
+ * Write an inspection's ENTIRE findings array in one request, keeping ids.
+ *
+ * This is what an ordinary save uses, online and offline alike. It replaces a
+ * loop of per-row add/update/remove calls that made one HTTP request per edited
+ * line — 44 sequential round trips on a typical inspection — and, worse, could
+ * half-apply: a connection dropped in the middle left an inspection in a state
+ * nobody chose and no retry could safely repeat. Sending the whole array is
+ * idempotent, so a replayed queue entry cannot double-apply.
+ *
+ * Rows keep their `recordId` as the stored id. Rows added in a session carry a
+ * `new:` key instead, which the server treats as no id and mints a real one
+ * for — see the `sync` action in api/inspection-lines.js.
+ */
+export async function syncLines(inspectionId, lines) {
+  const rows = (lines || []).map(l => {
+    const row = toRow(l);
+    const id = l.recordId ?? l.id;
+    return id && !String(id).startsWith('new:') ? { ...row, id: String(id) } : row;
+  });
+  const body = await post(inspectionId, { action: 'sync', lines: rows });
   return (body.lines || []).map(toLine);
 }
 
-/** Add lines in a single request. Returns the number written. */
-export async function addLines(inspectionId, lines) {
-  const rows = lines.map(toRow).filter(r => Object.keys(r).length);
-  if (!rows.length) return 0;
-  await post(inspectionId, { action: 'add', lines: rows });
-  return rows.length;
-}
-
-export async function updateLine(inspectionId, lineId, changes) {
-  return post(inspectionId, { action: 'update', lineId, changes: toRow(changes) });
-}
-
-export async function deleteLine(inspectionId, lineId) {
-  return post(inspectionId, { action: 'remove', lineId });
-}
+// addLines / updateLine / deleteLine are gone, with the save loop that used
+// them. They wrote one row per request — 44 sequential round trips on a typical
+// inspection — and could half-apply if the connection dropped mid-loop, leaving
+// an inspection in a state nobody chose and no retry could safely repeat.
+// `syncLines` replaces all three. The endpoint still accepts add/update/remove
+// for anything that needs a single row later; nothing does today.
 
 /**
  * Copy every line from one inspection onto another, in canonical category

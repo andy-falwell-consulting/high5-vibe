@@ -227,6 +227,25 @@ export async function listForParent(db, kind, parentId) {
 
 export const getFile = async (db, id) => parse(await redis.hget(FK.file(db), String(id)));
 
+// Flags a person sets on a file, as opposed to facts about the bytes.
+//
+// `inReport` is the only one so far: an inspection photo ticked to appear in
+// the generated report. It lives ON THE FILE RECORD rather than in a browser,
+// so the choice belongs to the inspection — it survives a different device, a
+// different person, and a report regenerated months later.
+const FILE_FLAGS = ['inReport'];
+
+export async function setFileFlags(db, id, patch) {
+  const meta = await getFile(db, id);
+  if (!meta) return null;
+  const next = { ...meta };
+  for (const k of FILE_FLAGS) {
+    if (k in patch) next[k] = !!patch[k];
+  }
+  await redis.hset(FK.file(db), { [String(id)]: JSON.stringify(next) });
+  return next;
+}
+
 // Files added in Vibe get a VF- id, the same convention as V-/VA-/VM- on
 // contacts: a bare number came from FileMaker, anything prefixed is ours.
 export async function nextFileId(db) {

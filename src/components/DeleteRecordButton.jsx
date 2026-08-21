@@ -35,6 +35,10 @@ export default function DeleteRecordButton({
   name,             // what to show in the dialog: "Delete <name>?"
   onDeleted,        // called after a successful delete — clear the selection
   label = 'Delete',
+  // Optional: deleting cannot work right now and we know why. Offline is the
+  // case this exists for — a delete is a server write with no local half, so
+  // offering it with no signal can only produce a failure dialog.
+  disabledReason = null,
 }) {
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState('');
@@ -75,7 +79,12 @@ export default function DeleteRecordButton({
 
   return (
     <>
-      <button className="h5-btn h5-btn--quiet h5-btn--sm drb-btn" onClick={() => setOpen(true)} title="Delete this record">🗑 {label}</button>
+      <button
+        className="h5-btn h5-btn--quiet h5-btn--sm drb-btn"
+        onClick={() => setOpen(true)}
+        disabled={!!disabledReason}
+        title={disabledReason || 'Delete this record'}
+      >🗑 {label}</button>
 
       {open && (
         <div className="h5-scrim" onClick={e => e.target === e.currentTarget && !busy && close()}>

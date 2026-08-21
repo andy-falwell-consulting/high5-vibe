@@ -97,3 +97,15 @@
 }
 .att-del:hover:not(:disabled) { background: var(--error-solid); color: var(--on-error-solid); }
 .att-del:disabled { opacity: 0.5; cursor: default; }
+
+/* "In report" — the tick that decides whether a photo appears in the generated
+   inspection report. Inspections only (see the reportFlag prop); the panel's
+   other four modules never render it. */
+.att-report {
+  display: flex; align-items: center; gap: var(--space-xs);
+  margin-top: 2px;
+  font-size: var(--text-micro); color: var(--fg-secondary);
+  cursor: pointer; user-select: none;
+}
+.att-report input { width: 14px; height: 14px; margin: 0; accent-color: var(--brand); cursor: pointer; }
+.att-report input:disabled { cursor: default; }

@@ -1,11 +1,11 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { getRecord, prefetchRecord, invalidateRecord, patchCachedRecord, addCachedRecord } from '../api/filemaker';
-import { updateVibeRecord, createVibeRecord } from '../api/vibeRecords';
+import { createVibeRecord } from '../api/vibeRecords';
 import { useAllRecords } from '../hooks/useAllRecords';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
 import RecordSaveBar from './RecordSaveBar';
 import RecordFormModal from './RecordFormModal';
-import { generateAndAttachReport, downloadReport, inspectionAttachments } from '../api/inspectionAttachments';
+import { generateAndAttachReport, downloadReport, inspectionAttachmentsFor } from '../api/inspectionAttachments';
 import AttachmentsPanel from './AttachmentsPanel';
 import InspectionLines from './InspectionLines';
 // Line items come from Vibe's own store (api/_inspectionLines.js), not the
@@ -13,14 +13,19 @@ import InspectionLines from './InspectionLines';
 // keys do NOT: every call takes the inspection's _kpt__Inspection_ID and a
 // line's own id, where the portal client took FileMaker recordIds. That is why
 // the swap is a real change rather than an import rename.
-import { listLines, addLines, updateLine, deleteLine, copyLines } from '../api/inspectionLinesVibe';
-import { fetchCarriedLines, markCarriedLines, clearCarriedLine } from '../api/naFlags';
+import { listLines, copyLines } from '../api/inspectionLinesVibe';
+import { fetchCarriedLines, markCarriedLines } from '../api/naFlags';
 import { copyProfileFields } from '../config/inspectionCopy';
 import './Inspections.css';
 import DeleteRecordButton from './DeleteRecordButton'
 import ReminderModal from './ReminderModal'
 import RecordFooter from './RecordFooter';
 import { useRecordPanel } from '../hooks/useRecordPanel';
+import TakeOffline from './TakeOffline';
+import { pinnedIds } from '../api/offlineInspections';
+import { saveDraft, loadDraft, clearDraft, draftIds } from '../api/offlineDrafts';
+import { enqueue, drainOutbox, queuedIds, onEntrySent, subscribeOutbox } from '../api/outbox';
+import SyncStatus from './SyncStatus';
 
 const LAYOUT = 'Inspections_New';
 const CACHE_VERSION = 1;
@@ -153,6 +158,29 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
   const [attError, setAttError] = useState(null);
   const [attReload, setAttReload] = useState(0); // bump to make AttachmentsPanel re-list
   const [showNew, setShowNew] = useState(false);
+  const photoInputRef = useRef(null);
+  // Which inspections are downloaded for offline use, and whether there is a
+  // network at all. Both are shown in the list rather than only inside the
+  // Take-offline dialog: standing in a field, "is this one on my iPad" is the
+  // question, and it should be answerable without opening anything.
+  const [offlineIds, setOfflineIds] = useState(() => new Set());
+  const [showOffline, setShowOffline] = useState(false);
+  const [online, setOnline] = useState(() => navigator.onLine);
+  // Records carrying staged edits that have never reached the server, and when
+  // the open one's edits were last touched. Both are shown rather than kept
+  // internal: unsent work is the thing an inspector most needs to be able to
+  // see at a glance at the end of a day.
+  const [draftIdSet, setDraftIdSet] = useState(() => new Set());
+  const [queuedIdSet, setQueuedIdSet] = useState(() => new Set());
+  const [draftRestoredAt, setDraftRestoredAt] = useState(null);
+  // Lines whose carried-over badge has been cleared by an edit — including one
+  // made in a previous session and restored from a draft. Held in a ref because
+  // the carried-flag fetch resolves independently and would otherwise put the
+  // badges back on lines that have already been reviewed.
+  const reviewedRef = useRef(new Set());
+  // Set to a recordId once its draft has been looked for, so the debounced
+  // writer below cannot save an empty state over a draft that is still loading.
+  const draftReadyRef = useRef(null);
 
   const parseFmDate = v => {
     if (!v) return 0;
@@ -162,6 +190,21 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
   };
 
   const orgName = f => f.Organization || f['inspt_CNTCT__site::Name_Organization'] || '';
+
+  const refreshOfflineIds = useCallback(() => { pinnedIds().then(setOfflineIds); }, []);
+  const refreshDraftIds = useCallback(() => { draftIds(LAYOUT).then(setDraftIdSet); }, []);
+  const refreshQueuedIds = useCallback(() => { queuedIds().then(setQueuedIdSet); }, []);
+  useEffect(() => { refreshOfflineIds(); refreshDraftIds(); refreshQueuedIds(); }, [refreshOfflineIds, refreshDraftIds, refreshQueuedIds]);
+  // The queue changes from outside this module — a drain triggered by the
+  // network coming back, on any page — so the marks follow it rather than only
+  // being set when this module writes.
+  useEffect(() => subscribeOutbox(() => refreshQueuedIds()), [refreshQueuedIds]);
+
+  useEffect(() => {
+    const on = () => setOnline(true), off = () => setOnline(false);
+    window.addEventListener('online', on); window.addEventListener('offline', off);
+    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
+  }, []);
 
   const list = useListControls({
     records,
@@ -198,6 +241,10 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
   const [linesLoading, setLinesLoading] = useState(false);
   const tempId = useRef(0);
   const selectedRef = useRef(null);   // guards async fetches against stale selections
+  // The recordId whose findings genuinely arrived. A `lines` save sends the
+  // WHOLE array, so saving one that never loaded would delete every finding on
+  // the inspection — see the guard in handleSave.
+  const linesLoadedRef = useRef(null);
   const copySourceRef = useRef(null); // recordId of the inspection being copied, if any
   const [copySource, setCopySource] = useState('');
 
@@ -205,18 +252,66 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
     setLineEdits({}); setNewLines([]); setDeletedIds(new Set());
   }, []);
 
+  // A `lines` entry comes back with the array as the server stored it, so the
+  // rows on screen pick up their real ids without a second request. Without
+  // this a line added offline would keep its `new:` key until the record was
+  // reopened, and every later save would mint it a new id.
+  useEffect(() => onEntrySent((entry, result) => {
+    if (String(selectedRef.current) !== String(entry.recordId)) return;
+    // A queued photo that has now uploaded is a different card with a real file
+    // id, so the panel has to re-list rather than keep the pending one.
+    if (entry.kind === 'photo') { setAttReload(n => n + 1); return; }
+    if (entry.kind === 'lines' && result?.lines) setLines(result.lines);
+  }), []);
+
   async function handleSelect(r) {
     setEdits({}); setSaveStatus(null);
     resetLineState();
     setCarriedIds(new Set());
+    setDraftRestoredAt(null);
+    reviewedRef.current = new Set();
+    draftReadyRef.current = null;
     selectedRef.current = r.recordId;
+
+    // Staged edits from a previous session on this device — a closed lid, a
+    // reaped tab, a flat battery. Restored before anything else touches the
+    // edit state, and marked ready either way so the writer below knows there
+    // is nothing still in flight to overwrite.
+    loadDraft(LAYOUT, r.recordId).then(d => {
+      if (selectedRef.current !== r.recordId) return;
+      if (d) {
+        setEdits(d.edits);
+        setLineEdits(d.lineEdits);
+        setNewLines(d.newLines);
+        setDeletedIds(d.deletedIds);
+        setDraftRestoredAt(d.updatedAt || null);
+        reviewedRef.current = new Set(Object.keys(d.lineEdits).map(String));
+        setCarriedIds(prev => {
+          const next = new Set(prev);
+          for (const id of reviewedRef.current) next.delete(id);
+          return next;
+        });
+        // Restored rows carry ids like `new:3`. Without moving the counter past
+        // them, the next line added this session would be given an id that
+        // already belongs to one on screen.
+        const highest = d.newLines.reduce((n, l) => Math.max(n, Number(String(l._tempId || '').split(':')[1]) || 0), 0);
+        tempId.current = Math.max(tempId.current, highest);
+      }
+    }).catch(() => {}).finally(() => {
+      if (selectedRef.current === r.recordId) draftReadyRef.current = r.recordId;
+    });
     // Guarded on the record id — clicking quickly between inspections must not
     // let a slow response land on the wrong record.
     fetchCarriedLines(r.recordId).then(keys => {
-      if (selectedRef.current === r.recordId) setCarriedIds(new Set(keys));
+      if (selectedRef.current !== r.recordId) return;
+      // Minus anything already reviewed in a restored draft — this resolves
+      // independently of the draft load, and whichever lands second must not
+      // contradict the other.
+      setCarriedIds(new Set(keys.filter(k => !reviewedRef.current.has(String(k)))));
     }).catch(() => {});
     setSelected(r);
     setLines([]);
+    linesLoadedRef.current = null;
     // Vibe's store has no 50-row portal cap to work around, so this is one
     // read of the whole set however long the inspection is.
     const inspectionId = r.fieldData?._kpt__Inspection_ID;
@@ -225,6 +320,7 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
       listLines(inspectionId).then(rows => {
         if (selectedRef.current !== r.recordId) return;
         setLines(rows);
+        linesLoadedRef.current = r.recordId;
         setLinesLoading(false);
       }).catch(() => { if (selectedRef.current === r.recordId) setLinesLoading(false); });
     }
@@ -253,6 +349,34 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
   // ── Attachments live in the shared <AttachmentsPanel>; only inspection-report
   // generation stays here (passed into the panel via `actions`). ──
   const inspId = selected?.fieldData?._kpt__Inspection_ID;
+  // Bound to the record's own id so a photo queued with no signal sorts
+  // alongside that inspection's other queued work — the record's edits have to
+  // replay first, because the photo's Drive folder is named from the record.
+  const attachApi = useMemo(
+    () => inspectionAttachmentsFor(selected?.recordId),
+    [selected?.recordId]);
+
+  // Photographs. A separate control from "Upload file" because it is a
+  // different act: `capture="environment"` opens the rear camera directly on an
+  // iPad rather than a file browser, which is the whole difference between
+  // photographing a frayed cable and not bothering.
+  async function handlePhotos(files) {
+    if (!inspId || !files?.length) return;
+    setAttBusy('photo'); setAttError(null);
+    try {
+      for (const [i, file] of files.entries()) {
+        setAttStage(files.length > 1 ? `Saving photo ${i + 1} of ${files.length}…` : 'Saving photo…');
+        await attachApi.upload(inspId, file, file.name, orgName(selected?.fieldData || {}));
+      }
+      setAttReload(n => n + 1);
+      refreshQueuedIds();
+    } catch (e) {
+      const msg = String(e?.message || e);
+      setAttError(/quota|storage/i.test(msg)
+        ? 'There is no room left on this device for another photo. Sync what is waiting, then try again.'
+        : (msg || 'Could not save the photo'));
+    } finally { setAttBusy(null); setAttStage(null); }
+  }
   async function handleGenerateReport(attach) {
     if (!selected) return;
     setAttBusy(attach ? 'report-attach' : 'report-download');
@@ -339,8 +463,28 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
     onRecordSelect?.(rec.recordId, rec.fieldData?.Organization || rec.fieldData?.['inspt_CNTCT__site::Name_Organization']);
   }
 
+  // Staged edits, written to the device as they change.
+  //
+  // Debounced: typing a description fires an edit per keystroke and IndexedDB
+  // writes are not free. 400ms is short enough that nothing plausible is lost
+  // and long enough that a sentence is one write, not forty.
+  useEffect(() => {
+    const recordId = selected?.recordId;
+    if (!recordId || draftReadyRef.current !== recordId) return;
+    const t = setTimeout(() => {
+      saveDraft(LAYOUT, recordId, { edits, lineEdits, newLines, deletedIds })
+        .then(refreshDraftIds)
+        .catch(() => { /* no offline store on this browser — nothing to do */ });
+    }, 400);
+    return () => clearTimeout(t);
+  }, [selected?.recordId, edits, lineEdits, newLines, deletedIds, refreshDraftIds]);
+
   const handleFieldChange = useCallback((fk, v) => setEdits(p => ({ ...p, [fk]: v })), []);
-  const handleDiscard = () => { setEdits({}); resetLineState(); setSaveStatus(null); setSaveErrorMsg(null); };
+  const handleDiscard = () => {
+    setEdits({}); resetLineState(); setSaveStatus(null); setSaveErrorMsg(null);
+    setDraftRestoredAt(null); reviewedRef.current = new Set();
+    if (selected?.recordId) clearDraft(LAYOUT, selected.recordId).then(refreshDraftIds).catch(() => {});
+  };
 
   // Editing a line is what marks it reviewed, so the carried-over badge clears
   // as soon as someone touches it (optimistically here; persisted on Save).
@@ -350,6 +494,7 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
       return;
     }
     setLineEdits(p => ({ ...p, [id]: { ...(p[id] || {}), [field]: value } }));
+    reviewedRef.current.add(String(id));
     setCarriedIds(prev => {
       if (!prev.has(String(id))) return prev;
       const next = new Set(prev); next.delete(String(id)); return next;
@@ -370,58 +515,97 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
     setNewLines(rows => [...rows, { _tempId: id, Category: category, Description: '', Quantity: '', Equipment: '', Element_Grade: '', Flag_Checkbox: '' }]);
   }, []);
 
-  // Re-read the lines after writing, so the on-screen rows carry the real ids
-  // the server assigned (needed for any subsequent edit or delete).
-  const refreshLines = useCallback(async () => {
-    const recordId = selected?.recordId;
-    const inspectionId = selected?.fieldData?._kpt__Inspection_ID;
-    if (!recordId || !inspectionId) return;
-    const rows = await listLines(inspectionId);
-    if (selectedRef.current === recordId) setLines(rows);
-  }, [selected?.recordId, selected?.fieldData?._kpt__Inspection_ID]);
+  // There is no refreshLines any more. It existed because the per-row writes
+  // could not tell the caller what ids the server had assigned, so the whole
+  // set had to be re-read after every save. `sync` returns the stored array, and
+  // the outbox hands it straight back — see the onEntrySent effect above.
 
   async function handleSave() {
     const lineChanges = Object.keys(lineEdits).length + newLines.length + deletedIds.size;
     if (!Object.keys(edits).length && !lineChanges) { return; }
     setSaving(true); setSaveStatus(null); setSaveErrorMsg(null);
     try {
-      // Line items first — they're the risky part. If they fail we surface the
-      // error before touching the parent, rather than half-saving.
+      const recordId = selected.recordId;
+      const label = orgName(f || {});
+      let savedLines = null;
+
+      if (Object.keys(edits).length) {
+        await enqueue({ kind: 'record', layout: LAYOUT, recordId, label, payload: { fields: edits } });
+      }
+
       if (lineChanges) {
         // Keyed on the inspection's own id, not FileMaker's recordId — see the
         // import comment. Passing recordId here would write under a key that
         // looks valid and belongs to nothing.
         const inspectionId = selected.fieldData?._kpt__Inspection_ID;
         if (!inspectionId) throw new Error('This inspection has no ID yet, so its lines cannot be saved.');
-        for (const id of deletedIds) await deleteLine(inspectionId, id);
-        for (const [id, changes] of Object.entries(lineEdits)) {
-          if (deletedIds.has(String(id))) continue;   // deleted wins over edited
-          await updateLine(inspectionId, id, changes);
+        // THE GUARD THAT STOPS A SAVE DELETING AN INSPECTION. A findings save
+        // sends the whole array and the server stores exactly that, so an array
+        // built from findings that never loaded — offline with nothing pinned,
+        // a request that failed — would wipe every line on the record. Adding
+        // one line to an inspection whose 44 could not be read must not be a
+        // way to lose the 44.
+        if (linesLoadedRef.current !== recordId) {
+          throw new Error('The findings could not be loaded, so they cannot be saved. Reopen this inspection first.');
         }
-        const toAdd = newLines.filter(l => (l.Description || '').trim() || l.Quantity || l.Equipment || l.Element_Grade);
-        if (toAdd.length) await addLines(inspectionId, toAdd);
 
-        // Persist the cleared carried-over flags for the lines just edited.
-        for (const id of Object.keys(lineEdits)) clearCarriedLine(selected.recordId, id).catch(() => {});
-        for (const id of deletedIds) clearCarriedLine(selected.recordId, id).catch(() => {});
+        // THE WHOLE ARRAY, not a list of changes. One request instead of the
+        // 44 sequential round trips a typical inspection used to make, and
+        // idempotent — so a queued entry replayed twice cannot double-apply.
+        // Deleting a line is leaving it out of the array.
+        savedLines = workingLines
+          .filter(l => !l._deleted)
+          // A row added and never filled in is an empty line on the report.
+          .filter(l => l.recordId || (l.Description || '').trim() || l.Quantity || l.Equipment || l.Element_Grade)
+          .map(l => {
+            // `_deleted` is a screen flag and `_tempId` is this session's key
+            // for a row the server has never seen; neither belongs in a payload.
+            const rest = { ...l };
+            delete rest._deleted;              // a screen flag
+            const temp = rest._tempId;
+            delete rest._tempId;               // this session's key for an unsent row
+            return rest.recordId ? rest : { ...rest, recordId: temp };
+          });
 
-        await refreshLines();
-        resetLineState();
+        await enqueue({
+          kind: 'lines', layout: LAYOUT, recordId, inspectionId, label,
+          payload: {
+            lines: savedLines,
+            // Editing a line is what marks it reviewed; the badge is cleared
+            // on screen already and this is what persists it.
+            carriedCleared: [...new Set([...Object.keys(lineEdits), ...deletedIds])].map(String),
+          },
+        });
       }
-      // Inspections_New is Vibe-owned (api/_vibeStore.js), so the record's own
-      // fields no longer go back to FileMaker. Line items still do — they are a
-      // portal, and the fragment model covers fieldData only. Until they move,
-      // an inspection's fields live in Vibe and its findings in FileMaker.
-      if (Object.keys(edits).length) await updateVibeRecord(LAYOUT, selected.recordId, edits);
-      // Apply saved values optimistically — no blocking refetch (which can be
-      // starved behind background batch loads). Patch the list cache so the
-      // sidebar status dot updates, and drop the detail cache so a later
-      // reopen pulls authoritative data from the server.
-      patchCachedRecord(LAYOUT, CACHE_VERSION, selected.recordId, edits);
-      invalidateRecord(LAYOUT, selected.recordId);
+
+      // COMMITTED. Everything from here is local bookkeeping: the work is
+      // durable in the queue, so the staged state can be cleared whether or not
+      // there is a network to send it over.
+      patchCachedRecord(LAYOUT, CACHE_VERSION, recordId, edits);
+      invalidateRecord(LAYOUT, recordId);
       setSelected(prev => ({ ...prev, fieldData: { ...prev.fieldData, ...edits } }));
-      setEdits({}); setSaveStatus('saved');
-      setTimeout(() => setSaveStatus(null), 2000);
+      if (savedLines) { setLines(savedLines); linesLoadedRef.current = recordId; }
+      setEdits({});
+      resetLineState();
+
+      draftReadyRef.current = null;
+      await clearDraft(LAYOUT, recordId).catch(() => {});
+      setDraftRestoredAt(null);
+      reviewedRef.current = new Set();
+      refreshDraftIds();
+      refreshQueuedIds();
+      draftReadyRef.current = recordId;
+
+      // Online this finishes in the same second and the toast says "Saved".
+      // Offline it does nothing and the toast says "Queued" — one path either
+      // way, which is what stops the offline half being a branch nobody
+      // exercises until it matters.
+      const before = navigator.onLine;
+      await drainOutbox().catch(() => {});
+      const stillQueued = (await queuedIds()).has(String(recordId));
+      setSaveStatus(!before || stillQueued ? 'queued' : 'saved');
+      refreshQueuedIds();
+      setTimeout(() => setSaveStatus(null), 2500);
     } catch (e) { setSaveStatus('error'); setSaveErrorMsg(e?.message || null); }
     finally { setSaving(false); }
   }
@@ -452,8 +636,19 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
               <div className="insp-sidebar-module">Inspections</div>
               <div className="insp-sidebar-count">{total ? `${total.toLocaleString()} inspections` : 'Loading…'}</div>
             </div>
-            <button className="insp-new-btn" onClick={() => setShowNew(true)} title="New inspection">＋ New</button>
+            <div className="insp-head-actions">
+              <button className="insp-new-btn" onClick={() => setShowOffline(true)} title="Download inspections for use with no signal">
+                ⇩ Offline{offlineIds.size ? ` (${offlineIds.size})` : ''}
+              </button>
+              <button
+                className="insp-new-btn"
+                onClick={() => setShowNew(true)}
+                disabled={!online}
+                title={online ? 'New inspection' : 'Needs a connection — an inspection is created and copied on the server'}
+              >＋ New</button>
+            </div>
           </div>
+          <SyncStatus />
           <ListToolbar c={list} unit="inspections" />
         </div>
 
@@ -476,6 +671,15 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
                       {[r.fieldData['inspt_CNTCT__site::Site Number'], r.fieldData.Date].filter(Boolean).join(' · ') || '—'}
                     </div>
                   </div>
+                  {draftIdSet.has(String(r.recordId)) && (
+                    <span className="insp-item-draft" title="Unsaved changes held on this device">●</span>
+                  )}
+                  {queuedIdSet.has(String(r.recordId)) && (
+                    <span className="insp-item-queued" title="Saved, waiting to sync">↑</span>
+                  )}
+                  {offlineIds.has(String(r.recordId)) && (
+                    <span className="insp-item-offline" title="Downloaded for offline use">⇩</span>
+                  )}
                 </div>
               );
             }} />
@@ -511,17 +715,34 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
                 </div>
               </div>
               <div className="insp-topbar-actions">
-                <button className="h5-btn h5-btn--quiet h5-btn--sm" onClick={() => setRemindOpen(true)}>⏰ Remind</button>
+                <button
+                  className="h5-btn h5-btn--quiet h5-btn--sm"
+                  onClick={() => setRemindOpen(true)}
+                  disabled={!online}
+                  title={online ? 'Set a reminder' : 'Needs a connection — a reminder is a calendar event'}
+                >⏰ Remind</button>
                 <DeleteRecordButton
                   layout={LAYOUT} cacheVersion={CACHE_VERSION}
                   recordId={selected.recordId}
                   name={f.Organization || f['inspt_CNTCT__site::Name_Organization']}
                   onDeleted={() => setSelected(null)}
+                  disabledReason={online ? null : 'Needs a connection'}
                 />
               </div>
             </div>
 
             <div className="insp-content">
+              {draftRestoredAt && (
+                <div className="h5-callout h5-callout--info insp-draft-note">
+                  <span className="h5-callout__icon">↺</span>
+                  <div className="h5-callout__body">
+                    <p className="h5-callout__title">Unsaved changes restored.</p>
+                    Last edited {new Date(draftRestoredAt).toLocaleString()} on this device, and not yet
+                    saved to the server. Save when there is a signal, or Discard to throw them away.
+                  </div>
+                </div>
+              )}
+
               <Section title="Inspection Details" icon="◈">
                 <div className="insp-field-grid">
                   <TextField label="Site" fieldKey="inspt_CNTCT__site::Name_Organization" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} />
@@ -565,12 +786,33 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
               <AttachmentsPanel
                 parentId={inspId}
                 parentLabel={f.Organization || f['inspt_CNTCT__site::Name_Organization']}
-                api={inspectionAttachments}
+                api={attachApi}
+                reportFlag
                 invoiceDocNumber={selected?.fieldData?._kat__QuickBooks_Invoice_ID}
                 reloadSignal={attReload}
                 actions={(
                   <>
-                    <button className="att-btn" disabled={attBusy === 'report-attach' || attBusy === 'report-download'} onClick={() => handleGenerateReport(true)}>
+                    <button
+                      className="att-btn"
+                      disabled={attBusy === 'photo' || !inspId}
+                      onClick={() => photoInputRef.current?.click()}
+                      title="Photograph a finding — works with no signal">
+                      {attBusy === 'photo' ? (attStage || 'Saving…') : '⛭ Take photo'}
+                    </button>
+                    <input
+                      ref={photoInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      multiple
+                      style={{ display: 'none' }}
+                      onChange={e => { handlePhotos([...e.target.files]); e.target.value = ''; }}
+                    />
+                    <button
+                      className="att-btn"
+                      disabled={attBusy === 'report-attach' || attBusy === 'report-download' || !online}
+                      title={online ? undefined : 'Needs a connection — the report is stored in Drive'}
+                      onClick={() => handleGenerateReport(true)}>
                       {attBusy === 'report-attach' ? (attStage || 'Working…') : '＋ Generate report & attach'}
                     </button>
                     <button className="att-btn" disabled={attBusy === 'report-attach' || attBusy === 'report-download'} onClick={() => handleGenerateReport(false)}>
@@ -582,7 +824,9 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
               {attError && <p className="insp-att-error">{attError}</p>}
 
               <RecordFooter id={f._kpt__Inspection_ID} recordId={selected.recordId} fieldData={f} />
-              <RecordSaveBar count={dirtyCount} saving={saving} status={saveStatus} errorMessage={saveErrorMsg} onSave={handleSave} onDiscard={handleDiscard} />
+              <RecordSaveBar
+                count={dirtyCount} saving={saving} status={saveStatus} errorMessage={saveErrorMsg}
+                onSave={handleSave} onDiscard={handleDiscard} />
             </div>
           </>
         )}
@@ -602,6 +846,14 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
           }}
           onClose={() => setRemindOpen(false)}
           onSaved={() => setRemindOpen(false)} />
+      )}
+
+      {showOffline && (
+        <TakeOffline
+          records={records}
+          onClose={() => setShowOffline(false)}
+          onChanged={refreshOfflineIds}
+        />
       )}
 
       {showNew && (

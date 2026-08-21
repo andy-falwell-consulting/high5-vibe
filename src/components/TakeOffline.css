@@ -1,0 +1,104 @@
+/* Take offline — picking the day's inspections to carry into a field.
+
+   Tokens only, no hex, and both themes come from the token layer rather than a
+   [data-theme] block at the bottom: every colour here is semantic (--card,
+   --fg-secondary, --success-fg), and those already flip. */
+
+.tko-modal { width: min(720px, 100%); }
+.tko-modal .h5-modal__foot { justify-content: space-between; align-items: center; }
+
+.tko-sub {
+  margin: var(--space-xs) 0 0;
+  font-size: var(--text-caption);
+  color: var(--fg-secondary);
+  line-height: var(--leading-normal);
+}
+
+.tko-callout-actions { margin-top: var(--space-md); }
+
+.tko-section { display: flex; flex-direction: column; gap: var(--space-sm); }
+
+.tko-section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.tko-section-title {
+  margin: 0;
+  font-size: var(--text-caption);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--fg-secondary);
+}
+
+.tko-count {
+  font-family: var(--font-num);
+  font-size: var(--text-caption);
+  color: var(--fg-secondary);
+}
+
+.tko-search {
+  flex: 1; max-width: 260px;
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+}
+.tko-search:focus { outline: none; border-color: var(--focus-ring); }
+
+.tko-empty {
+  margin: 0;
+  padding: var(--space-md) 0;
+  color: var(--fg-secondary);
+  font-size: var(--text-body);
+}
+
+.tko-list {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+/* The pick list is the long one — an inspector scrolls it, the modal doesn't. */
+.tko-list--pick { max-height: 280px; overflow-y: auto; }
+
+.tko-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.tko-row:last-child { border-bottom: none; }
+.tko-row.is-pinned { background: var(--surface-sunken); }
+
+/* The whole row is the hit area — this is used on a tablet, with gloves on. */
+.tko-pick {
+  flex: 1; min-width: 0;
+  display: flex; align-items: center; gap: var(--space-md);
+  cursor: pointer;
+}
+.tko-pick input { width: 18px; height: 18px; flex-shrink: 0; accent-color: var(--brand); }
+
+.tko-row-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tko-row-name {
+  font-size: var(--text-body);
+  color: var(--fg);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tko-row-sub { font-size: var(--text-micro); color: var(--fg-secondary); }
+
+.tko-state { font-size: var(--text-micro); color: var(--fg-secondary); white-space: nowrap; }
+
+.tko-badge { background: var(--success-bg); color: var(--success-fg); }
+
+.tko-storage {
+  font-size: var(--text-micro);
+  color: var(--fg-secondary);
+  font-family: var(--font-num);
+}

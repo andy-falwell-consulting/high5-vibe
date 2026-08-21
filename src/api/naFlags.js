@@ -1,4 +1,5 @@
 import { getCurrentEnv } from '../config/fmpEnvironments';
+import { getPinned } from './offlineStore';
 
 // Client for the per-record N/A-flag set (see api/na-flags.js).
 // Note: /api/* doesn't run on localhost (Vite only proxies /fmi), so these
@@ -35,6 +36,29 @@ export async function setNaFlag(recordId, key, on, ns) {
 // Lines copied from a prior year's inspection stay flagged until someone
 // edits them, so a stale finding can't quietly ship under a new date.
 const CARRIED = 'carried';
-export const fetchCarriedLines = recordId => fetchNaFlags(recordId, CARRIED);
+
+/**
+ * Which lines are still carried over and unreviewed.
+ *
+ * fetchNaFlags answers [] on any failure, which is right for a flag whose
+ * absence is harmless and wrong for this one: offline, an empty answer would
+ * clear every carried-over badge on the screen and present last year's grades
+ * as this year's reviewed findings. So when the request fails, the offline copy
+ * is consulted before an empty list is believed.
+ */
+export async function fetchCarriedLines(recordId) {
+  const db = getCurrentEnv().db;
+  try {
+    const r = await fetch(url(db, recordId, CARRIED), { credentials: 'include' });
+    if (!r.ok) throw new Error(`Request failed (${r.status})`);
+    const j = await r.json();
+    return Array.isArray(j.keys) ? j.keys.map(String) : [];
+  } catch {
+    const pin = await getPinned(db, 'Inspections_New', recordId).catch(() => null);
+    return Array.isArray(pin?.carried) ? pin.carried.map(String) : [];
+  }
+}
 export const markCarriedLines = (recordId, lineIds) => setNaFlag(recordId, lineIds, true, CARRIED);
-export const clearCarriedLine = (recordId, lineId) => setNaFlag(recordId, lineId, false, CARRIED);
+// clearCarriedLine is gone: clearing a badge one line at a time belonged to the
+// per-row save loop. The outbox sends the whole reviewed set in one call
+// alongside the findings it belongs to — see the `lines` handler in outbox.js.

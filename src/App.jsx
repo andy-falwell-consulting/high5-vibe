@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import NavRail from './components/NavRail'
 import LoginScreen from './components/LoginScreen'
+import { rememberIdentity, lastIdentity, forgetIdentity } from './api/identity'
+import { requestPersistentStorage } from './registerSW'
+import { watchForConnection } from './api/outbox'
 import ReadOnlyBanner from './components/ReadOnlyBanner'
 import ContactsV2 from './components/ContactsV2'
 import PreviewBypassBanner from './components/PreviewBypassBanner'
@@ -126,15 +129,27 @@ export default function App() {
   }, [activeModule, recordTitle])
 
   // Auth check — /api/me returns 401 if not logged in, 404 in local dev (pass through)
+  //
+  // A NETWORK FAILURE IS NOT A LOGOUT. This used to end at `user === null`,
+  // which renders <LoginScreen /> — so an iPad in a field with no signal showed
+  // a sign-in button it could not possibly complete, with the whole day's
+  // cached work sitting behind it. There is nothing wrong with the session at
+  // that moment; the only thing missing is the network needed to CHECK it.
+  //
+  // So: a 401 is a real logout and clears the remembered identity. Anything
+  // that looks like an unreachable server falls back to the last identity this
+  // device saw, flagged `offline`. It grants nothing — every API call is still
+  // authenticated server-side against the httpOnly cookie (see api/identity.js).
   useEffect(() => {
     fetch('/api/me')
       .then(r => {
-        if (r.status === 401) { setAuthChecked(true); return null }
+        if (r.status === 401) { forgetIdentity(); setAuthChecked(true); return null }
         if (!r.ok) { setAuthChecked(true); return null } // 404 in local dev — allow through
         return r.json()
       })
       .then(u => {
         if (u) {
+          rememberIdentity(u)
           setUser(u); setAuthChecked(true)
           setIsAdmin(!!u.isAdmin)
           // Mint a user-bound FileMaker write token so edits are attributed to
@@ -146,8 +161,29 @@ export default function App() {
           ensureFmpUserSession().then(name => setFmpConnected(!!name)).catch(() => setFmpConnected(false))
         }
       })
-      .catch(() => setAuthChecked(true)) // network error — allow through
+      .catch(() => {
+        // Unreachable, not unauthorised. No FileMaker session is minted here:
+        // it needs the network too, and Inspections_New is Vibe-owned, so the
+        // module this exists for never touches FileMaker on a write anyway.
+        setUser(lastIdentity())
+        setAuthChecked(true)
+      })
   }, [])
+
+  // Drain the offline queue whenever a drain might now succeed — the network
+  // coming back, the app regaining focus, a minute passing.
+  //
+  // HERE RATHER THAN IN THE INSPECTIONS MODULE, which is what owns the queue.
+  // A crew returning to the office lands wherever they left the app, and work
+  // saved in a field must go in without anyone remembering to open the right
+  // page first.
+  useEffect(() => watchForConnection(), [])
+
+  // Ask the browser not to treat this origin's storage as disposable. Safari
+  // mostly says no and prompts nobody, which is why the Home-screen install
+  // matters more (an installed web app is exempt from the 7-day eviction that
+  // would otherwise discard a queued field day) — but it costs nothing to ask.
+  useEffect(() => { requestPersistentStorage() }, [])
 
   // Keep the nav "Reminders" badge (overdue + due today) current. Refreshes on
   // any reminder mutation (via subscribeReminders) and every 5 min. No-ops on
