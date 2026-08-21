@@ -29,26 +29,29 @@ const SYNC_KEY = process.env.QBO_SYNC_KEY;
 // ever renamed there, rename it here too (and see kanban-order.js's
 // LEGACY_COLUMNS pattern if old orders need to survive the rename).
 const BOARD_COLUMNS = [
-  // The seven pipeline stages.
+  // The six in-flight stages.
   'Inquiry',
   'Follow-up Needed',
   'Proposed',
   'Approved/Needs to be D-Invoiced & TC',
   'Waiting on $ & Signed TC',
   'Confirmed/Scheduled',
-  'Ready to Bill',
   // Terminal.
-  'Final Invoiced',
   'Completed',
+  'Final Invoiced',
   'No Go',
-  // Neither — real values carried by real records.
-  'Keene EOL/C&S',
-  'Covid',
-  'OE',
-  'Business Development',
+  // Neither.
   'Out Reach',
   'Other',
 ];
+
+// RETIRED 2026-08-20 and deliberately NOT columns: 'Ready to Bill',
+// 'Keene EOL/C&S', 'Covid', 'OE', 'Business Development'. 84 records still
+// carry one; they are counted in the board's "with no status" chip rather than
+// given a lane. Any saved lane ORDER for those columns is now unreachable and
+// harmless — this list is a whitelist, so a request naming one is rejected with
+// 400 rather than resurrecting the lane.
+
 const keyFor = (db, columnId) => `trainings-kanban:order:${db}:${columnId}`;
 const asList = v => (Array.isArray(v) ? v.map(String) : []);
 

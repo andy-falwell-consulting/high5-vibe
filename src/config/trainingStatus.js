@@ -27,6 +27,9 @@ import { BRAND, UI } from './brandColors';
 
 // The in-flight progression, in order. Terminal states are deliberately NOT
 // stages: a record in one has left the pipeline rather than reached its end.
+//
+// 'Ready to Bill' was removed from the vocabulary on 2026-08-20. Four records
+// still carry it — see LEGACY_STATUSES.
 export const PIPELINE_STAGES = [
   'Inquiry',
   'Follow-up Needed',
@@ -34,45 +37,77 @@ export const PIPELINE_STAGES = [
   'Approved/Needs to be D-Invoiced & TC',
   'Waiting on $ & Signed TC',
   'Confirmed/Scheduled',
-  'Ready to Bill',
 ];
 
 export const PIPELINE_SHORT = [
-  'Inquiry', 'Follow-up', 'Proposed', 'Approved', 'Waiting on $', 'Confirmed', 'Ready to bill',
+  'Inquiry', 'Follow-up', 'Proposed', 'Approved', 'Waiting on $', 'Confirmed',
 ];
 
 // Terminal — shown as a pill on the record, and its own lane on the board.
-export const TERMINAL_STATUSES = ['Final Invoiced', 'Completed', 'No Go'];
+// Completed before Final Invoiced, which is the order Andy gave and the order
+// the work actually happens in.
+export const TERMINAL_STATUSES = ['Completed', 'Final Invoiced', 'No Go'];
 
-// Everything the dropdown offers. Includes values found only in the DATA
-// (Covid, OE, Ready to Bill, Business Development) so that opening a record
-// that carries one does not silently rewrite it to something else — the same
-// rule the contact-method type lists follow.
+// Everything the dropdown OFFERS. Eleven values, replacing the sixteen that
+// were here before (2026-08-20).
 export const ALL_STATUSES = [
   ...PIPELINE_STAGES,
   ...TERMINAL_STATUSES,
-  'Keene EOL/C&S', 'Covid', 'OE', 'Business Development', 'Out Reach', 'Other',
+  'Out Reach', 'Other',
 ];
 
-// Kanban board columns — ONE LANE PER STATUS THE DROPDOWN OFFERS, in the same
+// Values the vocabulary NO LONGER OFFERS but records still hold. Measured
+// against production the day they were retired:
+//
+//     44  Covid
+//     32  Keene EOL/C&S
+//      4  Ready to Bill
+//      3  OE
+//      1  Business Development
+//     ---
+//     84  records
+//
+// They are listed rather than deleted for two reasons, both of which bit this
+// module before:
+//
+//   1. A <select> whose value is not among its options renders as blank, and
+//      saving that record writes the blank over a real status. The old
+//      ALL_STATUSES comment described exactly this trap; retiring a value
+//      without recording it is how you walk into it.
+//   2. A status with no Kanban lane means a card that silently vanishes — the
+//      bug fixed in v1.0.471. These do not get lanes (the board shows the
+//      eleven offered values, as asked), but the board COUNTS them, so 84
+//      records are visible as a number rather than absent.
+//
+// Delete this list once the 84 have been remapped. Until then it is the record
+// of what needs remapping.
+export const LEGACY_STATUSES = [
+  'Ready to Bill', 'Keene EOL/C&S', 'Covid', 'OE', 'Business Development',
+];
+
+/** Is this a status the vocabulary no longer offers? */
+export const isLegacyStatus = s => LEGACY_STATUSES.includes(String(s || '').trim());
+
+/** What the dropdown should show for a record — the offered list, plus this
+ *  record's own value when it is a retired one, so opening a record can never
+ *  blank its status. */
+export const statusOptionsFor = current => {
+  const c = String(current || '').trim();
+  return c && !ALL_STATUSES.includes(c) ? [c, ...ALL_STATUSES] : ALL_STATUSES;
+};
+
+// Kanban board columns — one lane per status the dropdown offers, in the same
 // order the dropdown lists them.
 //
-// This used to be the seven pipeline stages only, on the reasoning that a
-// terminal record has left the pipeline rather than reached its end. That
-// reasoning is sound for a funnel and wrong for a board: it meant nine of the
-// sixteen statuses had nowhere to go, so a card set to one silently vanished
-// with no lane to look in and no message saying why. The pipeline reading still
-// exists — PIPELINE_STAGES drives the hero dots on the record — but the board
-// now shows the whole vocabulary.
+// Retired statuses deliberately get NO lane. A card holding one is counted in
+// the board's "with no status" chip instead, which already exists for exactly
+// this: blank statuses and the four spliced values in the data.
 export const BOARD_COLUMNS = ALL_STATUSES;
 
-// Header labels. The seven pipeline stages reuse the short labels the hero dots
-// already use, so the same stage reads the same in both places; the rest are
-// short enough already, apart from the one that is not.
+// Header labels. The pipeline stages reuse the short labels the hero dots
+// already use, so a stage reads the same in both places.
 export const BOARD_SHORT = {
   ...Object.fromEntries(PIPELINE_STAGES.map((s, i) => [s, PIPELINE_SHORT[i]])),
-  'Business Development': 'Biz Dev',
-  'Keene EOL/C&S': 'Keene EOL',
 };
 
 export const stageIndex = status => PIPELINE_STAGES.indexOf(String(status || '').trim());
@@ -81,6 +116,10 @@ export function statusColor(status) {
   const s = String(status || '').trim();
   if (s === 'No Go') return UI.danger;
   if (s === 'Final Invoiced' || s === 'Completed') return UI.success;
-  if (s === 'Covid' || s === 'Other' || s === 'Keene EOL/C&S') return UI.neutral;
+  // A retired status still needs a colour — 84 records carry one, and falling
+  // through to the pipeline branch below would paint them gold, as though they
+  // were in flight.
+  if (isLegacyStatus(s)) return UI.neutral;
+  if (s === 'Other' || s === 'Out Reach') return UI.neutral;
   return stageIndex(s) >= 0 ? BRAND.gold : UI.neutral;
 }

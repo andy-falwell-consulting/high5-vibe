@@ -8,7 +8,7 @@ import AttachmentsPanel from './AttachmentsPanel';
 import { trainingAttachments } from '../api/trainingAttachments';
 import { downloadWorkOrder } from '../api/trainingWorkOrder';
 import { LayoutCard, StatTiles, Pipeline, FinancialRows, NotesPair, ThirdsRow, ContactDetails } from './RecordLayout';
-import { PIPELINE_STAGES, PIPELINE_SHORT, ALL_STATUSES, stageIndex, statusColor as trnStatusColor } from '../config/trainingStatus';
+import { PIPELINE_STAGES, PIPELINE_SHORT, statusOptionsFor, stageIndex, statusColor as trnStatusColor } from '../config/trainingStatus';
 import { contactDetails } from '../api/contactLookup';
 import { updateVibeRecord } from '../api/vibeRecords';
 import { displayFieldsForContact } from '../api/contactDisplay';
@@ -592,7 +592,13 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
                 <select className="cv2-status" style={{ color: statusColor, borderColor: statusColor + '55', background: statusColor + '14' }}
                   value={status} onChange={e => handleFieldChange('Status', e.target.value)}>
                   <option value="">— status —</option>
-                  {ALL_STATUSES.map(o => <option key={o} value={o}>{o}</option>)}
+                  {/* statusOptionsFor, not ALL_STATUSES: five values were retired
+                      on 2026-08-20 and 84 records still hold one. A <select>
+                      whose value is not among its options renders BLANK, and
+                      saving that record would write the blank over a real
+                      status. This prepends the record's own value when it is a
+                      retired one, so opening a record can never erase it. */}
+                  {statusOptionsFor(status).map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
             </div>
