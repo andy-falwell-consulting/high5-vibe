@@ -205,7 +205,6 @@
 .trn-stamp-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
 /* ── Footer ────────────────────────────────────────────────────── */
-.trn-record-footer { font-size: var(--text-caption); color: var(--fg-disabled); text-align: right; padding: 0 0 var(--space-sm); font-family: var(--font-mono); }
 
 /* ── CCS-style header above the tab strip ──────────────────────── */
 /* The blocks themselves are styled by CCSv2.css (shared via RecordLayout).

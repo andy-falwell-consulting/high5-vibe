@@ -121,6 +121,13 @@ can't sign in (its derived `…/api/google-callback` isn't registered). And
 `*.vercel.app` is on the Public Suffix List, so a production cookie can't be
 shared to a preview host — ruling out "just always use the prod callback."
 
+**The `preview` branch is also served at `dev.high5adventure.org`** — a pinned
+domain, and the host Andy actually opens. If he says a change "isn't showing"
+somewhere, check which host and which version before assuming the change is
+broken: `curl -s https://<host>/ | grep -o '/assets/index-[^"]*\.js'` then grep
+that asset for `1\.0\.[0-9]*`. dev.* is `preview`; `vibe.high5adventure.org`
+and `db-livid.vercel.app` are production.
+
 Fix: one stable preview host via a rolling `preview` branch. Vercel gives any
 branch a stable alias derived from the **Vercel project name** (currently
 `high5-new-ui`), so `preview` always deploys to

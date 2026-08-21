@@ -203,6 +203,32 @@ message, and the surface change carries the state on its own.
 
 ---
 
+## Record footer
+
+`.h5-record-footer` with `__sep`. The provenance line under a record — ids, who
+created it and when, who last touched it and when. Rendered by
+`src/components/RecordFooter.jsx`, which is the only thing that should build
+that string.
+
+```jsx
+<RecordFooter id={f._kpt__RCD_ID} recordId={selected.recordId} fieldData={f} />
+```
+
+`fieldData` is read for the four `zz__*` stamps every FileMaker-backed layout
+carries, so most call sites pass nothing else. A record whose metadata is shaped
+differently (a Vibe-born contact, say) passes `created` / `createdBy` /
+`modified` / `modifiedBy` explicitly, and those win.
+
+**Every part is optional and an absent one is dropped**, rather than printed as
+`undefined`. That was a real difference between the nine hand-written copies
+this replaces.
+
+Quiet by design: caption size, `--fg-disabled`, right-aligned, and MONOSPACE —
+the line is almost entirely ids and dates, and proportional digits are harder to
+compare in a row of them. Same reasoning as tabular figures on a money column.
+
+---
+
 ## Empty state
 
 `.h5-empty` + `--error`, with `__icon` `__title` `__body`.

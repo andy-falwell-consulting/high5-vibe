@@ -286,7 +286,6 @@
 .insp-pill-toggle:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
 /* ── Footer ────────────────────────────────────────────────────── */
-.insp-record-footer { font-size: var(--text-caption); color: var(--fg-disabled); text-align: right; padding: 0 0 var(--space-sm); font-family: var(--font-mono); }
 
 /* ── Attachments ───────────────────────────────────────────────── */
 /* NOTE: this is a second, inline copy of what AttachmentsPanel already does.

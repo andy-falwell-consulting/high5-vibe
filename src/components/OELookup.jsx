@@ -9,6 +9,7 @@ import ListToolbar, { useListControls, ListBody } from './ListControls'
 import './OELookup.css'
 import DeleteRecordButton from './DeleteRecordButton'
 import ReminderModal from './ReminderModal'
+import RecordFooter from './RecordFooter';
 
 const LAYOUT = 'OELookup_New'
 const CACHE_VERSION = 1
@@ -429,7 +430,7 @@ export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {})
                 </div>
               )}
 
-              <div className="oe-record-footer">ID {val(f, 'Program Code')} · Record {selected.recordId} · Created {f.zz__Created_On?.split(' ')[0] || '—'} by {f.zz__Created_By || '—'} · Modified {f.zz__Modified_On?.split(' ')[0] || '—'} by {f.zz__Modified_By || '—'}</div>
+              <RecordFooter id={val(f, 'Program Code')} recordId={selected.recordId} fieldData={f} />
             </div>
           </>
         )}

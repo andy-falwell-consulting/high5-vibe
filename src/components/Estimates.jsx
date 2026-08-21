@@ -19,6 +19,7 @@ import { BRAND, UI } from '../config/brandColors'
 import './Estimates.css'
 import DeleteRecordButton from './DeleteRecordButton'
 import ReminderModal from './ReminderModal'
+import RecordFooter from './RecordFooter';
 
 // FileMaker MM/DD/YYYY → QBO YYYY-MM-DD
 const toIsoDate = v => { if (!v) return undefined; const [m, d, y] = String(v).split(' ')[0].split('/'); return y ? `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}` : undefined }
@@ -558,9 +559,7 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
                 </Section>
               )}
 
-              <div className="est-record-footer">
-                ID {f._kpt__Estimate_ID || '—'} · Record {selected.recordId} · Created {f.zz__Created_On?.split(' ')[0] || '—'} by {f.zz__Created_By || '—'} · Modified {f.zz__Modified_On?.split(' ')[0] || '—'} by {f.zz__Modified_By || '—'}
-              </div>
+              <RecordFooter id={f._kpt__Estimate_ID} recordId={selected.recordId} fieldData={f} />
               <RecordSaveBar count={dirtyCount} saving={saving} status={saveStatus} errorMessage={saveErrorMsg} onSave={handleSave} onDiscard={handleDiscard} />
             </div>
           </>
