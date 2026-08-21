@@ -23,6 +23,7 @@
 //     there is nothing to read back.
 import { getCurrentEnv } from '../config/fmpEnvironments';
 import { CATEGORIES, categoryRank } from '../config/inspectionCopy';
+import { pinnedByInspectionId } from './offlineStore';
 
 export const LAYOUT = 'Inspections_New';
 export const PORTAL = 'inspt_INSPLI';   // kept: the report still reads portalData for legacy records
@@ -91,11 +92,27 @@ const post = (inspectionId, payload) =>
     body: JSON.stringify(payload),
   }).then(json);
 
-/** Read one inspection's lines. */
+/**
+ * Read one inspection's lines, falling back to the offline copy.
+ *
+ * The fallback is not a nicety. Without it an inspection taken offline opens in
+ * the field showing its header and the words "No line items" — which is not
+ * "we couldn't load them", it is a positive claim that the course has nothing
+ * on it. A 44-row inspection reading as empty is the worst possible failure
+ * here, so a network error consults what "Take offline" downloaded before it
+ * reports anything at all.
+ */
 export async function listLines(inspectionId) {
   if (!inspectionId) return [];
-  const body = await json(await fetch(`/api/inspection-lines?${qs(inspectionId)}`, { credentials: 'include' }));
-  return (body.lines || []).map(toLine);
+  try {
+    const body = await json(await fetch(`/api/inspection-lines?${qs(inspectionId)}`, { credentials: 'include' }));
+    return (body.lines || []).map(toLine);
+  } catch (e) {
+    const pin = await pinnedByInspectionId(getCurrentEnv().db, LAYOUT, inspectionId).catch(() => null);
+    // Already in UI shape — pinning stores what listLines returned.
+    if (pin?.lines) return pin.lines;
+    throw e;
+  }
 }
 
 /** Add lines in a single request. Returns the number written. */

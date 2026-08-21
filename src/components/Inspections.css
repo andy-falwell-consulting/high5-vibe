@@ -49,6 +49,22 @@
 .insp-new-btn:hover { background: var(--surface-hover); color: var(--fg); border-color: var(--border-interactive); }
 .insp-new-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
+/* Two buttons where there was one. `margin-left: auto` lives on .insp-new-btn,
+   so wrapping them means the pair is pushed right and they sit together. */
+.insp-head-actions { margin-left: auto; display: flex; align-items: center; gap: var(--space-xs); }
+.insp-head-actions .insp-new-btn { margin-left: 0; }
+
+/* Said in the sidebar, not in a dialog: standing in a field, "did I download
+   this one" is the question, and it should not need a dialog to answer. */
+.insp-offline-strip {
+  margin-bottom: var(--space-md); padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--warning-border); border-radius: var(--radius-sm);
+  background: var(--warning-bg); color: var(--warning-fg);
+  font-size: var(--text-micro); font-weight: var(--weight-semibold);
+}
+
+.insp-item-offline { flex-shrink: 0; margin-left: auto; color: var(--success-fg); font-size: var(--text-caption); }
+
 /* Red on black, as the style sheet requires, in BOTH themes — so this is the
    one deliberate primitive reference in the file. Same reasoning as
    ContactsV2.css: a semantic surface token would turn the tile white and put

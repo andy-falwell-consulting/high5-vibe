@@ -21,6 +21,8 @@ import DeleteRecordButton from './DeleteRecordButton'
 import ReminderModal from './ReminderModal'
 import RecordFooter from './RecordFooter';
 import { useRecordPanel } from '../hooks/useRecordPanel';
+import TakeOffline from './TakeOffline';
+import { pinnedIds } from '../api/offlineInspections';
 
 const LAYOUT = 'Inspections_New';
 const CACHE_VERSION = 1;
@@ -153,6 +155,13 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
   const [attError, setAttError] = useState(null);
   const [attReload, setAttReload] = useState(0); // bump to make AttachmentsPanel re-list
   const [showNew, setShowNew] = useState(false);
+  // Which inspections are downloaded for offline use, and whether there is a
+  // network at all. Both are shown in the list rather than only inside the
+  // Take-offline dialog: standing in a field, "is this one on my iPad" is the
+  // question, and it should be answerable without opening anything.
+  const [offlineIds, setOfflineIds] = useState(() => new Set());
+  const [showOffline, setShowOffline] = useState(false);
+  const [online, setOnline] = useState(() => navigator.onLine);
 
   const parseFmDate = v => {
     if (!v) return 0;
@@ -162,6 +171,14 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
   };
 
   const orgName = f => f.Organization || f['inspt_CNTCT__site::Name_Organization'] || '';
+
+  const refreshOfflineIds = useCallback(() => { pinnedIds().then(setOfflineIds); }, []);
+  useEffect(() => { refreshOfflineIds(); }, [refreshOfflineIds]);
+  useEffect(() => {
+    const on = () => setOnline(true), off = () => setOnline(false);
+    window.addEventListener('online', on); window.addEventListener('offline', off);
+    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
+  }, []);
 
   const list = useListControls({
     records,
@@ -452,8 +469,18 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
               <div className="insp-sidebar-module">Inspections</div>
               <div className="insp-sidebar-count">{total ? `${total.toLocaleString()} inspections` : 'Loading…'}</div>
             </div>
-            <button className="insp-new-btn" onClick={() => setShowNew(true)} title="New inspection">＋ New</button>
+            <div className="insp-head-actions">
+              <button className="insp-new-btn" onClick={() => setShowOffline(true)} title="Download inspections for use with no signal">
+                ⇩ Offline{offlineIds.size ? ` (${offlineIds.size})` : ''}
+              </button>
+              <button className="insp-new-btn" onClick={() => setShowNew(true)} title="New inspection">＋ New</button>
+            </div>
           </div>
+          {!online && (
+            <div className="insp-offline-strip">
+              No connection — {offlineIds.size || 'no'} inspection{offlineIds.size === 1 ? '' : 's'} downloaded
+            </div>
+          )}
           <ListToolbar c={list} unit="inspections" />
         </div>
 
@@ -476,6 +503,9 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
                       {[r.fieldData['inspt_CNTCT__site::Site Number'], r.fieldData.Date].filter(Boolean).join(' · ') || '—'}
                     </div>
                   </div>
+                  {offlineIds.has(String(r.recordId)) && (
+                    <span className="insp-item-offline" title="Downloaded for offline use">⇩</span>
+                  )}
                 </div>
               );
             }} />
@@ -602,6 +632,14 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
           }}
           onClose={() => setRemindOpen(false)}
           onSaved={() => setRemindOpen(false)} />
+      )}
+
+      {showOffline && (
+        <TakeOffline
+          records={records}
+          onClose={() => setShowOffline(false)}
+          onChanged={refreshOfflineIds}
+        />
       )}
 
       {showNew && (

@@ -1,4 +1,6 @@
 import { getCurrentEnv, FMP_ENVIRONMENTS } from '../config/fmpEnvironments';
+// The store "Take offline" writes into — consulted only when the network fails.
+import { getPinned } from './offlineStore';
 
 // Priority fetch scheduler — two tiers (HIGH=0, LOW=1).
 // Single-record fetches use HIGH; bulk batch pages use LOW.
@@ -807,32 +809,75 @@ function recordUrl(layout, recordId, env) {
     : `/api/record?db=${encodeURIComponent(env.db)}&layout=${encodeURIComponent(layout)}&recordId=${encodeURIComponent(recordId)}`;
 }
 
+// The same record, from whatever this device already holds, when the network
+// cannot be reached. Two sources, best first:
+//
+//   1. The PINNED copy — what "Take offline" deliberately downloaded. Complete,
+//      and the only one a crew should be relying on in a field.
+//   2. The LIST ROW — every module already caches whole layouts in IndexedDB,
+//      so a record that has ever been listed has its fieldData here. Partial
+//      (no portalData), which is why it is second and why it says so.
+//
+// Marked `offline: true` so a caller can tell this apart from a live read
+// rather than discovering it by finding a field missing.
+async function offlineRecord(layout, recordId) {
+  const db = getCurrentEnv().db;
+  try {
+    const pin = await getPinned(db, layout, recordId);
+    if (pin?.record) return { response: { data: [pin.record] }, offline: true, pinned: true };
+  } catch { /* no offline store on this browser — try the list cache */ }
+
+  const rid = String(recordId);
+  const bare = `${db}__${layout}`;
+  const prefix = `${bare}__v`;
+  for (const mk of Object.keys(memCache)) {
+    if (mk !== bare && !mk.startsWith(prefix)) continue;
+    const hit = (memCache[mk]?.records || []).find(r => String(r.recordId) === rid);
+    if (hit) return { response: { data: [hit] }, offline: true, partial: true };
+  }
+  return null;
+}
+
 export async function getRecord(layout, recordId) {
   const key = `${layout}:${recordId}`;
   if (detailCache.has(key)) return detailCache.get(key);
-  const token = await getToken();
   const env = getCurrentEnv();
-  const res = await _scheduledFetch(_HIGH, () => fetch(
-    recordUrl(layout, recordId, env),
-    // no-store: this single-record URL is constant, so the browser HTTP cache
-    // would otherwise serve a stale copy after a related-row (portal) edit —
-    // making BOM add/edit/remove look like nothing happened until a full reload.
-    { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store', credentials: 'include' }
-  ));
-  if (res.status === 401) {
-    sessionToken = null;
+  try {
+    const token = await getToken();
+    const res = await _scheduledFetch(_HIGH, () => fetch(
+      recordUrl(layout, recordId, env),
+      // no-store: this single-record URL is constant, so the browser HTTP cache
+      // would otherwise serve a stale copy after a related-row (portal) edit —
+      // making BOM add/edit/remove look like nothing happened until a full reload.
+      { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store', credentials: 'include' }
+    ));
+    if (res.status === 401) {
+      sessionToken = null;
+      detailCache.delete(key);
+      return getRecord(layout, recordId);
+    }
+    // Refresh the matching list row from this fresh fetch (hover/click), so the
+    // displayed list reflects current data even though we don't bulk-refresh.
+    const promise = res.json().then(data => {
+      const rec = data?.response?.data?.[0];
+      if (rec) patchCachedRecordAcrossVersions(layout, recordId, rec.fieldData, rec.portalData);
+      return data;
+    });
+    detailCache.set(key, promise);
+    // `return await`, not `return`: a bare return hands the promise straight to
+    // the caller and this catch never runs, so a failure part-way through the
+    // read would skip the offline fallback entirely.
+    return await promise;
+  } catch (e) {
+    // Never leave a rejected promise in the cache — every later call for this
+    // record would be served the same failure without retrying.
     detailCache.delete(key);
-    return getRecord(layout, recordId);
+    // getToken() reaches the network too, so an offline device throws before it
+    // ever gets as far as the fetch. Both land here.
+    const local = await offlineRecord(layout, recordId);
+    if (local) return local;
+    throw e;
   }
-  // Refresh the matching list row from this fresh fetch (hover/click), so the
-  // displayed list reflects current data even though we don't bulk-refresh.
-  const promise = res.json().then(data => {
-    const rec = data?.response?.data?.[0];
-    if (rec) patchCachedRecordAcrossVersions(layout, recordId, rec.fieldData, rec.portalData);
-    return data;
-  });
-  detailCache.set(key, promise);
-  return promise;
 }
 
 // Fire-and-forget prefetch — call on hover so detail is ready before click
