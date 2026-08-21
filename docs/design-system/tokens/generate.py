@@ -45,7 +45,7 @@ LIGHT = collections.OrderedDict(
         ("fg", "grey/1000"),
         ("fg-hover", "grey/1100"),
         ("fg-secondary", "grey/700"),
-        ("fg-disabled", "grey/500"),
+        ("fg-disabled", "grey/600"),
         ("fg-inverse", "grey/0"),
         ("border", "grey/300"),
         ("card-border", "grey/400"),
@@ -106,7 +106,7 @@ DARK = collections.OrderedDict(
         ("fg", "grey/0"),
         ("fg-hover", "grey/200"),
         ("fg-secondary", "grey/500"),
-        ("fg-disabled", "grey/700"),
+        ("fg-disabled", "grey/600"),
         ("fg-inverse", "grey/1100"),
         ("border", "grey/900"),
         ("card-border", "grey/800"),
@@ -350,9 +350,18 @@ CONTRAST = [
         "name": "disabled text",
         "fg": "fg-disabled",
         "bg": "bg",
-        "min": 0.0,
-        "wcag_exempt": True,
-        "note": "WCAG 2.1 SC 1.4.3 exempts inactive/disabled UI components.",
+        "min": 3.0,
+        "note": (
+            "WCAG 2.1 SC 1.4.3 EXEMPTS disabled components, and this check used to "
+            "take the exemption — min 0.0. That is how --fg-disabled sat at 1.80:1 "
+            "in the light theme, which is not 'muted', it is invisible. A disabled "
+            "button whose label cannot be read is one you cannot decide about: you "
+            "cannot tell what enabling it would do. 3.0 is the floor for non-text "
+            "and large text, and it keeps 'disabled' legible while still clearly "
+            "distinct from --fg-secondary (5.02:1 light, 8.84:1 dark). "
+            "It also removes an ASYMMETRY: the two themes were 1.80 and 3.17, so "
+            "the same token meant two different degrees of 'off'."
+        ),
     },
 ]
 for h in CAT_HUES + ["neutral"]:

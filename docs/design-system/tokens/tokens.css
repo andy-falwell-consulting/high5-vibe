@@ -216,7 +216,7 @@
   --fg: var(--h5-grey-1000);
   --fg-hover: var(--h5-grey-1100);
   --fg-secondary: var(--h5-grey-700);
-  --fg-disabled: var(--h5-grey-500);
+  --fg-disabled: var(--h5-grey-600);
   --fg-inverse: var(--h5-grey-0);
   --border: var(--h5-grey-300);
   --card-border: var(--h5-grey-400);
@@ -294,7 +294,7 @@
   --fg: var(--h5-grey-0);
   --fg-hover: var(--h5-grey-200);
   --fg-secondary: var(--h5-grey-500);
-  --fg-disabled: var(--h5-grey-700);
+  --fg-disabled: var(--h5-grey-600);
   --fg-inverse: var(--h5-grey-1100);
   --border: var(--h5-grey-900);
   --card-border: var(--h5-grey-800);

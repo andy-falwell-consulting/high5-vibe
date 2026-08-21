@@ -58,7 +58,7 @@
    is scanning the column for, so an absent badge would hide exactly the thing
    worth seeing. */
 .oet-flags { display: flex; gap: var(--space-xs); flex-wrap: wrap; }
-.oet-flag { font-size: var(--text-micro); padding: 1px var(--space-sm); border-radius: var(--radius-pill); white-space: nowrap; background: var(--surface-sunken); color: var(--fg-disabled); }
+.oet-flag { font-size: var(--text-micro); padding: 1px var(--space-sm); border-radius: var(--radius-pill); white-space: nowrap; background: var(--surface-sunken); color: var(--fg-secondary); }
 .oet-flag.on { background: var(--success-bg); color: var(--success-fg); }
 
 /* The e-mail action column. A row with no contact shows a dash rather than a

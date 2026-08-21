@@ -192,7 +192,7 @@
 .trn-cost-input:focus { border-color: var(--focus-ring); }
 /* Unsaved is a warning, not an accent — same call as Inspections. */
 .trn-cost-input.dirty { border-color: var(--warning-fg); }
-.trn-cost-na { color: var(--fg-disabled); }
+.trn-cost-na { color: var(--fg-secondary); }
 .trn-dirty-dot { display: inline-block; width: 6px; height: 6px; border-radius: var(--radius-circle); background: var(--warning-fg); margin-left: var(--space-xs); vertical-align: middle; }
 
 /* ── Stamp button (FMP-style note stamp) ───────────────────────── */

@@ -641,7 +641,7 @@
 .v2-bom-qty:focus { border-color: var(--brand); }
 .v2-bom-qty:disabled { opacity: 0.5; }
 .v2-bom-remove {
-  background: none; border: none; color: var(--fg-disabled); font-size: 14px; cursor: pointer;
+  background: none; border: none; color: var(--fg-secondary); font-size: 14px; cursor: pointer;
   padding: 2px 6px; border-radius: 5px; line-height: 1;
 }
 .v2-bom-remove:hover { color: var(--fg-inverse); background: var(--error-solid); }
