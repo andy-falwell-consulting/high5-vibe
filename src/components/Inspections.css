@@ -63,7 +63,17 @@
   font-size: var(--text-micro); font-weight: var(--weight-semibold);
 }
 
-.insp-item-offline { flex-shrink: 0; margin-left: auto; color: var(--success-fg); font-size: var(--text-caption); }
+/* Both row marks sit at the right-hand end, in whatever combination a record
+   has. `.insp-item-text` takes the free space, so neither needs a margin. */
+.insp-item-offline { flex-shrink: 0; color: var(--success-fg); font-size: var(--text-caption); }
+
+/* Unsent work. Warning tone rather than error: nothing has gone wrong, but this
+   record is holding something the server has never seen. */
+.insp-item-draft { flex-shrink: 0; color: var(--warning-fg); font-size: var(--text-micro); }
+
+/* Every direct child of the scrolling content column must not shrink — see the
+   scrolling-layout note in CLAUDE.md. */
+.insp-draft-note { flex-shrink: 0; }
 
 /* Red on black, as the style sheet requires, in BOTH themes — so this is the
    one deliberate primitive reference in the file. Same reasoning as
@@ -113,7 +123,7 @@
 .insp-list-item.active { background: var(--surface-hover); border-left-color: var(--brand); }
 
 .insp-item-dot { width: 7px; height: 7px; border-radius: var(--radius-circle); flex-shrink: 0; opacity: 0.85; }
-.insp-item-text { min-width: 0; }
+.insp-item-text { min-width: 0; flex: 1; }
 .insp-item-name {
   font-size: var(--text-body); font-weight: var(--weight-medium); color: var(--fg);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;

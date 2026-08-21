@@ -137,6 +137,10 @@ Two things found while building, both now handled:
 
 ## Milestone B — a day's work, offline
 
+**BUILT — v1.0.500.** Verified in the browser: an edit survives a reload, a
+restored draft does not collide with new lines, and switching records neither
+leaks a draft nor loses one.
+
 *Step 2.*
 
 **B1. Drafts persist.** A `useOfflineDraft(inspectionId)` hook mirrors
@@ -152,6 +156,44 @@ as reviewed, which is the exact failure the badge exists to prevent.
 **B3. Honest UI.** The record shows what state it is in — pinned, edited, queued
 — and nothing that cannot work offline is left live to be pressed. Creating,
 copying and deleting are disabled with a reason, not hidden.
+
+### What B actually shipped
+
+- **Drafts persist**, debounced 400ms, restored on reopen, cleared on Save and
+  on Discard. A row in the list carries an amber dot when it holds work the
+  server has never seen, so "what still has not gone in" is answerable without
+  opening anything.
+- **Offline gating**, each with a reason rather than a dead button: New,
+  Remind, Delete and "Generate report & attach" are disabled with no signal.
+  Download report stays live — it builds from data already on the device.
+- **Save says why it cannot.** `RecordSaveBar` gained `blockedReason`: with no
+  signal it reads *"No connection — held on this device"* and Save is disabled,
+  while Discard stays live. Letting an inspector press Save and watch it fail
+  would teach them their work is in danger when it is not.
+- **The attachment LIST falls back** to what pinning recorded — names, sizes,
+  dates. The bytes are still in Drive, so a thumbnail will not render offline;
+  showing the list still beats a panel claiming the record has no attachments.
+
+Three things found while building:
+
+- **A restored draft collides with new lines.** Rows added in a session are
+  keyed `new:1`, `new:2`… from a counter that starts at zero on every load.
+  Restoring a draft containing `new:1` and then adding a line produced a second
+  `new:1` — duplicate React keys, one row shadowing the other. The restore now
+  moves the counter past whatever it restored.
+- **The carried-flag fetch could undo a restored review.** Editing a line
+  clears its carried-over badge; that clearing lives in a draft, but the flags
+  are fetched from the server independently and whichever resolved second won.
+  Reviewed line ids are now held in a ref and subtracted from the fetched set.
+- **The debounced writer could delete the draft it was about to restore.**
+  Selecting a record resets the edit state to empty, which is a state worth
+  saving — over the draft still being read from IndexedDB. Writing is now
+  gated on the restore having finished for that record.
+
+One correctness catch worth recording: the offline fallback for the attachment
+list was first added as an exported `listAttachments`, but `<AttachmentsPanel>`
+is handed the `inspectionAttachments` object and calls `api.list` — so the
+wrapper would have looked right in the file and done nothing on screen.
 
 ---
 

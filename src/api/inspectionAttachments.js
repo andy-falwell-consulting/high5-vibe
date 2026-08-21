@@ -10,12 +10,32 @@ import { getRecordWithPortals } from './filemaker';
 import { makeVibeAttachments } from './vibeFiles';
 import { generateInspectionReport, inspectionMeta } from './inspectionReport';
 import { listLines } from './inspectionLinesVibe';
+import { pinnedByInspectionId } from './offlineStore';
+import { getCurrentEnv } from '../config/fmpEnvironments';
 
 const INSPECTIONS_LAYOUT = 'Inspections_New';
 
 const attachments = makeVibeAttachments('inspection');
 
-export const listAttachments = attachments.list;
+/**
+ * The file list, falling back to what "Take offline" recorded.
+ *
+ * The LIST, not the bytes. Pinning stores each file's name, size and date so an
+ * inspector can see that last year's report is attached; the files themselves
+ * are still in Drive, so a thumbnail will not render and a click will not open
+ * anything until there is a signal. Showing the list is still worth it — the
+ * alternative offline is a panel that says a record has no attachments, which
+ * is a different and wrong claim.
+ */
+export async function listAttachments(parentId) {
+  try {
+    return await attachments.list(parentId);
+  } catch (e) {
+    const pin = await pinnedByInspectionId(getCurrentEnv().db, INSPECTIONS_LAYOUT, parentId).catch(() => null);
+    if (pin?.attachments) return pin.attachments;
+    throw e;
+  }
+}
 export const uploadAttachment = attachments.upload;
 export const deleteAttachment = attachments.remove;
 export const getFreshAttachmentUrl = attachments.freshUrl;
@@ -69,4 +89,8 @@ export async function downloadReport(record, onStage) {
 
 export { inspectionMeta };
 
-export const inspectionAttachments = attachments;
+// What <AttachmentsPanel> is actually given. The offline fallback has to be ON
+// THIS OBJECT, not merely exported alongside it: the panel calls `api.list`, so
+// a wrapper the panel never reaches would look correct in this file and do
+// nothing on screen.
+export const inspectionAttachments = { ...attachments, list: listAttachments };

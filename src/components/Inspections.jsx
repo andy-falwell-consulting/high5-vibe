@@ -23,6 +23,7 @@ import RecordFooter from './RecordFooter';
 import { useRecordPanel } from '../hooks/useRecordPanel';
 import TakeOffline from './TakeOffline';
 import { pinnedIds } from '../api/offlineInspections';
+import { saveDraft, loadDraft, clearDraft, draftIds } from '../api/offlineDrafts';
 
 const LAYOUT = 'Inspections_New';
 const CACHE_VERSION = 1;
@@ -162,6 +163,20 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
   const [offlineIds, setOfflineIds] = useState(() => new Set());
   const [showOffline, setShowOffline] = useState(false);
   const [online, setOnline] = useState(() => navigator.onLine);
+  // Records carrying staged edits that have never reached the server, and when
+  // the open one's edits were last touched. Both are shown rather than kept
+  // internal: unsent work is the thing an inspector most needs to be able to
+  // see at a glance at the end of a day.
+  const [draftIdSet, setDraftIdSet] = useState(() => new Set());
+  const [draftRestoredAt, setDraftRestoredAt] = useState(null);
+  // Lines whose carried-over badge has been cleared by an edit — including one
+  // made in a previous session and restored from a draft. Held in a ref because
+  // the carried-flag fetch resolves independently and would otherwise put the
+  // badges back on lines that have already been reviewed.
+  const reviewedRef = useRef(new Set());
+  // Set to a recordId once its draft has been looked for, so the debounced
+  // writer below cannot save an empty state over a draft that is still loading.
+  const draftReadyRef = useRef(null);
 
   const parseFmDate = v => {
     if (!v) return 0;
@@ -173,7 +188,8 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
   const orgName = f => f.Organization || f['inspt_CNTCT__site::Name_Organization'] || '';
 
   const refreshOfflineIds = useCallback(() => { pinnedIds().then(setOfflineIds); }, []);
-  useEffect(() => { refreshOfflineIds(); }, [refreshOfflineIds]);
+  const refreshDraftIds = useCallback(() => { draftIds(LAYOUT).then(setDraftIdSet); }, []);
+  useEffect(() => { refreshOfflineIds(); refreshDraftIds(); }, [refreshOfflineIds, refreshDraftIds]);
   useEffect(() => {
     const on = () => setOnline(true), off = () => setOnline(false);
     window.addEventListener('online', on); window.addEventListener('offline', off);
@@ -226,11 +242,46 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
     setEdits({}); setSaveStatus(null);
     resetLineState();
     setCarriedIds(new Set());
+    setDraftRestoredAt(null);
+    reviewedRef.current = new Set();
+    draftReadyRef.current = null;
     selectedRef.current = r.recordId;
+
+    // Staged edits from a previous session on this device — a closed lid, a
+    // reaped tab, a flat battery. Restored before anything else touches the
+    // edit state, and marked ready either way so the writer below knows there
+    // is nothing still in flight to overwrite.
+    loadDraft(LAYOUT, r.recordId).then(d => {
+      if (selectedRef.current !== r.recordId) return;
+      if (d) {
+        setEdits(d.edits);
+        setLineEdits(d.lineEdits);
+        setNewLines(d.newLines);
+        setDeletedIds(d.deletedIds);
+        setDraftRestoredAt(d.updatedAt || null);
+        reviewedRef.current = new Set(Object.keys(d.lineEdits).map(String));
+        setCarriedIds(prev => {
+          const next = new Set(prev);
+          for (const id of reviewedRef.current) next.delete(id);
+          return next;
+        });
+        // Restored rows carry ids like `new:3`. Without moving the counter past
+        // them, the next line added this session would be given an id that
+        // already belongs to one on screen.
+        const highest = d.newLines.reduce((n, l) => Math.max(n, Number(String(l._tempId || '').split(':')[1]) || 0), 0);
+        tempId.current = Math.max(tempId.current, highest);
+      }
+    }).catch(() => {}).finally(() => {
+      if (selectedRef.current === r.recordId) draftReadyRef.current = r.recordId;
+    });
     // Guarded on the record id — clicking quickly between inspections must not
     // let a slow response land on the wrong record.
     fetchCarriedLines(r.recordId).then(keys => {
-      if (selectedRef.current === r.recordId) setCarriedIds(new Set(keys));
+      if (selectedRef.current !== r.recordId) return;
+      // Minus anything already reviewed in a restored draft — this resolves
+      // independently of the draft load, and whichever lands second must not
+      // contradict the other.
+      setCarriedIds(new Set(keys.filter(k => !reviewedRef.current.has(String(k)))));
     }).catch(() => {});
     setSelected(r);
     setLines([]);
@@ -356,8 +407,28 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
     onRecordSelect?.(rec.recordId, rec.fieldData?.Organization || rec.fieldData?.['inspt_CNTCT__site::Name_Organization']);
   }
 
+  // Staged edits, written to the device as they change.
+  //
+  // Debounced: typing a description fires an edit per keystroke and IndexedDB
+  // writes are not free. 400ms is short enough that nothing plausible is lost
+  // and long enough that a sentence is one write, not forty.
+  useEffect(() => {
+    const recordId = selected?.recordId;
+    if (!recordId || draftReadyRef.current !== recordId) return;
+    const t = setTimeout(() => {
+      saveDraft(LAYOUT, recordId, { edits, lineEdits, newLines, deletedIds })
+        .then(refreshDraftIds)
+        .catch(() => { /* no offline store on this browser — nothing to do */ });
+    }, 400);
+    return () => clearTimeout(t);
+  }, [selected?.recordId, edits, lineEdits, newLines, deletedIds, refreshDraftIds]);
+
   const handleFieldChange = useCallback((fk, v) => setEdits(p => ({ ...p, [fk]: v })), []);
-  const handleDiscard = () => { setEdits({}); resetLineState(); setSaveStatus(null); setSaveErrorMsg(null); };
+  const handleDiscard = () => {
+    setEdits({}); resetLineState(); setSaveStatus(null); setSaveErrorMsg(null);
+    setDraftRestoredAt(null); reviewedRef.current = new Set();
+    if (selected?.recordId) clearDraft(LAYOUT, selected.recordId).then(refreshDraftIds).catch(() => {});
+  };
 
   // Editing a line is what marks it reviewed, so the carried-over badge clears
   // as soon as someone touches it (optimistically here; persisted on Save).
@@ -367,6 +438,7 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
       return;
     }
     setLineEdits(p => ({ ...p, [id]: { ...(p[id] || {}), [field]: value } }));
+    reviewedRef.current.add(String(id));
     setCarriedIds(prev => {
       if (!prev.has(String(id))) return prev;
       const next = new Set(prev); next.delete(String(id)); return next;
@@ -438,6 +510,15 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
       invalidateRecord(LAYOUT, selected.recordId);
       setSelected(prev => ({ ...prev, fieldData: { ...prev.fieldData, ...edits } }));
       setEdits({}); setSaveStatus('saved');
+      // The work is on the server now, so the local copy of it should not
+      // outlive that — a draft left behind would be restored over the saved
+      // record the next time it was opened.
+      draftReadyRef.current = null;
+      await clearDraft(LAYOUT, selected.recordId).catch(() => {});
+      setDraftRestoredAt(null);
+      reviewedRef.current = new Set();
+      refreshDraftIds();
+      draftReadyRef.current = selected.recordId;
       setTimeout(() => setSaveStatus(null), 2000);
     } catch (e) { setSaveStatus('error'); setSaveErrorMsg(e?.message || null); }
     finally { setSaving(false); }
@@ -473,7 +554,12 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
               <button className="insp-new-btn" onClick={() => setShowOffline(true)} title="Download inspections for use with no signal">
                 ⇩ Offline{offlineIds.size ? ` (${offlineIds.size})` : ''}
               </button>
-              <button className="insp-new-btn" onClick={() => setShowNew(true)} title="New inspection">＋ New</button>
+              <button
+                className="insp-new-btn"
+                onClick={() => setShowNew(true)}
+                disabled={!online}
+                title={online ? 'New inspection' : 'Needs a connection — an inspection is created and copied on the server'}
+              >＋ New</button>
             </div>
           </div>
           {!online && (
@@ -503,6 +589,9 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
                       {[r.fieldData['inspt_CNTCT__site::Site Number'], r.fieldData.Date].filter(Boolean).join(' · ') || '—'}
                     </div>
                   </div>
+                  {draftIdSet.has(String(r.recordId)) && (
+                    <span className="insp-item-draft" title="Unsaved changes held on this device">●</span>
+                  )}
                   {offlineIds.has(String(r.recordId)) && (
                     <span className="insp-item-offline" title="Downloaded for offline use">⇩</span>
                   )}
@@ -541,17 +630,34 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
                 </div>
               </div>
               <div className="insp-topbar-actions">
-                <button className="h5-btn h5-btn--quiet h5-btn--sm" onClick={() => setRemindOpen(true)}>⏰ Remind</button>
+                <button
+                  className="h5-btn h5-btn--quiet h5-btn--sm"
+                  onClick={() => setRemindOpen(true)}
+                  disabled={!online}
+                  title={online ? 'Set a reminder' : 'Needs a connection — a reminder is a calendar event'}
+                >⏰ Remind</button>
                 <DeleteRecordButton
                   layout={LAYOUT} cacheVersion={CACHE_VERSION}
                   recordId={selected.recordId}
                   name={f.Organization || f['inspt_CNTCT__site::Name_Organization']}
                   onDeleted={() => setSelected(null)}
+                  disabledReason={online ? null : 'Needs a connection'}
                 />
               </div>
             </div>
 
             <div className="insp-content">
+              {draftRestoredAt && (
+                <div className="h5-callout h5-callout--info insp-draft-note">
+                  <span className="h5-callout__icon">↺</span>
+                  <div className="h5-callout__body">
+                    <p className="h5-callout__title">Unsaved changes restored.</p>
+                    Last edited {new Date(draftRestoredAt).toLocaleString()} on this device, and not yet
+                    saved to the server. Save when there is a signal, or Discard to throw them away.
+                  </div>
+                </div>
+              )}
+
               <Section title="Inspection Details" icon="◈">
                 <div className="insp-field-grid">
                   <TextField label="Site" fieldKey="inspt_CNTCT__site::Name_Organization" f={f} edits={edits} onChange={handleFieldChange} editing={true} editable={false} />
@@ -600,7 +706,11 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
                 reloadSignal={attReload}
                 actions={(
                   <>
-                    <button className="att-btn" disabled={attBusy === 'report-attach' || attBusy === 'report-download'} onClick={() => handleGenerateReport(true)}>
+                    <button
+                      className="att-btn"
+                      disabled={attBusy === 'report-attach' || attBusy === 'report-download' || !online}
+                      title={online ? undefined : 'Needs a connection — the report is stored in Drive'}
+                      onClick={() => handleGenerateReport(true)}>
                       {attBusy === 'report-attach' ? (attStage || 'Working…') : '＋ Generate report & attach'}
                     </button>
                     <button className="att-btn" disabled={attBusy === 'report-attach' || attBusy === 'report-download'} onClick={() => handleGenerateReport(false)}>
@@ -612,7 +722,10 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
               {attError && <p className="insp-att-error">{attError}</p>}
 
               <RecordFooter id={f._kpt__Inspection_ID} recordId={selected.recordId} fieldData={f} />
-              <RecordSaveBar count={dirtyCount} saving={saving} status={saveStatus} errorMessage={saveErrorMsg} onSave={handleSave} onDiscard={handleDiscard} />
+              <RecordSaveBar
+                count={dirtyCount} saving={saving} status={saveStatus} errorMessage={saveErrorMsg}
+                blockedReason={online ? null : 'No connection — held on this device'}
+                onSave={handleSave} onDiscard={handleDiscard} />
             </div>
           </>
         )}

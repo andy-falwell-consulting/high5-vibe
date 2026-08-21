@@ -25,6 +25,10 @@
 }
 .rsb-count { font-size: var(--text-body); font-weight: var(--weight-semibold); color: var(--fg); }
 .rsb-err { font-size: var(--text-body); color: var(--error-fg); }
+
+/* Not an error — a statement of fact about the network. Warning rather than
+   error tone, because nothing has gone wrong and nothing has been lost. */
+.rsb-blocked { font-size: var(--text-body); color: var(--warning-fg); }
 .rsb-spacer { flex: 1; }
 
 /* Success confirmation. A pill rather than a badge: it is a transient
