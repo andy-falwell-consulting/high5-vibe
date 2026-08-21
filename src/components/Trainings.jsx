@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { BRAND, UI } from '../config/brandColors'
 import { getRecord, invalidateRecord, patchCachedRecord } from '../api/filemaker';
 import { useAllRecords } from '../hooks/useAllRecords';
@@ -8,7 +8,8 @@ import AttachmentsPanel from './AttachmentsPanel';
 import { trainingAttachments } from '../api/trainingAttachments';
 import { downloadWorkOrder } from '../api/trainingWorkOrder';
 import { LayoutCard, StatTiles, Pipeline, FinancialRows, NotesPair, ThirdsRow, ContactDetails } from './RecordLayout';
-import { PIPELINE_STAGES, PIPELINE_SHORT, ALL_STATUSES, stageIndex, statusColor as trnStatusColor } from '../config/trainingStatus';
+import { financialTiles } from '../config/financialTiles';
+import { PIPELINE_STAGES, PIPELINE_SHORT, statusOptionsFor, stageIndex, statusColor as trnStatusColor } from '../config/trainingStatus';
 import { contactDetails } from '../api/contactLookup';
 import { updateVibeRecord } from '../api/vibeRecords';
 import { displayFieldsForContact } from '../api/contactDisplay';
@@ -24,6 +25,7 @@ import DeleteRecordButton from './DeleteRecordButton'
 import ReminderModal from './ReminderModal'
 import { TRAININGS_LAYOUT as LAYOUT, TRAININGS_CACHE_VERSION as CACHE_VERSION, TRAINER_SLOTS } from '../config/trainingsCache';
 import RecordFooter from './RecordFooter';
+import { useRecordPanel } from '../hooks/useRecordPanel';
 
 const STATUS_COLOR = {
   'Final Invoiced': UI.success,
@@ -252,7 +254,9 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
   const { records, total } = useAllRecords(LAYOUT, { cacheVersion: CACHE_VERSION });
   const [selected, setSelected] = useState(null);
   const [remindOpen, setRemindOpen] = useState(false)
-  const [navWidth, setNavWidth] = useState(300);
+  // Width, drag and memory come from useRecordPanel — see the hook for what
+  // the twelve hand-rolled copies had drifted into.
+  const { width: navWidth, onPointerDown: startPanelResize } = useRecordPanel('trainings', 300);
   const [edits, setEdits] = useState({});
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
@@ -294,7 +298,6 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
   // Which of the Invoices/Payments tabs is showing, in the Contract and
   // financials card — same control CCS's own card uses.
   const [finTab, setFinTab] = useState('invoices');
-  const isResizing = useRef(false);
 
   const orgName = f => f.zz__Display_Organization__ct || '';
 
@@ -392,28 +395,6 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
     } catch (e) { setSaveStatus('error'); setSaveErrorMsg(e?.message || null); }
     finally { setSaving(false); }
   }
-
-  const startResize = useCallback((e) => {
-    e.preventDefault();
-    isResizing.current = true;
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-    const startX = e.clientX;
-    const startW = navWidth;
-    const onMove = (e) => {
-      if (!isResizing.current) return;
-      setNavWidth(Math.min(520, Math.max(200, startW + (e.clientX - startX))));
-    };
-    const onUp = () => {
-      isResizing.current = false;
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-  }, [navWidth]);
 
   const f = selected?.fieldData;
   const dirtyCount = Object.keys(edits).length;
@@ -521,7 +502,7 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
         )}
       </aside>
 
-      <div className="trn-resize-handle" onMouseDown={startResize} />
+      <div className="trn-resize-handle" onPointerDown={startPanelResize} />
 
       <main className="trn-main">
         {!selected && (
@@ -592,7 +573,13 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
                 <select className="cv2-status" style={{ color: statusColor, borderColor: statusColor + '55', background: statusColor + '14' }}
                   value={status} onChange={e => handleFieldChange('Status', e.target.value)}>
                   <option value="">— status —</option>
-                  {ALL_STATUSES.map(o => <option key={o} value={o}>{o}</option>)}
+                  {/* statusOptionsFor, not ALL_STATUSES: five values were retired
+                      on 2026-08-20 and 84 records still hold one. A <select>
+                      whose value is not among its options renders BLANK, and
+                      saving that record would write the blank over a real
+                      status. This prepends the record's own value when it is a
+                      retired one, so opening a record can never erase it. */}
+                  {statusOptionsFor(status).map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
             </div>
@@ -618,13 +605,17 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
                 />
               )}
 
-              <StatTiles tiles={[
-                { label: 'Estimated', value: money(qb?.totals?.estimated) },
-                { label: 'Invoiced', value: money(qb?.totals?.invoiced) },
-                { label: 'Received', value: money(qb?.totals?.received) },
-                { label: 'Balance due', value: money(qb?.totals?.balanceDue),
-                  tone: qb?.totals?.balanceDue > 0 ? statusColor : undefined },
-              ]} />
+              {/* The same four tiles CCS shows, from the same builder — see
+                  financialTiles in src/config/financialTiles.js. Invoiced is gone: CCS does
+                  not show it, and matching meant matching the set, not just the
+                  styling. Event date takes its place. */}
+              <StatTiles tiles={financialTiles({
+                estimated: qb?.totals?.estimated,
+                received: qb?.totals?.received,
+                balanceDue: qb?.totals?.balanceDue,
+                eventDate: val(f, edits, 'Start Date'),
+                live: !!qb,
+              })} />
 
               <ThirdsRow
                 left={<>

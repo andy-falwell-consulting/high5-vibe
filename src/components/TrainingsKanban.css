@@ -534,7 +534,7 @@
 .tkb-card-remove {
   position: absolute; top: 4px; right: 4px;
   width: 18px; height: 18px; border-radius: 4px;
-  border: none; background: transparent; color: var(--fg-disabled);
+  border: none; background: transparent; color: var(--fg-secondary);
   font-size: 12px; line-height: 1; cursor: pointer; opacity: 0;
   transition: opacity 0.12s, background 0.12s, color 0.12s;
 }

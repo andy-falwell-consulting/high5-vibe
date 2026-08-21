@@ -20,6 +20,7 @@ import './Estimates.css'
 import DeleteRecordButton from './DeleteRecordButton'
 import ReminderModal from './ReminderModal'
 import RecordFooter from './RecordFooter';
+import { useRecordPanel } from '../hooks/useRecordPanel';
 
 // FileMaker MM/DD/YYYY → QBO YYYY-MM-DD
 const toIsoDate = v => { if (!v) return undefined; const [m, d, y] = String(v).split(' ')[0].split('/'); return y ? `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}` : undefined }
@@ -101,13 +102,14 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
   const { records, total, loading, error } = useAllRecords(LAYOUT, { cacheVersion: CACHE_VERSION })
   const [selected, setSelected] = useState(null)
   const [remindOpen, setRemindOpen] = useState(false)
-  const [sidebarWidth, setSidebarWidth] = useState(300)
+  // Width, drag and memory come from useRecordPanel — see the hook for what
+  // the twelve hand-rolled copies had drifted into.
+  const { width: sidebarWidth, onPointerDown: startPanelResize } = useRecordPanel('estimates', 300);
   const [edits, setEdits] = useState({})
   const [saving, setSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState(null)
   const [saveErrorMsg, setSaveErrorMsg] = useState(null)
   const [showNew, setShowNew] = useState(false)
-  const dragging = useRef(false)
 
   // ── Line-item editing ──
   // Staged like field `edits`: nothing is written until Save, so Discard really
@@ -274,15 +276,6 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
     onRecordSelect?.(newId, rec.fieldData?.zz__Display_Contact__ct || rec.fieldData?.Title)
   }
 
-  const onMouseDown = useCallback(e => {
-    dragging.current = true
-    const startX = e.clientX, startW = sidebarWidth
-    const onMove = ev => { if (!dragging.current) return; setSidebarWidth(Math.max(220, Math.min(520, startW + ev.clientX - startX))) }
-    const onUp = () => { dragging.current = false; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-  }, [sidebarWidth])
-
   const handleChange = useCallback((fk, val) => setEdits(p => ({ ...p, [fk]: val })), [])
   const handleDiscard = () => { setEdits({}); resetLines(); setSaveStatus(null); setSaveErrorMsg(null) }
 
@@ -414,7 +407,7 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
         )}
       </aside>
 
-      <div className="est-resize-handle" onMouseDown={onMouseDown} />
+      <div className="est-resize-handle" onPointerDown={startPanelResize} />
 
       <main className="est-main">
         {!selected ? (

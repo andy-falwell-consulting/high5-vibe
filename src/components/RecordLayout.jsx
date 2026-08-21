@@ -29,7 +29,7 @@ export function StatTiles({ tiles }) {
         <div className="cv2-kpi" key={t.label}>
           <div className="cv2-kpi-label">{t.label}</div>
           <div className="cv2-kpi-num" style={t.tone ? { color: t.tone } : undefined}>{t.value}</div>
-          {t.sub && <div className="cv2-kpi-sub">{t.sub}</div>}
+          {t.sub && <div className={`cv2-kpi-sub${t.subUrgent ? ' urg' : ''}`}>{t.sub}</div>}
         </div>
       ))}
     </div>

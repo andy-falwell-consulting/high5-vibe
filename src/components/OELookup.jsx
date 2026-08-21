@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { getRecord, addCachedRecord } from '../api/filemaker'
 import { createVibeRecord } from '../api/vibeRecords'
 import { getCurrentEnv } from '../config/fmpEnvironments'
@@ -10,6 +10,7 @@ import './OELookup.css'
 import DeleteRecordButton from './DeleteRecordButton'
 import ReminderModal from './ReminderModal'
 import RecordFooter from './RecordFooter';
+import { useRecordPanel } from '../hooks/useRecordPanel';
 
 const LAYOUT = 'OELookup_New'
 const CACHE_VERSION = 1
@@ -119,8 +120,9 @@ export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {})
   const [selected, setSelected] = useState(null)
   const [remindOpen, setRemindOpen] = useState(false)
   const [showNew, setShowNew] = useState(false)
-  const [sidebarWidth, setSidebarWidth] = useState(300)
-  const dragging = useRef(false)
+  // Width, drag and memory come from useRecordPanel — see the hook for what
+  // the twelve hand-rolled copies had drifted into.
+  const { width: sidebarWidth, onPointerDown: startPanelResize } = useRecordPanel('oe-lookup', 300);
 
   async function handleSelect(r) {
     setSelected(r)
@@ -144,18 +146,6 @@ export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {})
   }, [navTarget])
 
   // Resize handle
-  const onMouseDown = useCallback(e => {
-    dragging.current = true
-    const startX = e.clientX
-    const startW = sidebarWidth
-    const onMove = ev => {
-      if (!dragging.current) return
-      setSidebarWidth(Math.max(220, Math.min(520, startW + ev.clientX - startX)))
-    }
-    const onUp = () => { dragging.current = false; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-  }, [sidebarWidth])
 
   // ── Create a new program ──
   //
@@ -268,7 +258,7 @@ export default function OELookup({ navTarget, onClearNav, onRecordSelect } = {})
         )}
       </aside>
 
-      <div className="h5-resize" onMouseDown={onMouseDown} />
+      <div className="h5-resize" onPointerDown={startPanelResize} />
 
       {/* Main */}
       <main className="h5-detail">

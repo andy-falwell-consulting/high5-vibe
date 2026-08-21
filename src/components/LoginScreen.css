@@ -102,7 +102,7 @@
   margin-top: 10px;
   padding: 12px 20px;
   background: var(--surface);
-  color: var(--fg-disabled);
+  color: var(--fg-secondary);
   border: 1px solid var(--border-interactive);
   border-radius: 10px;
   font-size: 16px;
@@ -150,7 +150,7 @@
 [data-theme="dark"] .ls-title { color: var(--fg); }
 [data-theme="dark"] .ls-hello { color: var(--fg-secondary); }
 [data-theme="dark"] .ls-error { background: var(--error-bg); border-color: var(--error-bg); color: var(--error-fg); }
-[data-theme="dark"] .ls-google-btn { background: var(--surface); color: var(--fg-disabled); border-color: var(--border-interactive); }
+[data-theme="dark"] .ls-google-btn { background: var(--surface); color: var(--fg-secondary); border-color: var(--border-interactive); }
 [data-theme="dark"] .ls-google-btn:hover { background: var(--surface-sunken); }
 [data-theme="dark"] .ls-note { color: var(--fg-secondary); }
-[data-theme="dark"] .ls-version { color: var(--fg-disabled); }
+[data-theme="dark"] .ls-version { color: var(--fg-secondary); }

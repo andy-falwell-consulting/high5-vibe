@@ -1,6 +1,11 @@
 .txn-container { display: flex; flex: 1; min-height: 0; overflow: hidden; background: var(--bg); color: var(--fg); }
 
-.txn-sidebar { width: 340px; flex-shrink: 0; display: flex; flex-direction: column; min-height: 0; background: var(--card); border-right: 1px solid var(--border); }
+/* Width comes from useRecordPanel now — it was pinned here at 340px with no
+   way to change it, which is what made the row content feel cramped. */
+.txn-sidebar { flex-shrink: 0; display: flex; flex-direction: column; min-height: 0; background: var(--card); border-right: 1px solid var(--border); }
+.txn-resize { width: 4px; flex-shrink: 0; cursor: col-resize; background: var(--border); transition: background var(--duration-fast) var(--ease-standard); }
+.txn-resize:hover { background: var(--brand); }
+
 .txn-statusbar { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--fg-secondary); }
 .txn-statusbar select { flex: 1; background: var(--surface-sunken); border: 1px solid var(--border); border-radius: 6px; color: var(--fg); padding: 5px 8px; font-family: inherit; font-size: 13px; }
 

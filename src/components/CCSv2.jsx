@@ -22,6 +22,9 @@ import './CCSv2.css';
 import DeleteRecordButton from './DeleteRecordButton';
 import ReminderModal from './ReminderModal';
 import RecordFooter from './RecordFooter';
+import { StatTiles } from './RecordLayout';
+import { financialTiles } from '../config/financialTiles';
+import { useRecordPanel } from '../hooks/useRecordPanel';
 
 const LAYOUT = RCD_LAYOUT;
 const CCS_ATT_API = { list: listCcsAttachments, upload: uploadCcsAttachment, remove: deleteCcsAttachment, freshUrl: ccsAttachmentUrl };
@@ -147,7 +150,6 @@ const num = v => { const n = Number(v); return isNaN(n) ? 0 : n; };
 const fmtMoneyFull = v => `$${num(v).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
 // KPI variant: distinguishes "nothing linked" (null → em dash) from a real
 // zero. A $0 balance means paid in full, which fmtMoney would hide as '—'.
-const kpiMoney = v => (v == null ? '—' : `$${num(v).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`);
 
 const parseFmDate = v => {
   if (!v) return null;
@@ -297,7 +299,9 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
   const [remindOpen, setRemindOpen] = useState(false);
 
   const naFlags = useNaFlags(selected?.recordId);
-  const [navWidth, setNavWidth] = useState(300);
+  // Width, drag and memory come from useRecordPanel — see the hook for what
+  // the twelve hand-rolled copies had drifted into.
+  const { width: navWidth, onPointerDown: startPanelResize } = useRecordPanel('ccs', 300);
   const [edits, setEdits]       = useState({});
   const [saving, setSaving]     = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
@@ -319,7 +323,6 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
   // Phone and e-mail for the project's contact. Keyed by contact id so switching
   // records cannot land a slow answer on the wrong project.
   const [contactInfo, setContactInfo] = useState(null);
-  const isResizing = useRef(false);
   const selectedRef = useRef(null); // guards async estimate fetch against stale selections
 
   const f = useMemo(() => selected?.fieldData || EMPTY_FIELDS, [selected]);
@@ -560,16 +563,6 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
     finally { setSaving(false); }
   };
 
-  const startResize = useCallback((e) => {
-    e.preventDefault();
-    isResizing.current = true;
-    document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';
-    const startX = e.clientX, startW = navWidth;
-    const onMove = ev => { if (isResizing.current) setNavWidth(Math.min(460, Math.max(220, startW + (ev.clientX - startX)))); };
-    const onUp = () => { isResizing.current = false; document.body.style.cursor = ''; document.body.style.userSelect = ''; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-    window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
-  }, [navWidth]);
-
   // ── List filtering / sorting ──
   const parseTs = v => { const dt = parseFmDate(v); return dt ? dt.getTime() : 0; };
   const projStatus = t => { t = (t || '').toLowerCase(); if (t.includes('complet')) return 'done'; if (t.includes('no go') || t.includes('cancel')) return 'nogo'; return t ? 'active' : null; };
@@ -674,7 +667,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
         </div>
       </nav>
 
-      <div className="cv2-resize" onMouseDown={startResize} />
+      <div className="cv2-resize" onPointerDown={startPanelResize} />
 
       <main className="cv2-main">
         {!selected ? (
@@ -767,30 +760,18 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
               </div>
 
 
-              {/* KPIs */}
-              <div className="cv2-kpis">
-                <div className="cv2-kpi">
-                  <div className="cv2-kpi-label">Estimated value</div>
-                  <div className="cv2-kpi-num">{kpiMoney(estValue)}</div>
-                  {finLive && <div className="cv2-kpi-sub">live from QuickBooks</div>}
-                </div>
-                <div className="cv2-kpi">
-                  <div className="cv2-kpi-label">Received</div>
-                  <div className="cv2-kpi-num" style={{ color: received ? '#0f6e56' : 'inherit' }}>{kpiMoney(received)}</div>
-                  {finLive && <div className="cv2-kpi-sub">live from QuickBooks</div>}
-                </div>
-                <div className="cv2-kpi">
-                  <div className="cv2-kpi-label">Balance due</div>
-                  <div className="cv2-kpi-num" style={{ color: balanceDue ? '#854f0b' : 'inherit' }}>{kpiMoney(balanceDue)}</div>
-                  {finLive && balanceDue === 0 && <div className="cv2-kpi-sub">paid in full</div>}
-                  {finLive && balanceDue !== 0 && <div className="cv2-kpi-sub">live from QuickBooks</div>}
-                </div>
-                <div className="cv2-kpi">
-                  <div className="cv2-kpi-label">Event date</div>
-                  <div className="cv2-kpi-num">{fmtDate(val('rcd start date'))}</div>
-                  {startDays != null && <div className={`cv2-kpi-sub${eventUrgent ? ' urg' : ''}`}>{startDays < 0 ? `${-startDays}d ago` : startDays === 0 ? 'today' : `in ${startDays}d`}</div>}
-                </div>
-              </div>
+              {/* KPIs — from the shared builder, so CCS and Trainings cannot
+                  drift apart again. The tones used to be inline hex here
+                  (#0f6e56, #854f0b), which is why the branding sweep never
+                  reached them; they are tokens now. */}
+              <StatTiles tiles={financialTiles({
+                estimated: estValue,
+                received,
+                balanceDue,
+                eventDate: val('rcd start date'),
+                live: finLive,
+                urgent: eventUrgent,
+              })} />
 
               {/* A stored reference resolving to another client's record is common
                   enough (roughly 3 in 4 estimate links) that it needs saying out
@@ -1065,7 +1046,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
                           <button className="cv2-phase-head" onClick={() => setExpanded(p => ({ ...p, [s.id]: !p[s.id] }))}>
                             <Ring pct={s.pct} color={col} />
                             <div className="cv2-phase-info">
-                              <div className="cv2-phase-row"><span className="cv2-phase-name">{s.name}</span><span className="cv2-phase-count" style={{ color: full ? '#0f6e56' : 'var(--cv2-text-2)' }}>{s.done}/{s.all}{full ? ' · done' : ''}</span></div>
+                              <div className="cv2-phase-row"><span className="cv2-phase-name">{s.name}</span><span className="cv2-phase-count" style={{ color: full ? 'var(--success-fg)' : 'var(--cv2-text-2)' }}>{s.done}/{s.all}{full ? ' · done' : ''}</span></div>
                               <div className="cv2-phase-bar"><div style={{ width: `${Math.round(s.pct * 100)}%`, background: col }} /></div>
                             </div>
                             <span className="cv2-chev">{open ? '▴' : '▾'}</span>

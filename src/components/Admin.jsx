@@ -756,6 +756,90 @@ const VOCAB_LAYOUTS = [
 // PHASE C3. These vocabularies come from FileMaker today and have to outlive
 // it: after cutover there is no FileMaker copy to re-seed from, and no other
 // way to add a builder, a trainer or a program type without a code deploy.
+// Remapping the Trainings statuses that were retired on 2026-08-20. Five values
+// left the vocabulary and 84 records still carry one; they display correctly and
+// keep their status, so this is not urgent — but it is the only thing that makes
+// them stop being legacy.
+//
+// Read-only until you press Apply: the plan writes nothing, and it says how many
+// records have no mapping decided yet, so the remaining work stays visible.
+function StatusRemap() {
+  const [plan, setPlan] = useState(null);
+  const [result, setResult] = useState(null);
+  const [busy, setBusy] = useState(null);
+  const [error, setError] = useState(null);
+
+  const call = async (commit) => {
+    setBusy(commit ? 'apply' : 'plan'); setError(null);
+    try {
+      const db = getCurrentEnv().db;
+      const url = `/api/status-remap?db=${encodeURIComponent(db)}${commit ? '&confirm=yes' : ''}`;
+      const r = await fetch(url, { method: commit ? 'POST' : 'GET', credentials: 'include' });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+      if (commit) { setResult(body); setPlan(null); } else { setPlan(body); setResult(null); }
+    } catch (e) { setError(e.message); }
+    finally { setBusy(null); }
+  };
+
+  return (
+    <section className="admin-section">
+      <h2 className="admin-section-title">Retired training statuses</h2>
+      <p className="admin-note">
+        Five statuses left the Trainings vocabulary. Records still holding one keep it and
+        display it correctly — they simply have no Kanban lane, and are counted in the
+        board&apos;s &ldquo;with no status&rdquo; chip. This moves them onto current values.
+      </p>
+      <p className="admin-note">
+        <strong>Ready to Bill → Waiting on $ &amp; Signed TC.</strong> Note that the target is a
+        pipeline stage, so those records become <em>in flight</em> and will show up as live work.
+        The other four retired statuses have no mapping decided yet and are left alone.
+      </p>
+
+      <div className="admin-drift-actions">
+        <button className="h5-btn h5-btn--quiet h5-btn--sm" disabled={!!busy} onClick={() => call(false)}>
+          {busy === 'plan' ? 'Checking…' : 'Show the plan'}
+        </button>
+        {plan?.willChange > 0 && (
+          <button className="h5-btn h5-btn--primary h5-btn--sm" disabled={!!busy} onClick={() => call(true)}>
+            {busy === 'apply' ? 'Applying…' : `Apply to ${plan.willChange} record${plan.willChange === 1 ? '' : 's'}`}
+          </button>
+        )}
+      </div>
+
+      {error && <p className="admin-error">{error}</p>}
+
+      {plan && (
+        <>
+          <table className="admin-drift-table">
+            <thead><tr><th>Retired status</th><th>Becomes</th><th className="num">Records</th></tr></thead>
+            <tbody>
+              {plan.byStatus.map(b => (
+                <tr key={b.from}>
+                  <td>{b.from}</td>
+                  <td>{b.to || <span className="admin-missing">no mapping decided</span>}</td>
+                  <td className="num">{b.records}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="admin-note">
+            {plan.willChange} of {plan.total} would change. Nothing has been written.
+          </p>
+        </>
+      )}
+
+      {result && (
+        <p className="admin-note">
+          Changed {result.changed} record{result.changed === 1 ? '' : 's'}
+          {result.undecided > 0 && `, ${result.undecided} still awaiting a mapping decision`}.
+          {result.failed?.length > 0 && ` ${result.failed.length} failed.`}
+        </p>
+      )}
+    </section>
+  );
+}
+
 function VocabTab() {
   const [layout, setLayout] = useState(VOCAB_LAYOUTS[0].layout);
   const [state, setState] = useState(null);     // { lists, source }
@@ -1553,7 +1637,7 @@ export default function Admin() {
       {tab === 'preview' && <PreviewAccessTab />}
       {tab === 'fmp' && <><FmpSyncSection /><FmpTab /></>}
       {tab === 'backup' && <><SaTestSection /><BackupTab /><RestoreSection /></>}
-      {tab === 'vocab' && <VocabTab />}
+      {tab === 'vocab' && <><StatusRemap /><VocabTab /></>}
       {tab === 'wsemail' && <WorkshopEmailTab />}
       {tab === 'agent' && <AgentTab />}
       {tab === 'drift' && <DriftTab />}

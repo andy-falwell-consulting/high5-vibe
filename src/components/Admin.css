@@ -306,6 +306,21 @@ input.admin-vocab-edit { margin-bottom: 8px; }
 .admin-drift-delta.worse { color: var(--error-fg); }
 .admin-drift-delta.better { color: var(--success-fg); }
 .admin-drift-when { margin-left: auto; font-size: 12px; color: var(--fg-secondary); }
+/* .admin-error was used THIRTEEN times in Admin.jsx and never defined, so every
+   error message in this panel rendered as ordinary body text — no colour, no
+   weight, nothing to distinguish "that failed" from the paragraph above it.
+   Found while auditing the classes a new panel uses, which is the only reason
+   the previous three (est-ghost-btn, insp-ghost-btn, admin-note) were found too. */
+.admin-error { color: var(--error-fg); font-size: var(--text-caption); margin: var(--space-sm) 0; }
+
+/* Numeric table cells. Right-aligned with tabular figures so a column of counts
+   can be compared down the page rather than read one row at a time. */
+.admin-drift-table .num, .admin-section .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* A row of actions above a result table. Defined rather than assumed — three
+   undefined classes have shipped from this codebase already (est-ghost-btn,
+   insp-ghost-btn, admin-note), and each looked styled until someone measured it. */
+.admin-drift-actions { display: flex; gap: var(--space-sm); align-items: center; flex-wrap: wrap; margin-bottom: var(--space-md); }
 .admin-drift-table { margin-bottom: 12px; }
 .admin-callout-warn { padding: 10px 14px; border-radius: 6px; background: var(--warning-bg); color: var(--warning-fg); font-size: 13px; margin-bottom: 14px; }
 .admin-callout-warn ul { margin: 6px 0 0; padding-left: 18px; }

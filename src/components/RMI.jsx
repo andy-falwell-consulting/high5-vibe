@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { getRecord, invalidateRecord, patchCachedRecord, addCachedRecord } from '../api/filemaker'
 import { updateVibeRecord, createVibeRecord } from '../api/vibeRecords'
 import { contactDetails } from '../api/contactLookup'
@@ -10,6 +10,7 @@ import RecordFormModal from './RecordFormModal'
 import './RMI.css'
 import DeleteRecordButton from './DeleteRecordButton'
 import RecordFooter from './RecordFooter';
+import { useRecordPanel } from '../hooks/useRecordPanel';
 
 const LAYOUT = 'RMI_New'
 const CACHE_VERSION = 1
@@ -143,14 +144,15 @@ function Section({ title, icon, children }) {
 export default function RMI({ navTarget, onClearNav, onRecordSelect } = {}) {
   const { records, total, loading, error } = useAllRecords(LAYOUT, { cacheVersion: CACHE_VERSION })
   const [selected, setSelected] = useState(null)
-  const [navWidth, setNavWidth] = useState(300)
+  // Width, drag and memory come from useRecordPanel — see the hook for what
+  // the twelve hand-rolled copies had drifted into.
+  const { width: navWidth, onPointerDown: startPanelResize } = useRecordPanel('rmi', 300);
   const [edits, setEdits] = useState({})
   const [saving, setSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState(null)
   const [saveErrorMsg, setSaveErrorMsg] = useState(null)
   const [showNew, setShowNew] = useState(false)
   const [contactInfo, setContactInfo] = useState(null)
-  const isResizing = useRef(false)
 
   // The selected record's contact, from Vibe — see LookupField above for why.
   // Keyed on the contact id so a stale reply for a previously selected record
@@ -258,28 +260,6 @@ export default function RMI({ navTarget, onClearNav, onRecordSelect } = {}) {
     onRecordSelect?.(rec.recordId, orgName(rec.fieldData))
   }
 
-  const startResize = useCallback((e) => {
-    e.preventDefault()
-    isResizing.current = true
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
-    const startX = e.clientX
-    const startW = navWidth
-    const onMove = (e) => {
-      if (!isResizing.current) return
-      setNavWidth(Math.min(520, Math.max(220, startW + (e.clientX - startX))))
-    }
-    const onUp = () => {
-      isResizing.current = false
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-    }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-  }, [navWidth])
-
   const f = selected?.fieldData
   const dirtyCount = Object.keys(edits).length
 
@@ -328,7 +308,7 @@ export default function RMI({ navTarget, onClearNav, onRecordSelect } = {}) {
         )}
       </aside>
 
-      <div className="rmi-resize-handle" onMouseDown={startResize} />
+      <div className="rmi-resize-handle" onPointerDown={startPanelResize} />
 
       <main className="rmi-main">
         {!selected && (

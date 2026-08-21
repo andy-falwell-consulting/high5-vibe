@@ -15,6 +15,7 @@ import { BRAND } from '../config/brandColors';
 import './ProductsAndServicesV2.css';
 import DeleteRecordButton from './DeleteRecordButton';
 import RecordFooter from './RecordFooter';
+import { useRecordPanel } from '../hooks/useRecordPanel';
 
 const LAYOUT = 'Products & Services_New';
 // Must match the cacheVersion passed to useAllRecords below — patchCachedRecord
@@ -202,7 +203,9 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
   const [saveErrorMsg, setSaveErrorMsg] = useState(null);
   const [showBomPicker, setShowBomPicker] = useState(false);
   const [bomOps, setBomOps] = useState([]); // staged BOM edits: {type:'add'|'qty'|'remove', ...}
-  const [navWidth, setNavWidth] = useState(300);
+  // Width, drag and memory come from useRecordPanel — see the hook for what
+  // the twelve hand-rolled copies had drifted into.
+  const { width: navWidth, onPointerDown: startPanelResize } = useRecordPanel('products', 300);
   const [showNewItem, setShowNewItem] = useState(false);
   const [syncStatus, setSyncStatus] = useState({});
   const [syncError, setSyncError] = useState({});
@@ -214,7 +217,6 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
   const imgInputRef = useRef(null);
   const previewRef = useRef(null);
   const bomTotalRef = useRef(0);   // live BOM total, so the override toggle can seed Unit Price
-  const isResizing = useRef(false);
 
   // Set/replace the optimistic preview, revoking the previous blob URL.
   const setPreview = useCallback((url) => {
@@ -225,28 +227,6 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
 
   // Switching products clears any stale optimistic preview/status.
   useEffect(() => { setPreview(null); setImgStatus(null); }, [selected?.recordId, setPreview]);
-
-  const startResize = useCallback((e) => {
-    e.preventDefault();
-    isResizing.current = true;
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-    const startX = e.clientX;
-    const startW = navWidth;
-    const onMove = (e) => {
-      if (!isResizing.current) return;
-      setNavWidth(Math.min(600, Math.max(180, startW + (e.clientX - startX))));
-    };
-    const onUp = () => {
-      isResizing.current = false;
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-  }, [navWidth]);
 
   const parseFmDate = v => {
     if (!v) return 0;
@@ -724,7 +704,7 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
         )}
       </aside>
 
-      <div className="v2-resize-handle" onMouseDown={startResize} />
+      <div className="v2-resize-handle" onPointerDown={startPanelResize} />
 
       <main className="v2-main">
         {!selected && (

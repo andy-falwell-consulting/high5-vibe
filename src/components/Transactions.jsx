@@ -5,6 +5,7 @@ import ListToolbar, { useListControls } from './ListControls';
 
 const ROW_H = 54; // fixed row height (px) — must match .txn-row in CSS for virtualization
 import './Transactions.css';
+import { useRecordPanel } from '../hooks/useRecordPanel';
 
 // Read-only ledger of QBO sales transactions (mirror served by /api/transactions).
 // Shopify orders appear here as Sales Receipts.
@@ -44,6 +45,9 @@ async function loadAll() {
 }
 
 export default function Transactions({ onRecordSelect } = {}) {
+  // Widest default of any module: a row carries a type chip, a document
+  // number, an amount, a customer and a date, and 340px could not hold them.
+  const { width, onPointerDown: startPanelResize } = useRecordPanel('transactions', 400);
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -135,7 +139,7 @@ export default function Transactions({ onRecordSelect } = {}) {
 
   return (
     <div className="txn-container">
-      <aside className="txn-sidebar">
+      <aside className="txn-sidebar" style={{ width }}>
         <ListToolbar c={controls} />
         <div className="txn-statusbar">
           <label>Status</label>
@@ -174,6 +178,11 @@ export default function Transactions({ onRecordSelect } = {}) {
           </div>
         )}
       </aside>
+
+      {/* This page had NO resize handle and was pinned at 340px in CSS —
+          the reason its rows felt cramped. Every other module has had one
+          for months. */}
+      <div className="txn-resize" onPointerDown={startPanelResize} />
 
       <main className="txn-main">
         {!d ? (
