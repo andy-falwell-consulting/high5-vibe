@@ -638,6 +638,24 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
           <ListBody c={list} activeId={selected?.recordId} renderItem={r => {
             const rf = r.fieldData; const c = statusColor(mergedStatus(rf));
             const d = daysUntil(rf['rcd start date']);
+            // Project type and start date, as the Trainings list shows them.
+            //
+            // Type of Project is a THREE-REPETITION FileMaker field, so a
+            // project can carry up to three — hence "types". Measured on 200
+            // live records: rep 1 is filled on every single one, rep 2 on 19,
+            // rep 3 on 2 — so this is almost always one word, and the comma
+            // join is for the handful that are not.
+            //
+            // fmtDate rather than the stored string: this module already
+            // formats dates that way (the hero KPI does), and "Aug 25, 2026"
+            // scans better than "08/25/2026" in a 320px column.
+            //
+            // This DISPLACES the contact name the sub-line used to carry.
+            // Three facts do not fit here legibly, and the contact is on the
+            // record itself. mergedStatus stays as the fallback for the one
+            // record in 200 with neither a type nor a date.
+            const types = [1, 2, 3].map(i => rf[`Type of Project(${i})`]).filter(Boolean).join(', ');
+            const when = rf['rcd start date'] ? fmtDate(rf['rcd start date']) : '';
             return (
               <div key={r.recordId} className={`cv2-list-item${selected?.recordId === r.recordId ? ' active' : ''}`}
                 onClick={() => { handleSelect(r); onRecordSelect?.(r.recordId, r.fieldData?.zz__Display_Organization__ct); }} /* onMouseEnter={() => prefetchRecord(LAYOUT, r.recordId)} */>
@@ -645,7 +663,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
                 <div className="cv2-list-body">
                   <div className="cv2-list-org">{rf.zz__Display_Organization__ct || '—'}</div>
                   <div className="cv2-list-sub">
-                    <span>{rf.zz__Display_Contact__ct || mergedStatus(rf) || ''}</span>
+                    <span>{[types, when].filter(Boolean).join(' · ') || mergedStatus(rf) || '—'}</span>
                     {d != null && d >= 0 && d <= 30 && <span className="cv2-list-due">{d}d</span>}
                   </div>
                 </div>
