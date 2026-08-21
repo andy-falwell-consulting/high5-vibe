@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { pinInspection, unpinInspection, listPinnedInspections, inspectionLabel } from '../api/offlineInspections';
 import { offlineStorageAvailable } from '../api/offlineStore';
+import { pendingEntries } from '../api/outbox';
 import { isControlled, applyUpdateNow, onUpdateReady, requestPersistentStorage, storageEstimate } from '../registerSW';
 import './TakeOffline.css';
 
@@ -39,11 +40,17 @@ export default function TakeOffline({ records = [], onClose, onChanged }) {
   const [updateReady, setUpdateReady] = useState(false);
   const [storageOk, setStorageOk] = useState(true);
   const [estimate, setEstimate] = useState({ usage: 0, quota: 0 });
+  // Photographs are the only thing here that can grow without bound: a heavy
+  // day is 15 sites, and if a photo is a tap they get taken. Counted and shown
+  // rather than left to be discovered when a capture fails.
+  const [photos, setPhotos] = useState({ count: 0, bytes: 0 });
   const [online, setOnline] = useState(() => navigator.onLine);
 
   const refresh = useCallback(async () => {
     try { setPinned(await listPinnedInspections()); } catch { setPinned([]); }
     setEstimate(await storageEstimate());
+    const queued = (await pendingEntries().catch(() => [])).filter(e => e.kind === 'photo');
+    setPhotos({ count: queued.length, bytes: queued.reduce((n, e) => n + (e.payload?.size || 0), 0) });
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
@@ -135,6 +142,17 @@ export default function TakeOffline({ records = [], onClose, onChanged }) {
               <div className="h5-callout__body">
                 <p className="h5-callout__title">This browser will not hold offline work.</p>
                 Private browsing, or storage turned off. Nothing downloaded here would survive.
+              </div>
+            </div>
+          )}
+
+          {estimate.quota > 0 && estimate.usage / estimate.quota > 0.8 && (
+            <div className="h5-callout h5-callout--warning">
+              <span className="h5-callout__icon">▦</span>
+              <div className="h5-callout__body">
+                <p className="h5-callout__title">This device is nearly full.</p>
+                {bytes(estimate.usage)} of {bytes(estimate.quota)} used. Sync what is waiting before
+                taking more photos — a capture that runs out of room cannot be saved anywhere.
               </div>
             </div>
           )}
@@ -247,6 +265,7 @@ export default function TakeOffline({ records = [], onClose, onChanged }) {
         <div className="h5-modal__foot">
           <span className="tko-storage">
             {bytes(estimate.usage)} used{estimate.quota ? ` of ${bytes(estimate.quota)}` : ''}
+            {photos.count > 0 ? ` · ${photos.count} photo${photos.count === 1 ? '' : 's'} waiting (${bytes(photos.bytes)})` : ''}
             {done > 0 && !busy ? ` · ${done} downloaded` : ''}
             {failed > 0 && !busy ? ` · ${failed} failed` : ''}
           </span>

@@ -1,11 +1,11 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { getRecord, prefetchRecord, invalidateRecord, patchCachedRecord, addCachedRecord } from '../api/filemaker';
 import { createVibeRecord } from '../api/vibeRecords';
 import { useAllRecords } from '../hooks/useAllRecords';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
 import RecordSaveBar from './RecordSaveBar';
 import RecordFormModal from './RecordFormModal';
-import { generateAndAttachReport, downloadReport, inspectionAttachments } from '../api/inspectionAttachments';
+import { generateAndAttachReport, downloadReport, inspectionAttachmentsFor } from '../api/inspectionAttachments';
 import AttachmentsPanel from './AttachmentsPanel';
 import InspectionLines from './InspectionLines';
 // Line items come from Vibe's own store (api/_inspectionLines.js), not the
@@ -158,6 +158,7 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
   const [attError, setAttError] = useState(null);
   const [attReload, setAttReload] = useState(0); // bump to make AttachmentsPanel re-list
   const [showNew, setShowNew] = useState(false);
+  const photoInputRef = useRef(null);
   // Which inspections are downloaded for offline use, and whether there is a
   // network at all. Both are shown in the list rather than only inside the
   // Take-offline dialog: standing in a field, "is this one on my iPad" is the
@@ -256,9 +257,11 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
   // this a line added offline would keep its `new:` key until the record was
   // reopened, and every later save would mint it a new id.
   useEffect(() => onEntrySent((entry, result) => {
-    if (entry.kind !== 'lines' || !result?.lines) return;
     if (String(selectedRef.current) !== String(entry.recordId)) return;
-    setLines(result.lines);
+    // A queued photo that has now uploaded is a different card with a real file
+    // id, so the panel has to re-list rather than keep the pending one.
+    if (entry.kind === 'photo') { setAttReload(n => n + 1); return; }
+    if (entry.kind === 'lines' && result?.lines) setLines(result.lines);
   }), []);
 
   async function handleSelect(r) {
@@ -346,6 +349,34 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
   // ── Attachments live in the shared <AttachmentsPanel>; only inspection-report
   // generation stays here (passed into the panel via `actions`). ──
   const inspId = selected?.fieldData?._kpt__Inspection_ID;
+  // Bound to the record's own id so a photo queued with no signal sorts
+  // alongside that inspection's other queued work — the record's edits have to
+  // replay first, because the photo's Drive folder is named from the record.
+  const attachApi = useMemo(
+    () => inspectionAttachmentsFor(selected?.recordId),
+    [selected?.recordId]);
+
+  // Photographs. A separate control from "Upload file" because it is a
+  // different act: `capture="environment"` opens the rear camera directly on an
+  // iPad rather than a file browser, which is the whole difference between
+  // photographing a frayed cable and not bothering.
+  async function handlePhotos(files) {
+    if (!inspId || !files?.length) return;
+    setAttBusy('photo'); setAttError(null);
+    try {
+      for (const [i, file] of files.entries()) {
+        setAttStage(files.length > 1 ? `Saving photo ${i + 1} of ${files.length}…` : 'Saving photo…');
+        await attachApi.upload(inspId, file, file.name, orgName(selected?.fieldData || {}));
+      }
+      setAttReload(n => n + 1);
+      refreshQueuedIds();
+    } catch (e) {
+      const msg = String(e?.message || e);
+      setAttError(/quota|storage/i.test(msg)
+        ? 'There is no room left on this device for another photo. Sync what is waiting, then try again.'
+        : (msg || 'Could not save the photo'));
+    } finally { setAttBusy(null); setAttStage(null); }
+  }
   async function handleGenerateReport(attach) {
     if (!selected) return;
     setAttBusy(attach ? 'report-attach' : 'report-download');
@@ -755,11 +786,28 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
               <AttachmentsPanel
                 parentId={inspId}
                 parentLabel={f.Organization || f['inspt_CNTCT__site::Name_Organization']}
-                api={inspectionAttachments}
+                api={attachApi}
+                reportFlag
                 invoiceDocNumber={selected?.fieldData?._kat__QuickBooks_Invoice_ID}
                 reloadSignal={attReload}
                 actions={(
                   <>
+                    <button
+                      className="att-btn"
+                      disabled={attBusy === 'photo' || !inspId}
+                      onClick={() => photoInputRef.current?.click()}
+                      title="Photograph a finding — works with no signal">
+                      {attBusy === 'photo' ? (attStage || 'Saving…') : '⛭ Take photo'}
+                    </button>
+                    <input
+                      ref={photoInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      multiple
+                      style={{ display: 'none' }}
+                      onChange={e => { handlePhotos([...e.target.files]); e.target.value = ''; }}
+                    />
                     <button
                       className="att-btn"
                       disabled={attBusy === 'report-attach' || attBusy === 'report-download' || !online}

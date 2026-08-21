@@ -282,6 +282,11 @@ Two things found while building:
 
 ## Milestone D — photos, and the report checkbox
 
+**BUILT — v1.0.502.** Verified: a 2400×1800 capture is stored at 1600×1200 and
+20 KB, queues with no signal, can be ticked for the report before it has ever
+been uploaded, and lands with its tick applied when the signal returns. One tick
+puts exactly one JPEG in the PDF; two ticks put two.
+
 **D1. Capture.** `<input type="file" accept="image/*" capture="environment">`
 opens the camera directly on iOS. Downscale on capture via canvas to a 1600 px
 long edge at JPEG q0.8 — 3–5 MB becomes 300–500 KB. An inspection photo
@@ -313,6 +318,34 @@ checkbox; **checked photos are included in the generated report**.
   report can be generated on site before anything has uploaded.
 - **Cap:** warn past ~20 photos in one report rather than silently building a
   100 MB PDF.
+
+### What D actually shipped
+
+- **A "Take photo" button** separate from "Upload file", because it is a
+  different act: `capture="environment"` opens the rear camera directly on an
+  iPad rather than a file browser, which is the whole difference between
+  photographing a frayed cable and not bothering.
+- **Downscaled on capture** to a 1600px long edge at JPEG q0.8, with EXIF
+  orientation honoured via `createImageBitmap` — without it, portrait photos
+  taken on an iPad come out sideways, and they would come out sideways in the
+  report too.
+- **Queued like any other write** when there is no signal, bytes in their own
+  IndexedDB store so the queue stays small. A queued photo shows in the panel
+  immediately, with a real thumbnail drawn from the local blob.
+- **Ticked in the field, applied on arrival.** A photo taken on a course has no
+  file id to flag against, so the tick rides on its queue entry and is applied
+  the moment it uploads. Without that, the one moment an inspector is looking at
+  the finding is the one moment they cannot say "this goes in the report".
+- **Unticked by default.** Nothing reaches a client-facing report because
+  somebody took a photograph; it reaches it because somebody said so.
+- **Storage shown, not discovered.** "Take offline" reports photos waiting and
+  their size, and warns past 80% of the device's quota. A capture that runs out
+  of room says so in those words.
+
+One thing fixed on the way past: every Vibe-born file was displaying its full
+ISO timestamp, milliseconds and all, because the panel split the date on a space
+and only FileMaker's format has one. Photographs would have made that the common
+case.
 
 **D4. Attach to a line — DROPPED (decided 2026-08-21).** Photos attach to the
 inspection. Kept here only to record what was considered: the file

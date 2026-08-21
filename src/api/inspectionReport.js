@@ -44,7 +44,7 @@ export function inspectionMeta(record) {
 // them out of the record is what lets the findings come from Vibe's own store.
 // The portal is still read when no lines are supplied, so a caller that has
 // only a FileMaker record — and any inspection not yet migrated — still works.
-export function buildInspectionDoc(record, logos, lines) {
+export function buildInspectionDoc(record, logos, lines, photos = []) {
   const f = record.fieldData || {};
   const li = Array.isArray(lines) && lines.length
     ? lines
@@ -155,6 +155,36 @@ export function buildInspectionDoc(record, logos, lines) {
     });
   });
 
+  // Photographs, last, on their own pages.
+  //
+  // ONLY THE ONES SOMEONE TICKED. Every photo on an inspection would make the
+  // report unusable — the tick on each attachment is what says "this one is
+  // evidence", and it lives on the file record so the choice survives a
+  // regeneration months later by somebody else.
+  //
+  // Two per row at 220pt: the content width is 468pt, and a photo of a frayed
+  // cable is legible at three inches on paper. A table rather than columns so
+  // the captions line up when one photo is portrait and its neighbour is not.
+  if (photos.length) {
+    const CELL = 220;
+    const cell = p => (p
+      ? [{ image: p.dataUrl, fit: [CELL, CELL], alignment: 'center' },
+         { text: p.caption || '', fontSize: 9, color: '#5a5a5a', alignment: 'center', margin: [0, 4, 0, 10] }]
+      : '');
+    const rows = [];
+    for (let i = 0; i < photos.length; i += 2) rows.push([cell(photos[i]), cell(photos[i + 1])]);
+    content.push({
+      pageBreak: 'before',
+      stack: [
+        { text: 'Photographs', bold: true, fontSize: 14, margin: [0, 0, 0, 12] },
+        {
+          table: { dontBreakRows: true, widths: [CELL, CELL], body: rows },
+          layout: { defaultBorder: false, paddingLeft: () => 0, paddingRight: () => 8, paddingTop: () => 0, paddingBottom: () => 0 },
+        },
+      ],
+    });
+  }
+
   return {
     pageSize: 'LETTER',
     pageMargins: [72, 46, 72, 54],
@@ -166,7 +196,7 @@ export function buildInspectionDoc(record, logos, lines) {
 }
 
 // Lazy-load pdfmake + assets, return { blob, filename }
-export async function generateInspectionReport(record, lines) {
+export async function generateInspectionReport(record, lines, photos = []) {
   const [pdfmakeMod, assets] = await Promise.all([
     import('pdfmake/build/pdfmake'),
     import('../assets/reportAssets.js'),
@@ -179,7 +209,7 @@ export async function generateInspectionReport(record, lines) {
       italics: 'LiberationSans-Italic.ttf', bolditalics: 'LiberationSans-BoldItalic.ttf',
     },
   };
-  const doc = buildInspectionDoc(record, assets.reportLogos, lines);
+  const doc = buildInspectionDoc(record, assets.reportLogos, lines, photos);
   const { filename } = inspectionMeta(record);
   const blob = await new Promise((resolve, reject) => {
     try { pdfMake.createPdf(doc).getBlob(resolve); } catch (e) { reject(e); }

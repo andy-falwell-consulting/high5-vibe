@@ -20,11 +20,16 @@
 // offline, the crew's sync wins. That is what the FileMaker portal did, what
 // `replace` already did, and what §7 of the scope accepts on the grounds that
 // one inspector owns one inspection for a day.
-import { STORES, idbPut, idbGetAll, idbDelete } from './offlineStore';
+import { STORES, idbPut, idbGet, idbGetAll, idbDelete } from './offlineStore';
 import { getCurrentEnv } from '../config/fmpEnvironments';
 import { updateVibeRecord } from './vibeRecords';
 import { syncLines } from './inspectionLinesVibe';
 import { setNaFlag } from './naFlags';
+// The raw uploader, NOT inspectionAttachments — that module imports this one to
+// queue a photo, and importing it back would be a cycle.
+import { makeVibeAttachments } from './vibeFiles';
+
+const inspectionFiles = makeVibeAttachments('inspection');
 
 // Replay order within one inspection. The record first because the Drive folder
 // a photo lands in is named from the record's own fields, so photos filed
@@ -135,6 +140,21 @@ export async function enqueue({ kind, layout, recordId, inspectionId, label, pay
   return entry;
 }
 
+/**
+ * Change something on an entry that has not been sent yet.
+ *
+ * One caller: ticking "in report" on a photo taken in a field. The photo has no
+ * file id to flag against until it uploads, so the intent rides along on the
+ * queue entry and is applied the moment it lands.
+ */
+export async function updateEntryPayload(id, patch) {
+  const entry = (await pendingEntries()).find(e => e.id === id);
+  if (!entry) return null;
+  const next = { ...entry, payload: { ...entry.payload, ...patch } };
+  await idbPut(STORES.OUTBOX, next);
+  return next;
+}
+
 export async function discardEntry(id) {
   await idbDelete(STORES.OUTBOX, id).catch(() => {});
   await refreshCounts();
@@ -166,6 +186,27 @@ const HANDLERS = {
     const cleared = e.payload.carriedCleared || [];
     if (cleared.length) await setNaFlag(e.recordId, cleared, false, 'carried').catch(() => {});
     return { lines };
+  },
+
+  async photo(e) {
+    const blob = await idbGet(STORES.BLOBS, e.blobKey);
+    // The bytes ARE the photo. If they are gone there is nothing to retry and
+    // nothing to recover, so this fails loudly rather than leaving an entry
+    // that looks like it is still waiting for a signal.
+    if (!blob) throw new Error('The photo is no longer on this device.');
+    const { name, mime, parentId, parentLabel } = e.payload;
+    const file = new File([blob], name, { type: mime || 'image/jpeg' });
+    const card = await inspectionFiles.upload(parentId, file, name, parentLabel);
+    // Ticked in the field, before this photo had a file id to tick against.
+    // Applied here rather than lost — the tick is a judgement made while
+    // looking at the finding, which is exactly when it is worth making.
+    if (e.payload.inReport && card?.recordId) {
+      await inspectionFiles.setFlags(card.recordId, { inReport: true }).catch(() => {});
+    }
+    // Deleted only once the server has it — a photo is the one thing in this
+    // queue that exists nowhere else.
+    await idbDelete(STORES.BLOBS, e.blobKey).catch(() => {});
+    return { card };
   },
 };
 

@@ -2,6 +2,7 @@
 //
 //   POST   /api/files-write?db=…&kind=ccs&parentId=123   raw bytes
 //            headers: content-type, x-filename
+//   PATCH  /api/files-write?db=…&fileId=VF-100001&inReport=1
 //   DELETE /api/files-write?db=…&fileId=VF-100001
 //
 // Raw bytes rather than multipart, matching api/image.js: the browser sends the
@@ -9,7 +10,7 @@
 // runtime. bodyParser is off for the same reason.
 import { getGoogleSession } from './_googleSession.js';
 import { ALLOWED_DBS } from './_fmp.js';
-import { SOURCES, isFileKind, putFile, nextFileId, deleteFile, driveToken, getFile } from './_vibeFiles.js';
+import { SOURCES, isFileKind, putFile, nextFileId, deleteFile, driveToken, getFile, setFileFlags } from './_vibeFiles.js';
 
 // Vercel's request body cap. A 4.5 MB limit would have refused the largest file
 // already in the store (6.2 MB), so this is worth stating rather than
@@ -47,7 +48,21 @@ export default async function handler(req, res) {
       return res.status(200).json({ deleted: fileId, name: gone?.name, parentId: gone?.parentId });
     }
 
-    if (req.method !== 'POST') return res.status(405).json({ error: 'POST or DELETE' });
+    // Setting a flag on an existing file. Query parameters rather than a body:
+    // bodyParser is off on this route so POST can take raw bytes, and a flag is
+    // one boolean — parsing a body by hand to carry it would be worse.
+    if (req.method === 'PATCH') {
+      const fileId = String(req.query?.fileId || '');
+      if (!fileId) return res.status(400).json({ error: 'fileId is required' });
+      if (req.query?.inReport === undefined) return res.status(400).json({ error: 'nothing to set' });
+      const updated = await setFileFlags(db, fileId, { inReport: req.query.inReport === '1' });
+      if (!updated) return res.status(404).json({ error: 'no such file' });
+      // eslint-disable-next-line no-unused-vars
+      const { driveId: _d, parentLabel: _l, ...safe } = updated;
+      return res.status(200).json({ file: safe });
+    }
+
+    if (req.method !== 'POST') return res.status(405).json({ error: 'POST, PATCH or DELETE' });
 
     const kind = String(req.query?.kind || '');
     const parentId = String(req.query?.parentId || '').trim();

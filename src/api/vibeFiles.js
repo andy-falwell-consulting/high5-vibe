@@ -37,6 +37,9 @@ const toCard = f => ({
   created: f.createdAt || '',
   by: f.createdBy || '',
   isImage: isImage(f.name) || String(f.mime || '').startsWith('image/'),
+  // Ticked to appear in the generated report. A property of the file, not of
+  // whoever is looking at it — see setFileFlags in api/_vibeFiles.js.
+  inReport: !!f.inReport,
   hasFile: true,
   url: fileUrl(f.id),
   size: f.size,
@@ -78,5 +81,14 @@ export function makeVibeAttachments(kind) {
   // stable — but returning it means a click behaves the same as before.
   async function freshUrl(id) { return fileUrl(id); }
 
-  return { list, upload, remove, freshUrl };
+  /** Set a per-file flag (today: whether a photo appears in the report). */
+  async function setFlags(id, patch) {
+    const q = Object.entries(patch).map(([k, v]) => `${k}=${v ? '1' : '0'}`).join('&');
+    const body = await json(await fetch(
+      `/api/files-write?${qs(`fileId=${encodeURIComponent(id)}&${q}`)}`,
+      { method: 'PATCH', credentials: 'include' }));
+    return toCard(body.file);
+  }
+
+  return { list, upload, remove, freshUrl, setFlags };
 }
