@@ -40,3 +40,7 @@
   border: 1px solid var(--success-border); border-radius: var(--radius-pill);
   font-size: var(--text-body); font-weight: var(--weight-semibold); width: fit-content;
 }
+
+/* Queued, not saved. Warning tone rather than success: nothing has gone wrong,
+   and nothing has reached the server either. */
+.rsb-toast--queued { background: var(--warning-bg); color: var(--warning-fg); border-color: var(--warning-border); }

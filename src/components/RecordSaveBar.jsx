@@ -34,5 +34,9 @@ export default function RecordSaveBar({ count = 0, saving = false, status = null
     )
   }
   if (status === 'saved') return <div className="rsb-toast">✓ Saved</div>
+  // Committed to the device but not yet to the server. Deliberately not "Saved"
+  // with a caveat: an inspector deciding whether it is safe to close the lid
+  // needs the difference to be the first thing they read, not a footnote.
+  if (status === 'queued') return <div className="rsb-toast rsb-toast--queued">↑ Queued — syncs when there is a signal</div>
   return null
 }

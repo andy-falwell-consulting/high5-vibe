@@ -3,6 +3,7 @@ import NavRail from './components/NavRail'
 import LoginScreen from './components/LoginScreen'
 import { rememberIdentity, lastIdentity, forgetIdentity } from './api/identity'
 import { requestPersistentStorage } from './registerSW'
+import { watchForConnection } from './api/outbox'
 import ReadOnlyBanner from './components/ReadOnlyBanner'
 import ContactsV2 from './components/ContactsV2'
 import PreviewBypassBanner from './components/PreviewBypassBanner'
@@ -168,6 +169,15 @@ export default function App() {
         setAuthChecked(true)
       })
   }, [])
+
+  // Drain the offline queue whenever a drain might now succeed — the network
+  // coming back, the app regaining focus, a minute passing.
+  //
+  // HERE RATHER THAN IN THE INSPECTIONS MODULE, which is what owns the queue.
+  // A crew returning to the office lands wherever they left the app, and work
+  // saved in a field must go in without anyone remembering to open the right
+  // page first.
+  useEffect(() => watchForConnection(), [])
 
   // Ask the browser not to treat this origin's storage as disposable. Safari
   // mostly says no and prompts nobody, which is why the Home-screen install

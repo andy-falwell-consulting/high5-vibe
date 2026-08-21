@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { getRecord, prefetchRecord, invalidateRecord, patchCachedRecord, addCachedRecord } from '../api/filemaker';
-import { updateVibeRecord, createVibeRecord } from '../api/vibeRecords';
+import { createVibeRecord } from '../api/vibeRecords';
 import { useAllRecords } from '../hooks/useAllRecords';
 import ListToolbar, { useListControls, ListBody } from './ListControls';
 import RecordSaveBar from './RecordSaveBar';
@@ -13,8 +13,8 @@ import InspectionLines from './InspectionLines';
 // keys do NOT: every call takes the inspection's _kpt__Inspection_ID and a
 // line's own id, where the portal client took FileMaker recordIds. That is why
 // the swap is a real change rather than an import rename.
-import { listLines, addLines, updateLine, deleteLine, copyLines } from '../api/inspectionLinesVibe';
-import { fetchCarriedLines, markCarriedLines, clearCarriedLine } from '../api/naFlags';
+import { listLines, copyLines } from '../api/inspectionLinesVibe';
+import { fetchCarriedLines, markCarriedLines } from '../api/naFlags';
 import { copyProfileFields } from '../config/inspectionCopy';
 import './Inspections.css';
 import DeleteRecordButton from './DeleteRecordButton'
@@ -24,6 +24,8 @@ import { useRecordPanel } from '../hooks/useRecordPanel';
 import TakeOffline from './TakeOffline';
 import { pinnedIds } from '../api/offlineInspections';
 import { saveDraft, loadDraft, clearDraft, draftIds } from '../api/offlineDrafts';
+import { enqueue, drainOutbox, queuedIds, onEntrySent, subscribeOutbox } from '../api/outbox';
+import SyncStatus from './SyncStatus';
 
 const LAYOUT = 'Inspections_New';
 const CACHE_VERSION = 1;
@@ -168,6 +170,7 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
   // internal: unsent work is the thing an inspector most needs to be able to
   // see at a glance at the end of a day.
   const [draftIdSet, setDraftIdSet] = useState(() => new Set());
+  const [queuedIdSet, setQueuedIdSet] = useState(() => new Set());
   const [draftRestoredAt, setDraftRestoredAt] = useState(null);
   // Lines whose carried-over badge has been cleared by an edit — including one
   // made in a previous session and restored from a draft. Held in a ref because
@@ -189,7 +192,13 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
 
   const refreshOfflineIds = useCallback(() => { pinnedIds().then(setOfflineIds); }, []);
   const refreshDraftIds = useCallback(() => { draftIds(LAYOUT).then(setDraftIdSet); }, []);
-  useEffect(() => { refreshOfflineIds(); refreshDraftIds(); }, [refreshOfflineIds, refreshDraftIds]);
+  const refreshQueuedIds = useCallback(() => { queuedIds().then(setQueuedIdSet); }, []);
+  useEffect(() => { refreshOfflineIds(); refreshDraftIds(); refreshQueuedIds(); }, [refreshOfflineIds, refreshDraftIds, refreshQueuedIds]);
+  // The queue changes from outside this module — a drain triggered by the
+  // network coming back, on any page — so the marks follow it rather than only
+  // being set when this module writes.
+  useEffect(() => subscribeOutbox(() => refreshQueuedIds()), [refreshQueuedIds]);
+
   useEffect(() => {
     const on = () => setOnline(true), off = () => setOnline(false);
     window.addEventListener('online', on); window.addEventListener('offline', off);
@@ -231,12 +240,26 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
   const [linesLoading, setLinesLoading] = useState(false);
   const tempId = useRef(0);
   const selectedRef = useRef(null);   // guards async fetches against stale selections
+  // The recordId whose findings genuinely arrived. A `lines` save sends the
+  // WHOLE array, so saving one that never loaded would delete every finding on
+  // the inspection — see the guard in handleSave.
+  const linesLoadedRef = useRef(null);
   const copySourceRef = useRef(null); // recordId of the inspection being copied, if any
   const [copySource, setCopySource] = useState('');
 
   const resetLineState = useCallback(() => {
     setLineEdits({}); setNewLines([]); setDeletedIds(new Set());
   }, []);
+
+  // A `lines` entry comes back with the array as the server stored it, so the
+  // rows on screen pick up their real ids without a second request. Without
+  // this a line added offline would keep its `new:` key until the record was
+  // reopened, and every later save would mint it a new id.
+  useEffect(() => onEntrySent((entry, result) => {
+    if (entry.kind !== 'lines' || !result?.lines) return;
+    if (String(selectedRef.current) !== String(entry.recordId)) return;
+    setLines(result.lines);
+  }), []);
 
   async function handleSelect(r) {
     setEdits({}); setSaveStatus(null);
@@ -285,6 +308,7 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
     }).catch(() => {});
     setSelected(r);
     setLines([]);
+    linesLoadedRef.current = null;
     // Vibe's store has no 50-row portal cap to work around, so this is one
     // read of the whole set however long the inspection is.
     const inspectionId = r.fieldData?._kpt__Inspection_ID;
@@ -293,6 +317,7 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
       listLines(inspectionId).then(rows => {
         if (selectedRef.current !== r.recordId) return;
         setLines(rows);
+        linesLoadedRef.current = r.recordId;
         setLinesLoading(false);
       }).catch(() => { if (selectedRef.current === r.recordId) setLinesLoading(false); });
     }
@@ -459,67 +484,97 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
     setNewLines(rows => [...rows, { _tempId: id, Category: category, Description: '', Quantity: '', Equipment: '', Element_Grade: '', Flag_Checkbox: '' }]);
   }, []);
 
-  // Re-read the lines after writing, so the on-screen rows carry the real ids
-  // the server assigned (needed for any subsequent edit or delete).
-  const refreshLines = useCallback(async () => {
-    const recordId = selected?.recordId;
-    const inspectionId = selected?.fieldData?._kpt__Inspection_ID;
-    if (!recordId || !inspectionId) return;
-    const rows = await listLines(inspectionId);
-    if (selectedRef.current === recordId) setLines(rows);
-  }, [selected?.recordId, selected?.fieldData?._kpt__Inspection_ID]);
+  // There is no refreshLines any more. It existed because the per-row writes
+  // could not tell the caller what ids the server had assigned, so the whole
+  // set had to be re-read after every save. `sync` returns the stored array, and
+  // the outbox hands it straight back — see the onEntrySent effect above.
 
   async function handleSave() {
     const lineChanges = Object.keys(lineEdits).length + newLines.length + deletedIds.size;
     if (!Object.keys(edits).length && !lineChanges) { return; }
     setSaving(true); setSaveStatus(null); setSaveErrorMsg(null);
     try {
-      // Line items first — they're the risky part. If they fail we surface the
-      // error before touching the parent, rather than half-saving.
+      const recordId = selected.recordId;
+      const label = orgName(f || {});
+      let savedLines = null;
+
+      if (Object.keys(edits).length) {
+        await enqueue({ kind: 'record', layout: LAYOUT, recordId, label, payload: { fields: edits } });
+      }
+
       if (lineChanges) {
         // Keyed on the inspection's own id, not FileMaker's recordId — see the
         // import comment. Passing recordId here would write under a key that
         // looks valid and belongs to nothing.
         const inspectionId = selected.fieldData?._kpt__Inspection_ID;
         if (!inspectionId) throw new Error('This inspection has no ID yet, so its lines cannot be saved.');
-        for (const id of deletedIds) await deleteLine(inspectionId, id);
-        for (const [id, changes] of Object.entries(lineEdits)) {
-          if (deletedIds.has(String(id))) continue;   // deleted wins over edited
-          await updateLine(inspectionId, id, changes);
+        // THE GUARD THAT STOPS A SAVE DELETING AN INSPECTION. A findings save
+        // sends the whole array and the server stores exactly that, so an array
+        // built from findings that never loaded — offline with nothing pinned,
+        // a request that failed — would wipe every line on the record. Adding
+        // one line to an inspection whose 44 could not be read must not be a
+        // way to lose the 44.
+        if (linesLoadedRef.current !== recordId) {
+          throw new Error('The findings could not be loaded, so they cannot be saved. Reopen this inspection first.');
         }
-        const toAdd = newLines.filter(l => (l.Description || '').trim() || l.Quantity || l.Equipment || l.Element_Grade);
-        if (toAdd.length) await addLines(inspectionId, toAdd);
 
-        // Persist the cleared carried-over flags for the lines just edited.
-        for (const id of Object.keys(lineEdits)) clearCarriedLine(selected.recordId, id).catch(() => {});
-        for (const id of deletedIds) clearCarriedLine(selected.recordId, id).catch(() => {});
+        // THE WHOLE ARRAY, not a list of changes. One request instead of the
+        // 44 sequential round trips a typical inspection used to make, and
+        // idempotent — so a queued entry replayed twice cannot double-apply.
+        // Deleting a line is leaving it out of the array.
+        savedLines = workingLines
+          .filter(l => !l._deleted)
+          // A row added and never filled in is an empty line on the report.
+          .filter(l => l.recordId || (l.Description || '').trim() || l.Quantity || l.Equipment || l.Element_Grade)
+          .map(l => {
+            // `_deleted` is a screen flag and `_tempId` is this session's key
+            // for a row the server has never seen; neither belongs in a payload.
+            const rest = { ...l };
+            delete rest._deleted;              // a screen flag
+            const temp = rest._tempId;
+            delete rest._tempId;               // this session's key for an unsent row
+            return rest.recordId ? rest : { ...rest, recordId: temp };
+          });
 
-        await refreshLines();
-        resetLineState();
+        await enqueue({
+          kind: 'lines', layout: LAYOUT, recordId, inspectionId, label,
+          payload: {
+            lines: savedLines,
+            // Editing a line is what marks it reviewed; the badge is cleared
+            // on screen already and this is what persists it.
+            carriedCleared: [...new Set([...Object.keys(lineEdits), ...deletedIds])].map(String),
+          },
+        });
       }
-      // Inspections_New is Vibe-owned (api/_vibeStore.js), so the record's own
-      // fields no longer go back to FileMaker. Line items still do — they are a
-      // portal, and the fragment model covers fieldData only. Until they move,
-      // an inspection's fields live in Vibe and its findings in FileMaker.
-      if (Object.keys(edits).length) await updateVibeRecord(LAYOUT, selected.recordId, edits);
-      // Apply saved values optimistically — no blocking refetch (which can be
-      // starved behind background batch loads). Patch the list cache so the
-      // sidebar status dot updates, and drop the detail cache so a later
-      // reopen pulls authoritative data from the server.
-      patchCachedRecord(LAYOUT, CACHE_VERSION, selected.recordId, edits);
-      invalidateRecord(LAYOUT, selected.recordId);
+
+      // COMMITTED. Everything from here is local bookkeeping: the work is
+      // durable in the queue, so the staged state can be cleared whether or not
+      // there is a network to send it over.
+      patchCachedRecord(LAYOUT, CACHE_VERSION, recordId, edits);
+      invalidateRecord(LAYOUT, recordId);
       setSelected(prev => ({ ...prev, fieldData: { ...prev.fieldData, ...edits } }));
-      setEdits({}); setSaveStatus('saved');
-      // The work is on the server now, so the local copy of it should not
-      // outlive that — a draft left behind would be restored over the saved
-      // record the next time it was opened.
+      if (savedLines) { setLines(savedLines); linesLoadedRef.current = recordId; }
+      setEdits({});
+      resetLineState();
+
       draftReadyRef.current = null;
-      await clearDraft(LAYOUT, selected.recordId).catch(() => {});
+      await clearDraft(LAYOUT, recordId).catch(() => {});
       setDraftRestoredAt(null);
       reviewedRef.current = new Set();
       refreshDraftIds();
-      draftReadyRef.current = selected.recordId;
-      setTimeout(() => setSaveStatus(null), 2000);
+      refreshQueuedIds();
+      draftReadyRef.current = recordId;
+
+      // Online this finishes in the same second and the toast says "Saved".
+      // Offline it does nothing and the toast says "Queued" — one path either
+      // way, which is what stops the offline half being a branch nobody
+      // exercises until it matters.
+      const before = navigator.onLine;
+      await drainOutbox().catch(() => {});
+      const stillQueued = (await queuedIds()).has(String(recordId));
+      setSaveStatus(!before || stillQueued ? 'queued' : 'saved');
+      refreshQueuedIds();
+      setTimeout(() => setSaveStatus(null), 2500);
     } catch (e) { setSaveStatus('error'); setSaveErrorMsg(e?.message || null); }
     finally { setSaving(false); }
   }
@@ -562,11 +617,7 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
               >＋ New</button>
             </div>
           </div>
-          {!online && (
-            <div className="insp-offline-strip">
-              No connection — {offlineIds.size || 'no'} inspection{offlineIds.size === 1 ? '' : 's'} downloaded
-            </div>
-          )}
+          <SyncStatus />
           <ListToolbar c={list} unit="inspections" />
         </div>
 
@@ -591,6 +642,9 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
                   </div>
                   {draftIdSet.has(String(r.recordId)) && (
                     <span className="insp-item-draft" title="Unsaved changes held on this device">●</span>
+                  )}
+                  {queuedIdSet.has(String(r.recordId)) && (
+                    <span className="insp-item-queued" title="Saved, waiting to sync">↑</span>
                   )}
                   {offlineIds.has(String(r.recordId)) && (
                     <span className="insp-item-offline" title="Downloaded for offline use">⇩</span>
@@ -724,7 +778,6 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
               <RecordFooter id={f._kpt__Inspection_ID} recordId={selected.recordId} fieldData={f} />
               <RecordSaveBar
                 count={dirtyCount} saving={saving} status={saveStatus} errorMessage={saveErrorMsg}
-                blockedReason={online ? null : 'No connection — held on this device'}
                 onSave={handleSave} onDiscard={handleDiscard} />
             </div>
           </>

@@ -5,7 +5,23 @@
 //     { action: 'add',     lines: [ {...}, … ] }
 //     { action: 'update',  lineId, changes: {...} }
 //     { action: 'remove',  lineId }
-//     { action: 'replace', lines: [ {...}, … ] }   // used by copy
+//     { action: 'replace', lines: [ {...}, … ] }   // used by copy — RE-MINTS IDS
+//     { action: 'sync',    lines: [ {...}, … ] }   // the whole array, IDS KEPT
+//
+// SYNC VS REPLACE — they look alike and are not interchangeable. `replace`
+// calls nextLineId() for every incoming row, so it hands back a completely
+// renumbered set. That is right for a copy (the rows genuinely are new ones on
+// a new inspection) and wrong for everything else: a line's id is what the
+// carried-over flags in api/na-flags.js are keyed on, so renumbering a saved
+// inspection silently orphans every one of them and presents last year's
+// unreviewed findings as reviewed.
+//
+// `sync` keeps each row's id, mints one only for rows that arrive without,
+// and drops stored rows the array no longer contains. It is what an ordinary
+// save uses — online and, once the outbox replays, offline — because it is
+// idempotent: sending the same array twice cannot double-apply, where a
+// sequence of add/update/remove calls half-applied on a dropped connection
+// leaves an inspection in a state nobody chose.
 //
 // Every write is read-modify-write on that inspection's single hash field. Two
 // people editing different lines of the same inspection still resolve
@@ -71,6 +87,36 @@ export default async function handler(req, res) {
       return res.status(200).json({ inspectionId, lines: await writeLines(db, inspectionId, next) });
     }
 
+    if (action === 'sync') {
+      const incoming = Array.isArray(body.lines) ? body.lines : [];
+      const rows = [];
+      for (const l of incoming) {
+        // An id the client already holds is kept — including one belonging to a
+        // row the office deleted while a crew was offline. Resurrecting it is
+        // the same last-writer-wins the whole array already resolves by, and it
+        // keeps the row's flags attached to it.
+        //
+        // `new:` ids are the app's own temporary keys for rows added in a
+        // session that has never synced. They are treated as no id at all: a
+        // client key must never be stored, or the next session's would collide
+        // with it.
+        const given = l?.id === undefined || l?.id === null ? '' : String(l.id);
+        const isNew = !given || given.startsWith('new:');
+        const fields = cleanLine(l, '');
+        const hasContent = Object.keys(fields).length > 1;
+        // A blank new row is not a line — it is an empty row someone added and
+        // never filled in, and writing it puts a blank line on the report. A
+        // blank STORED row is kept: emptying a line's fields is an edit, not a
+        // request to delete it. Deleting is done by leaving it out of the array.
+        if (isNew && !hasContent) continue;
+        // Minted only once it is known the row is being kept, so a session of
+        // added-then-abandoned rows does not burn ids.
+        rows.push(cleanLine(l, isNew ? await nextLineId(db) : given));
+      }
+      const next = await writeLines(db, inspectionId, rows);
+      return res.status(200).json({ inspectionId, lines: next, count: next.length });
+    }
+
     if (action === 'replace') {
       const incoming = Array.isArray(body.lines) ? body.lines : [];
       const rows = [];
@@ -81,7 +127,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ inspectionId, lines: await writeLines(db, inspectionId, rows) });
     }
 
-    return res.status(400).json({ error: "action must be add, update, remove or replace" });
+    return res.status(400).json({ error: "action must be add, update, remove, replace or sync" });
   } catch (e) {
     return res.status(502).json({ error: String(e?.message || e).slice(0, 300) });
   }

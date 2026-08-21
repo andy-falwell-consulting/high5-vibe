@@ -199,6 +199,11 @@ wrapper would have looked right in the file and done nothing on screen.
 
 ## Milestone C — sync on reconnect
 
+**BUILT — v1.0.501.** Verified against a faked network with every line of app
+code running for real: an offline save queues, the `online` event alone drains
+it, replay order is record → lines → flags, a server rejection keeps its entry
+visible and retryable, and "Try again" recovers it.
+
 *Step 3, and the real work.*
 
 **C1. The outbox.** `src/api/outbox.js`, entry shape per §5 of the scope doc.
@@ -237,6 +242,43 @@ saving 44 edited lines is 44 sequential round trips; this makes it one. One
 path, and a visibly faster save on the office desk where it gets tested daily.
 
 ---
+
+### What C actually shipped
+
+- **Save no longer means send.** Pressing Save writes to an IndexedDB queue and
+  returns; a drainer sends it whenever there is a network. Online that finishes
+  in the same second. Offline the toast reads *"Queued — syncs when there is a
+  signal"* rather than *"Saved"*, because an inspector deciding whether it is
+  safe to close the lid needs the difference first, not as a footnote.
+- **`action: 'sync'`** on `/api/inspection-lines`, id-preserving and idempotent.
+  12 unit tests cover it, including the two that matter: existing ids survive a
+  save, and the app's `new:` keys are never stored.
+- **One save path, online and off** — the per-row `add`/`update`/`remove` loop
+  is deleted, along with `addLines`, `updateLine`, `deleteLine` and
+  `clearCarriedLine`, which it orphaned. A 44-line inspection was 44 sequential
+  round trips; it is now one.
+- **Four states, permanently visible** in the sidebar: Offline — N held /
+  Syncing N of M / Synced HH:MM / N could not sync, with "Try again". A failed
+  entry keeps the server's own message and is never dropped.
+- **Draining is App-level**, not module-level: a crew returning to the office
+  lands wherever they left the app, and the work must go in without anyone
+  remembering to open Inspections first.
+- **Two marks in the list**, because they are different states: an amber dot
+  for unsaved changes on the device, a blue arrow for saved-but-not-sent.
+
+Two things found while building:
+
+- **A findings save could delete an inspection.** `sync` stores exactly the
+  array it is sent, so an array built from findings that never loaded — offline
+  with nothing pinned, or a read that failed — would wipe every line on the
+  record. Adding one line to an inspection whose 44 could not be read must not
+  be a way to lose the 44. Saving now refuses, by name, unless the findings
+  genuinely arrived for that record.
+- **Replay order was decided by whichever half was enqueued first.** Sorting on
+  `createdAt` alone let that happen; the photo upload names its Drive folder
+  from the record's own fields, so a photo sent before the record's edits files
+  under a stale name. Entries are now grouped by record and ordered by kind
+  inside the group, so the order cannot depend on how a save was written.
 
 ## Milestone D — photos, and the report checkbox
 

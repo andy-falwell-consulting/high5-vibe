@@ -59,4 +59,6 @@ export async function fetchCarriedLines(recordId) {
   }
 }
 export const markCarriedLines = (recordId, lineIds) => setNaFlag(recordId, lineIds, true, CARRIED);
-export const clearCarriedLine = (recordId, lineId) => setNaFlag(recordId, lineId, false, CARRIED);
+// clearCarriedLine is gone: clearing a badge one line at a time belonged to the
+// per-row save loop. The outbox sends the whole reviewed set in one call
+// alongside the findings it belongs to — see the `lines` handler in outbox.js.
