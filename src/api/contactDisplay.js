@@ -22,7 +22,17 @@ import { getCurrentEnv } from '../config/fmpEnvironments';
 const FIELDS_BY_LAYOUT = {
   'RCD_New':         { org: 'zz__Display_Organization__ct', person: 'zz__Display_Contact__ct', address: 'Address_Block_Billing' },
   'trainings_New':   { org: 'zz__Display_Organization__ct', person: 'zz__Display_Contact__ct', address: 'Address_Block_Billing' },
-  'Estimates_New':   {                                      person: 'zz__Display_Contact__ct', address: 'Address_Block_Billing' },
+  // `personOrOrg`: this layout has ONE display field and no organization field
+  // at all — verified against production, where zz__Display_Organization__ct
+  // does not exist on Estimates_New. Its create form labels the field
+  // "Contact / Organization" for exactly that reason: it carries whichever the
+  // record has.
+  //
+  // Without the flag, picking an ORGANISATION resolved a name with nowhere to
+  // put it — org had no mapping, contactName was empty, so nothing was written
+  // and the header stayed blank. Picking a PERSON always worked, which is why
+  // this survived.
+  'Estimates_New':   { person: 'zz__Display_Contact__ct', personOrOrg: true, address: 'Address_Block_Billing' },
   'Inspections_New': { org: 'Organization',                                                    address: 'Address_Block_Billing' },
   'RMI_New':         { org: 'zz__Display_Organization__ct', person: 'zz__Display_Contact__ct' },
 };
@@ -63,6 +73,12 @@ export function contactDisplayFields(layout, resolved, { clearAddress = false } 
   const out = {};
   if (map.org && resolved.organizationName) out[map.org] = resolved.organizationName;
   if (map.person && resolved.contactName) out[map.person] = resolved.contactName;
+  // One field for both, and no person to put in it — use the organisation.
+  // Only reached on a layout that declares personOrOrg, so no other layout can
+  // silently start showing an organisation where it expects a person.
+  else if (map.person && map.personOrOrg && resolved.organizationName) {
+    out[map.person] = resolved.organizationName;
+  }
   if (map.address) {
     if (resolved.addressBlock) out[map.address] = resolved.addressBlock;
     else if (clearAddress) out[map.address] = '';
