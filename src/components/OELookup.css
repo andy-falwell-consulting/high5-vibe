@@ -56,7 +56,6 @@
 .oe-code-preview code { font-family: var(--font-mono); font-size: var(--text-caption); background: var(--surface-sunken); padding: 1px 5px; border-radius: var(--radius-xs); }
 .oe-code-note { color: var(--fg-secondary); }
 
-.oe-record-footer { padding-top: var(--space-md); border-top: 1px solid var(--border); font-size: var(--text-micro); color: var(--fg-secondary); }
 
 /* The skeleton stack while the list loads, and the left half of the page header.
    Both are containers with no colour of their own — kept because the markup

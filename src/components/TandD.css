@@ -168,6 +168,5 @@
 .tnd-dirty-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--fg); margin-left: 6px; vertical-align: middle; }
 
 /* ── Footer ────────────────────────────────────────────────────── */
-.tnd-record-footer { font-size: 13px; color: var(--fg-disabled); text-align: right; padding: 0 0 8px; font-family: monospace; }
 
 /* ── Light Theme ───────────────────────────────────────────────── */

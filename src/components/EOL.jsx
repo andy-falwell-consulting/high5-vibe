@@ -7,6 +7,7 @@ import RecordSaveBar from './RecordSaveBar';
 import AttachmentsPanel from './AttachmentsPanel';
 import { trainingAttachments } from '../api/trainingAttachments';
 import './EOL.css';
+import RecordFooter from './RecordFooter';
 
 const LAYOUT = 'trainings_New'; // TEMP placeholder — net-new module; swap to the real EOL layout once created in FileMaker
 const CACHE_VERSION = 1;
@@ -365,9 +366,7 @@ export default function EOL({ navTarget, onClearNav, onRecordSelect } = {}) {
                 <AttachmentsPanel parentId={f._kpt__TrainingProposal_ID} parentLabel={f.zz__Display_Organization__ct} api={trainingAttachments} title="Photos" invoiceDocNumber={f._kat__QuickBooks_Invoice_ID} readOnly={RECORDS_LOCKED} />
               </div>
 
-              <div className="eol-record-footer">
-                ID {f._kpt__TrainingProposal_ID} · Record {selected.recordId} · Created {f.zz__Created_On?.split(' ')[0]} by {f.zz__Created_By} · Modified {f.zz__Modified_On?.split(' ')[0] || '—'} by {f.zz__Modified_By}
-              </div>
+              <RecordFooter id={f._kpt__TrainingProposal_ID} recordId={selected.recordId} fieldData={f} />
               <RecordSaveBar count={dirtyCount} saving={saving} status={saveStatus} errorMessage={saveErrorMsg} onSave={handleSave} onDiscard={handleDiscard} />
             </div>
           </>

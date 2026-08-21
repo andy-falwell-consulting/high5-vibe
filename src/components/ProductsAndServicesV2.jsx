@@ -14,6 +14,7 @@ import { CATEGORIES, TYPES, VENDORS, QBO_INCOME, QBO_CLASS } from '../config/pro
 import { BRAND } from '../config/brandColors';
 import './ProductsAndServicesV2.css';
 import DeleteRecordButton from './DeleteRecordButton';
+import RecordFooter from './RecordFooter';
 
 const LAYOUT = 'Products & Services_New';
 // Must match the cacheVersion passed to useAllRecords below — patchCachedRecord
@@ -934,7 +935,7 @@ export default function ProductsAndServicesV2({ navTarget, onClearNav, onRecordS
                 </div>
               </div>
 
-              <div className="v2-record-footer">ID {f._kpt__Item_ID} · Record {selected.recordId} · Created {f.zz__Created_On?.split(' ')[0] || '—'} by {f.zz__Created_By || '—'} · Modified {f.zz__Modified_On?.split(' ')[0] || '—'} by {f.zz__Modified_By || '—'}</div>
+              <RecordFooter id={f._kpt__Item_ID} recordId={selected.recordId} fieldData={f} />
             </div>
           </>
         )}

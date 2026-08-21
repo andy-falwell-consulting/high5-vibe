@@ -20,6 +20,7 @@ import { getCurrentEnv } from '../config/fmpEnvironments';
 import ReminderModal from './ReminderModal';
 import QuickAddFromContact from './QuickAddFromContact';
 import './ContactsV2.css';
+import RecordFooter from './RecordFooter';
 
 // Contacts, on Vibe's own model — organizations, people and affiliations as
 // three separate things (docs/contacts-model.md).
@@ -1322,6 +1323,9 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
                     <InvoicesTable state={invoices} openId={openId} />
                   </Section>
                 )}
+                <RecordFooter id={person.id} fieldData={{}}
+                  created={person.createdOn} createdBy={person.createdBy}
+                  modified={person.modifiedOn} modifiedBy={person.modifiedBy} />
               </>
             )}
           </div>
@@ -1466,6 +1470,9 @@ export default function ContactsV2({ navTarget, onClearNav, onRecordSelect, onNa
                     <InvoicesTable state={invoices} openId={openId} />
                   </Section>
                 )}
+                <RecordFooter id={org.id} fieldData={{}}
+                  created={org.createdOn} createdBy={org.createdBy}
+                  modified={org.modifiedOn} modifiedBy={org.modifiedBy} />
               </>
             )}
           </div>

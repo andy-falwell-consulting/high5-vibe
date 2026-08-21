@@ -19,6 +19,7 @@ import { copyProfileFields } from '../config/inspectionCopy';
 import './Inspections.css';
 import DeleteRecordButton from './DeleteRecordButton'
 import ReminderModal from './ReminderModal'
+import RecordFooter from './RecordFooter';
 
 const LAYOUT = 'Inspections_New';
 const CACHE_VERSION = 1;
@@ -600,9 +601,7 @@ export default function Inspections({ navTarget, onClearNav, onRecordSelect } = 
               />
               {attError && <p className="insp-att-error">{attError}</p>}
 
-              <div className="insp-record-footer">
-                ID {f._kpt__Inspection_ID} · Record {selected.recordId} · Created {f.zz__Created_On?.split(' ')[0]} by {f.zz__Created_By} · Modified {f.zz__Modified_On?.split(' ')[0] || '—'} by {f.zz__Modified_By}
-              </div>
+              <RecordFooter id={f._kpt__Inspection_ID} recordId={selected.recordId} fieldData={f} />
               <RecordSaveBar count={dirtyCount} saving={saving} status={saveStatus} errorMessage={saveErrorMsg} onSave={handleSave} onDiscard={handleDiscard} />
             </div>
           </>

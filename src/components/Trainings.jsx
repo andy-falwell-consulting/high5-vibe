@@ -23,6 +23,7 @@ import './Trainings.css';
 import DeleteRecordButton from './DeleteRecordButton'
 import ReminderModal from './ReminderModal'
 import { TRAININGS_LAYOUT as LAYOUT, TRAININGS_CACHE_VERSION as CACHE_VERSION, TRAINER_SLOTS } from '../config/trainingsCache';
+import RecordFooter from './RecordFooter';
 
 const STATUS_COLOR = {
   'Final Invoiced': UI.success,
@@ -894,9 +895,7 @@ export default function Trainings({ navTarget, onClearNav, onRecordSelect, onNav
               )}
 
 
-              <div className="trn-record-footer">
-                ID {f._kpt__TrainingProposal_ID} · Record {selected.recordId} · Created {f.zz__Created_On?.split(' ')[0]} by {f.zz__Created_By} · Modified {f.zz__Modified_On?.split(' ')[0] || '—'} by {f.zz__Modified_By}
-              </div>
+              <RecordFooter id={f._kpt__TrainingProposal_ID} recordId={selected.recordId} fieldData={f} />
               <RecordSaveBar count={dirtyCount} saving={saving} status={saveStatus} errorMessage={saveErrorMsg} onSave={handleSave} onDiscard={handleDiscard} />
             </div>
           </>

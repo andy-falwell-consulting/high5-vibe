@@ -9,6 +9,7 @@ import RecordSaveBar from './RecordSaveBar'
 import RecordFormModal from './RecordFormModal'
 import './RMI.css'
 import DeleteRecordButton from './DeleteRecordButton'
+import RecordFooter from './RecordFooter';
 
 const LAYOUT = 'RMI_New'
 const CACHE_VERSION = 1
@@ -418,9 +419,7 @@ export default function RMI({ navTarget, onClearNav, onRecordSelect } = {}) {
                 </div>
               </Section>
 
-              <div className="rmi-record-footer">
-                ID {f._kpt__RMI_ID || '—'} · Record {selected.recordId} · Created {f.zz__Created_On?.split(' ')[0] || '—'} by {f.zz__Created_By || '—'} · Modified {f.zz__Modified_On?.split(' ')[0] || '—'} by {f.zz__Modified_By || '—'}
-              </div>
+              <RecordFooter id={f._kpt__RMI_ID} recordId={selected.recordId} fieldData={f} />
               <RecordSaveBar count={dirtyCount} saving={saving} status={saveStatus} errorMessage={saveErrorMsg} onSave={handleSave} onDiscard={handleDiscard} />
             </div>
           </>

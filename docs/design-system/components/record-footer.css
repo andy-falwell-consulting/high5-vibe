@@ -1,0 +1,42 @@
+/* Record footer — the provenance line under a record.
+   Who made it and when, who touched it last and when, plus the ids.
+
+   Quiet on purpose — caption size, right-aligned, out of the reading path of
+   the record itself. But --fg-SECONDARY, not --fg-disabled.
+
+   Trainings used --fg-disabled and copying that faithfully would have been
+   wrong. Measured against --card in the light theme: --fg-disabled is #C1C1C1,
+   1.80:1 — far under the 4.5:1 floor, and not really legible at 13px.
+   --fg-secondary is #6F6F6F, 5.02:1. The whole point of the request is that
+   every record SHOWS this, and 1.8:1 shows it only in the sense that the pixels
+   are present.
+
+   --fg-disabled is for a control you cannot use, where low contrast is the
+   message. Reference text is not disabled.
+
+   (This was a regression of mine: the original hex here was #6b7280, about
+   4.8:1, and the branding sweep in v1.0.480 mapped it to --fg-disabled.)
+
+   MONOSPACE, and that is the one deliberate oddity. The line is almost entirely
+   ids and dates — `RCD-1234 · 06/05/2013` — and proportional digits in a row of
+   them are harder to compare than they look. It is the same reasoning as
+   font-variant-numeric on a money column.
+
+   Nine modules each had their own copy of this rule under nine different class
+   names (.trn-record-footer, .est-record-footer, .insp-record-footer, …), with
+   two subtly different bodies in the markup — one guarded a missing value with
+   an em dash, the other printed "undefined". One name, one rule. */
+
+.h5-record-footer {
+  flex-shrink: 0;
+  padding: 0 0 var(--space-sm);
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  color: var(--fg-secondary);
+}
+
+/* The separator between facts. A span rather than a literal "·" in the markup
+   so the spacing is the stylesheet's business, and so a fact that is absent can
+   take its separator with it. */
+.h5-record-footer__sep { padding: 0 var(--space-xs); opacity: 0.6; }

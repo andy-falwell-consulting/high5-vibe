@@ -350,7 +350,6 @@
 .cv2-suggest { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 11px 16px; background: var(--success-bg); border: 1px solid var(--success-border); border-radius: 10px; font-size: 17px; color: var(--success-fg); }
 .cv2-suggest button { background: transparent; border: 1px solid var(--success-border); color: var(--success-fg); border-radius: 7px; padding: 5px 12px; font-size: 15px; cursor: pointer; font-family: inherit; }
 .cv2-suggest button:hover { background: var(--success-bg); }
-.cv2-meta { margin-top: 16px; font-size: 13px; color: var(--cv2-text-4); font-family: monospace; }
 
 /* ── Save bar / toast ──────────────────────────────────────────── */
 .cv2-savebar { position: sticky; bottom: 0; display: flex; align-items: center; gap: 12px; margin: 0 16px 14px; padding: 11px 16px; background: var(--cv2-surface); border: 1px solid var(--cv2-border-2); border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,0.35); }

@@ -55,8 +55,20 @@ export async function writeHash(key, entries) {
 
 export const isOrgRow = f => f.Organization === 1 || f.Organization === '1';
 
+// zz__* are FileMaker's own provenance stamps. Carried through both
+// projections so a contact can show the same footer every other record shows —
+// they were being dropped here, which is why Contacts was the one record page
+// with no "created by" line rather than an oversight in the component.
+const provenance = f => ({
+  createdOn: f.zz__Created_On || '',
+  createdBy: f.zz__Created_By || '',
+  modifiedOn: f.zz__Modified_On || '',
+  modifiedBy: f.zz__Modified_By || '',
+});
+
 export function toOrganization(f) {
   return {
+    ...provenance(f),
     id: String(f._kpt__Contact_ID),
     name: f.Name_Organization || '',
     status: f.Status || '',
@@ -71,6 +83,7 @@ export function toOrganization(f) {
 
 export function toPerson(f) {
   return {
+    ...provenance(f),
     id: String(f._kpt__Contact_ID),
     first: f.Name_First || '',
     last: f.Name_Last || '',

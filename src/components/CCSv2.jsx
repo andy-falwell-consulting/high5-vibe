@@ -21,6 +21,7 @@ import { contactDetails } from '../api/contactLookup';
 import './CCSv2.css';
 import DeleteRecordButton from './DeleteRecordButton';
 import ReminderModal from './ReminderModal';
+import RecordFooter from './RecordFooter';
 
 const LAYOUT = RCD_LAYOUT;
 const CCS_ATT_API = { list: listCcsAttachments, upload: uploadCcsAttachment, remove: deleteCcsAttachment, freshUrl: ccsAttachmentUrl };
@@ -1117,9 +1118,7 @@ export default function CCSv2({ navTarget, onNavigateTo, onNavigateApp, onClearN
 
               <AttachmentsPanel parentId={f._kpt__RCD_ID} parentLabel={org} api={CCS_ATT_API} invoiceDocNumber={f['_kat__QuickBooks_Invoice_ID(1)']} />
 
-              <div className="cv2-meta">
-                ID {f._kpt__RCD_ID} · Record {selected.recordId} · Created {f.zz__Created_On?.split(' ')[0] || '—'} by {f.zz__Created_By} · Modified {f.zz__Modified_On?.split(' ')[0] || '—'} by {f.zz__Modified_By}
-              </div>
+              <RecordFooter id={f._kpt__RCD_ID} recordId={selected.recordId} fieldData={f} />
             </div>
 
             {dirtyCount > 0 && (

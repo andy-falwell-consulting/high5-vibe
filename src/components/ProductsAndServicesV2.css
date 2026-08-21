@@ -656,13 +656,6 @@
 }
 
 /* ── Footer ────────────────────────────────────────────────────── */
-.v2-record-footer {
-  font-size: 13px;
-  color: var(--fg-secondary);
-  text-align: right;
-  padding: 0 28px 20px;
-  font-family: monospace;
-}
 
 .v2-empty-section {
   padding: 14px 16px;
