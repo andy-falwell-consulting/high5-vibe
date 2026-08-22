@@ -174,6 +174,25 @@ export default async function handler(req, res) {
   const summary = Object.fromEntries(Object.entries(buckets).map(([k, v]) => [k, v.length]));
   const exceptions = EXCEPTIONS.reduce((t, k) => t + buckets[k].length, 0);
 
+  // Exceptions in the STORED result, so the Admin tab can show them without
+  // re-running a five-thousand-order sweep. 121 rows is about 15 KB; the
+  // explained buckets run to thousands and are deliberately left out.
+  const rows = Object.fromEntries(EXCEPTIONS.map(k => [k, buckets[k]]));
+
+  // The year an exception falls in is the only thing that makes this readable.
+  // 96% of the value is 2021-22, and a headline that never moves gets ignored
+  // within a week — so the tab leads on what is RECENT and files the rest as a
+  // backlog.
+  const byYear = {};
+  for (const k of EXCEPTIONS) {
+    for (const r of buckets[k]) {
+      const y = String(r.date || '').slice(0, 4) || 'unknown';
+      byYear[y] = byYear[y] || { count: 0, value: 0 };
+      byYear[y].count += 1;
+      byYear[y].value = Math.round((byYear[y].value + (r.total || 0)) * 100) / 100;
+    }
+  }
+
   const result = {
     at: new Date().toISOString(),
     ordersSince: LINK_LIVE_FROM,
@@ -181,6 +200,8 @@ export default async function handler(req, res) {
     summary,
     exceptions,
     unexplainedValue: { paid: money(buckets.missing_paid), unpaid: money(buckets.missing_unpaid) },
+    byYear,
+    rows,
   };
   // The RESULT is stored, never the source data — this owns no records.
   await redis.set(lastKey(db), result).catch(() => {});
@@ -191,8 +212,5 @@ export default async function handler(req, res) {
   if (req.query?.full === '1') return res.status(200).json({ db, ...result, buckets });
   // Exceptions in full, everything else as a count: the explained buckets run to
   // thousands of rows and there is nothing in them to act on.
-  return res.status(200).json({
-    db, ...result,
-    rows: Object.fromEntries(EXCEPTIONS.map(k => [k, buckets[k]])),
-  });
+  return res.status(200).json({ db, ...result });
 }
