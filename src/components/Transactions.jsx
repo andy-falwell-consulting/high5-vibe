@@ -6,6 +6,7 @@ import ListToolbar, { useListControls } from './ListControls';
 const ROW_H = 54; // fixed row height (px) — must match .txn-row in CSS for virtualization
 import './Transactions.css';
 import { useRecordPanel } from '../hooks/useRecordPanel';
+import { LINE_META, ORIGIN_META, lineLabel, lineShort, lineTone, originLabel, originShort, LINE_ORDER, ORIGIN_ORDER } from '../config/txnSource';
 
 // Read-only ledger of QBO sales transactions (mirror served by /api/transactions).
 // Shopify orders appear here as Sales Receipts.
@@ -20,6 +21,21 @@ const TYPE_ORDER = ['Invoice', 'Estimate', 'SalesReceipt', 'CreditMemo'];
 // QBO web-app deep-link path per transaction type (…/app/<path>?txnId=<id>).
 
 const money = v => `$${Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+// Why the source says what it says, in words rather than a rule name.
+//
+// A label nobody can interrogate is a label nobody should trust — around half
+// the ledger has no recorded source at all, so the ones that DO claim something
+// have to be able to show their working.
+const WHY = {
+  stamp: 'Vibe stamped its own reference on this record when it created it.',
+  link: "QuickBooks' own link between this transaction and the estimate.",
+  docNumber: 'The document number follows the online store\u2019s own numbering.',
+  customer: 'The customer QuickBooks files these under.',
+  note: 'An estimate number typed into the internal memo \u2014 free text, so this one is inferred rather than certain.',
+  type: 'An estimate is not from anywhere; it is where a piece of work starts.',
+  none: 'Nothing on this record names a source. Most of the ledger before 2018 is like this.',
+};
 const parseDate = v => { if (!v) return 0; const [y, m, d] = String(v).split('-'); return new Date(`${y}-${m}-${d}T00:00:00`).getTime() || 0; };
 const fmtDate = v => { const t = parseDate(v); return t ? new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'; };
 
@@ -54,6 +70,8 @@ export default function Transactions({ onRecordSelect } = {}) {
   const [selected, setSelected] = useState(null);
   const [detail, setDetail] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [originFilter, setOriginFilter] = useState('all');
+  const [lineFilter, setLineFilter] = useState('all');
   const [pdfBusy, setPdfBusy] = useState(false);
 
   useEffect(() => {
@@ -76,7 +94,13 @@ export default function Transactions({ onRecordSelect } = {}) {
       { id: 'all', label: 'All' },
       ...TYPE_ORDER.map(t => ({ id: t, label: TYPE_META[t].label + 's', color: TYPE_META[t].color, match: f => f.type === t })),
     ],
-    extraFilter: statusFilter === 'all' ? undefined : (f => f.status === statusFilter),
+    // One predicate for all three dropdowns — useListControls takes a single
+    // extraFilter, and combining them here keeps the count in the toolbar honest.
+    extraFilter: (statusFilter === 'all' && originFilter === 'all' && lineFilter === 'all')
+      ? undefined
+      : (f => (statusFilter === 'all' || f.status === statusFilter)
+           && (originFilter === 'all' || (f.src?.o || 'unknown') === originFilter)
+           && (lineFilter === 'all' || (f.src?.l || '') === lineFilter)),
     sorts: [
       { id: 'date', label: 'Date', value: f => parseDate(f.date) },
       { id: 'amount', label: 'Amount', value: f => Number(f.total || 0) },
@@ -147,6 +171,16 @@ export default function Transactions({ onRecordSelect } = {}) {
             <option value="all">All</option>
             {statuses.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
+          <label>Source</label>
+          <select value={originFilter} onChange={e => setOriginFilter(e.target.value)}>
+            <option value="all">All</option>
+            {ORIGIN_ORDER.filter(k => ORIGIN_META[k]).map(k => <option key={k} value={k}>{originLabel(k)}</option>)}
+          </select>
+          <label>Work</label>
+          <select value={lineFilter} onChange={e => setLineFilter(e.target.value)}>
+            <option value="all">All</option>
+            {LINE_ORDER.filter(k => LINE_META[k]).map(k => <option key={k} value={k}>{lineLabel(k)}</option>)}
+          </select>
         </div>
         {loading && records.length === 0 ? (
           <div className="txn-loading">{Array.from({ length: 12 }, (_, i) => <div key={i} className="txn-skeleton" />)}</div>
@@ -167,8 +201,28 @@ export default function Transactions({ onRecordSelect } = {}) {
                     onClick={() => handleSelect(r)}>
                     <span className="txn-type" style={{ background: tm.color + '22', color: tm.color }}>{tm.short}</span>
                     <div className="txn-row-main">
-                      <div className="txn-row-top"><span className="txn-num">#{r.docNumber || '—'}</span><span className="txn-amt">{money(r.total)}</span></div>
-                      <div className="txn-row-sub"><span className="txn-cust">{r.customerName || '—'}</span><span className="txn-date">{fmtDate(r.date)}</span></div>
+                      {/* The chips sit on the TOP line, beside the document
+                          number, because that line has slack and the one below
+                          does not: a customer name is the longest thing on the
+                          row and squeezing it to "Prosper Valle…" to make room
+                          costs more than it gives. */}
+                      <div className="txn-row-top">
+                        <span className="txn-num">#{r.docNumber || '—'}</span>
+                        {/* An estimate's origin is itself, which is not worth a
+                            chip on every one of 8,970 rows — the type chip
+                            already says it. */}
+                        {r.src?.o && r.src.o !== 'self' && (
+                          <span className={`txn-src-chip o-${r.src.o}`} title={originLabel(r.src.o)}>{originShort(r.src.o)}</span>
+                        )}
+                        {r.src?.l && (
+                          <span className={`txn-src-chip tone-${lineTone(r.src.l)}`} title={lineLabel(r.src.l)}>{lineShort(r.src.l)}</span>
+                        )}
+                        <span className="txn-amt">{money(r.total)}</span>
+                      </div>
+                      <div className="txn-row-sub">
+                        <span className="txn-cust">{r.customerName || '—'}</span>
+                        <span className="txn-date">{fmtDate(r.date)}</span>
+                      </div>
                     </div>
                     <span className="txn-status-dot" style={{ background: statusColor(r.status) }} title={r.status} />
                   </div>
@@ -215,6 +269,36 @@ export default function Transactions({ onRecordSelect } = {}) {
               ) : null}
               <div className="txn-kpi"><div className="txn-kpi-l">Status</div><div className="txn-kpi-v" style={{ color: statusColor(d.status) }}>{d.status}</div></div>
             </div>
+
+            {d.source && (
+              <div className="txn-lines-card">
+                <div className="txn-lines-head">Source</div>
+                <div className="txn-source-body">
+                  <div className="txn-source-row">
+                    <span className="txn-source-l">Came from</span>
+                    <span className="txn-source-v">
+                      <span className={`txn-src-chip o-${d.source.origin.kind}`}>{originShort(d.source.origin.kind) || 'Estimate'}</span>
+                      {d.source.origin.label}
+                      {d.source.origin.ref && <span className="txn-source-ref">{d.source.origin.ref}</span>}
+                      {/* Said out loud rather than shown as a colour: an
+                          inference and a fact should not look alike. */}
+                      {d.source.origin.confidence === 'likely' && <span className="txn-source-maybe">inferred</span>}
+                    </span>
+                  </div>
+                  <div className="txn-source-row">
+                    <span className="txn-source-l">Kind of work</span>
+                    <span className="txn-source-v">
+                      {d.source.line
+                        ? <><span className={`txn-src-chip tone-${lineTone(d.source.line)}`}>{lineShort(d.source.line)}</span>{lineLabel(d.source.line)}</>
+                        : <span className="dim">Not classified \u2014 the line items name no account.</span>}
+                    </span>
+                  </div>
+                  <p className="txn-source-why">{WHY[d.source.origin.why] || ''}</p>
+                  {d.note && <p className="txn-source-note">Internal memo: {d.note}</p>}
+                  {d.po && <p className="txn-source-note">P.O. {d.po}</p>}
+                </div>
+              </div>
+            )}
 
             <div className="txn-lines-card">
               <div className="txn-lines-head">Line items</div>

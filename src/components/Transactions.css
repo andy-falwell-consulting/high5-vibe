@@ -6,7 +6,10 @@
 .txn-resize { width: 4px; flex-shrink: 0; cursor: col-resize; background: var(--border); transition: background var(--duration-fast) var(--ease-standard); }
 .txn-resize:hover { background: var(--brand); }
 
-.txn-statusbar { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--fg-secondary); }
+/* Three filters now, not one — it wraps rather than squeezing the selects to
+   nothing on a narrow panel. */
+.txn-statusbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 12px; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--fg-secondary); }
+.txn-statusbar select { min-width: 0; max-width: 150px; }
 .txn-statusbar select { flex: 1; background: var(--surface-sunken); border: 1px solid var(--border); border-radius: 6px; color: var(--fg); padding: 5px 8px; font-family: inherit; font-size: 13px; }
 
 .txn-loading { padding: 8px; display: flex; flex-direction: column; gap: 8px; }
@@ -56,3 +59,76 @@
 .txn-lines td { padding: 8px 14px; border-bottom: 1px solid var(--border); }
 .txn-lines .num { text-align: right; font-variant-numeric: tabular-nums; }
 .dim { color: var(--fg-secondary); }
+
+/* ── Source: where a transaction came from, and what it was for ──────────
+   Two axes, so two chips. Colours come from the category tokens, which exclude
+   red by design — nothing here competes with the brand accent or with the
+   status dot already on the row. */
+
+.txn-src-chip {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  font-size: 10px;
+  font-weight: var(--weight-semibold);
+  line-height: 1.5;
+  white-space: nowrap;
+  background: var(--cat-neutral-bg);
+  color: var(--cat-neutral-fg);
+}
+
+.txn-src-chip.tone-blue    { background: var(--cat-blue-bg);    color: var(--cat-blue-fg); }
+.txn-src-chip.tone-green   { background: var(--cat-green-bg);   color: var(--cat-green-fg); }
+.txn-src-chip.tone-purple  { background: var(--cat-purple-bg);  color: var(--cat-purple-fg); }
+.txn-src-chip.tone-khaki   { background: var(--cat-khaki-bg);   color: var(--cat-khaki-fg); }
+.txn-src-chip.tone-gold    { background: var(--cat-gold-bg);    color: var(--cat-gold-fg); }
+.txn-src-chip.tone-mustard { background: var(--cat-mustard-bg); color: var(--cat-mustard-fg); }
+.txn-src-chip.tone-neutral { background: var(--cat-neutral-bg); color: var(--cat-neutral-fg); }
+
+/* Origin chips are deliberately quieter than the work chips: the kind of work
+   is what a person scans a ledger by, and it is known for 97% of it. */
+.txn-src-chip.o-shopify,
+.txn-src-chip.o-amazon,
+.txn-src-chip.o-paypal,
+.txn-src-chip.o-bloomerang,
+.txn-src-chip.o-estimate,
+.txn-src-chip.o-self,
+.txn-src-chip.o-vibe {
+  background: transparent;
+  color: var(--fg-secondary);
+  border: 1px solid var(--border);
+}
+
+/* NOT HIDDEN. 16,815 transactions genuinely have no recorded source, and an
+   honest blank is the point — but it is drawn faintly, because "we do not know"
+   should not shout as loudly as "this came from D-3041". */
+.txn-src-chip.o-unknown {
+  background: transparent;
+  color: var(--fg-secondary);
+  border: 1px dashed var(--border);
+  opacity: 0.7;
+}
+
+/* The amount is pushed right and never shrinks; the chips sit between it and
+   the document number. On a narrow panel the chips are what give way, not the
+   money or the customer name. */
+.txn-row-top .txn-amt { margin-left: auto; flex-shrink: 0; }
+.txn-row-top .txn-src-chip { overflow: hidden; text-overflow: ellipsis; }
+.txn-cust { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.txn-date { flex-shrink: 0; }
+
+.txn-source-body { padding: 10px 14px; display: flex; flex-direction: column; gap: var(--space-sm); }
+.txn-source-row { display: flex; gap: var(--space-md); align-items: baseline; }
+.txn-source-l { width: 96px; flex-shrink: 0; font-size: 12px; color: var(--fg-secondary); }
+.txn-source-v { display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap; font-size: 14px; }
+.txn-source-ref { font-family: var(--font-mono); font-size: 12px; color: var(--fg-secondary); }
+
+/* An inference and a fact must not look alike. */
+.txn-source-maybe {
+  font-size: 10px; font-weight: var(--weight-semibold);
+  padding: 1px 6px; border-radius: var(--radius-pill);
+  background: var(--warning-bg); color: var(--warning-fg);
+}
+
+.txn-source-why { margin: 0; font-size: 12px; color: var(--fg-secondary); line-height: var(--leading-normal); }
+.txn-source-note { margin: 0; font-size: 12px; color: var(--fg-secondary); font-family: var(--font-mono); word-break: break-word; }
