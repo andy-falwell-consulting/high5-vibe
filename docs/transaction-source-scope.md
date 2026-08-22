@@ -228,8 +228,9 @@ is a story.
    records deleted. The format lives in `api/_vibeStamp.js`, which the Phase 2
    classifier must import rather than re-derive.
 1. **Capture** — widen `normalize()` to keep `LinkedTxn`, `PrivateNote` and
-   `CustomField`; re-sync. Nothing visible changes. *(~half a day, plus the
-   re-sync running itself down.)*
+   `CustomField`; re-sync. **BUILT — v1.0.505–506**, together with the storage
+   split, because separately the first makes bandwidth worse and together they
+   halve it. Nothing visible changed. See the measured result in §10.
 2. **Classify** — the rule table as a pure function with unit tests over
    captured fixtures, so each rule's coverage is a number rather than a hope.
    *(~half a day.)*
@@ -284,6 +285,29 @@ Against a **100 GB monthly cap**, at various usage levels:
 
 The one-off re-sync is noise. The ongoing cost is **~2.5 MB per page open**, or
 roughly a quarter of one percent of the cap per hundred opens.
+
+### DONE — measured after the fact, 2026-08-21
+
+Phases 0 and 1 shipped together with the split (v1.0.504–506). The re-sync ran
+over production; all 34,452 rows and 34,446 line entries were rewritten.
+
+| | before | after |
+|---|---:|---:|
+| **shipped from Redis per ledger load** | 21.1 MB | **9.3 MB** |
+| line items (own hash, read on demand) | — | 14.3 MB |
+| payload to the browser | 8.12 MB | 8.12 MB |
+
+**A 56% cut, not the 12% increase Phase 1 alone would have been.** At 500 ledger
+loads a month that is 10.6 GB → 4.7 GB, saving roughly 5.9 GB against the 100 GB
+cap — while capturing the source evidence that Phase 1 existed for.
+
+The one-off rewrite cost ~24 MB and took four runs: Estimate and SalesReceipt
+one each, Invoice two (it hit the 260-second cap at 15,300 of 18,440 and resumed
+from its cursor, which is what that design is for).
+
+Mean stored row by type: Invoice 307 B, SalesReceipt 273 B, Estimate 250 B,
+CreditMemo 250 B. Mean lines: Estimate 941 B — by far the largest, and exactly
+the payload the list was carrying for nothing.
 
 ### The thing actually worth fixing
 
