@@ -23,9 +23,23 @@ async function authorized(req) {
 }
 
 const parse = v => (typeof v === 'string' ? JSON.parse(v) : v);
-// Legacy rows carry their lines inline; new ones do not. Either way the list
-// answers without them.
-const slim = r => { const { lines, ...rest } = r; return rest; };
+
+// What the LIST does not send.
+//
+// `lines` because a legacy row still carries them inline and the list has never
+// drawn them. `links`, `note` and `po` because they are the raw evidence a
+// transaction's source is DERIVED from, and nothing reads them in a list — at
+// 77 bytes across 34,452 rows that is 2.5 MB shipped to every browser to say
+// nothing yet. Phase 2 adds a short derived label here instead; until then the
+// evidence is available on the detail, which is the only place it is shown.
+const LIST_OMITS = ['lines', 'links', 'note', 'po'];
+const slim = r => {
+  const out = { ...r };
+  for (const k of LIST_OMITS) delete out[k];
+  return out;
+};
+// The detail keeps the evidence — it is what answers "why does it say that?".
+const withoutLines = r => { const out = { ...r }; delete out.lines; return out; };
 
 export default async function handler(req, res) {
   if (!(await authorized(req))) return res.status(401).json({ error: 'unauthorized' });
@@ -43,7 +57,7 @@ export default async function handler(req, res) {
       // The lines hash wins; a legacy row's inline copy is the fallback until
       // the re-sync reaches it.
       const lines = (l && parse(l)) || row.lines || [];
-      return res.status(200).json({ ...slim(row), lines });
+      return res.status(200).json({ ...withoutLines(row), lines });
     }
 
     const cursor = String(req.query?.cursor ?? '0');
