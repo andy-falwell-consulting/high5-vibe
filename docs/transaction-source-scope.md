@@ -233,7 +233,37 @@ is a story.
    halve it. Nothing visible changed. See the measured result in §10.
 2. **Classify** — the rule table as a pure function with unit tests over
    captured fixtures, so each rule's coverage is a number rather than a hope.
-   *(~half a day.)*
+   **BUILT — v1.0.507–509.** The numbers, measured over all 34,453:
+
+   | | answered |
+   |---|---|
+   | **line of business** | **33,504 (97%)** |
+   | **origin** | **17,638 (51%)** |
+
+   | origin | count |
+   |---|---:|
+   | Shopify | 5,454 |
+   | an estimate (`self`) | 8,970 |
+   | from an estimate | 2,863 |
+   | Amazon | 228 |
+   | Bloomerang | 101 |
+   | PayPal | 22 |
+   | **unknown** | **16,815** |
+
+   | line of business | count |
+   |---|---:|
+   | Catalog | 10,981 |
+   | Challenge Course Services | 10,942 |
+   | Training & Team Development | 5,713 |
+   | Deposit | 3,730 |
+   | Fundraising | 977 |
+   | Shipping | 609 |
+   | RCD Components | 470 |
+   | Travel | 82 |
+
+   Origin by era, which is the gradient §5.1 predicted from a 54-invoice sample,
+   now confirmed across the whole ledger: **pre-2018 27% · 2018–2022 51% ·
+   2023+ 90%.**
 3. **Show** — an origin chip and a line-of-business chip on the row; both, plus
    `why` and the private note, on the detail panel; both as filter chips in the
    sidebar. *(~a day.)*

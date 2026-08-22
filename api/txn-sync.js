@@ -7,6 +7,8 @@
 // GET/POST /api/txn-sync?db=High5_Core4            run a sync slice
 // GET      /api/txn-sync?db=High5_Core4&count=1    just COUNT(*) per type
 // POST     /api/txn-sync?db=High5_Core4&reset=1    start the backfill again
+// POST     /api/txn-sync?db=High5_Core4&lob=1       recompute line-of-business
+//                                                   from stored lines, no QBO
 //
 // TWO HASHES SINCE v1.0.505. The row and its line items are stored separately
 // (see api/_txnNormalize.js): the ledger list reads every row and needs none of
@@ -20,6 +22,7 @@ import { Redis } from '@upstash/redis';
 import { getGoogleSession } from './_googleSession.js';
 import { qboQuery } from './_qbo.js';
 import { normalizeRow, normalizeLines, TYPES } from './_txnNormalize.js';
+import { lineOfBusiness } from './_txnSource.js';
 
 export const config = { maxDuration: 300 };
 
@@ -51,8 +54,15 @@ async function storeBatch(db, type, rows) {
   const empty = [];
   for (const e of rows) {
     const key = `${type}:${e.Id}`;
-    recs[key] = JSON.stringify(normalizeRow(type, e));
     const li = normalizeLines(e);
+    const row = normalizeRow(type, e);
+    // Computed here and STORED, unlike origin which is derived at read time.
+    // Its input is the line items, and those live in a hash the ledger list
+    // deliberately does not read — deriving it later would mean reading them
+    // back and undoing the saving that separation exists for.
+    const lob = lineOfBusiness(li);
+    if (lob) row.lob = lob;
+    recs[key] = JSON.stringify(row);
     // A transaction whose lines have gone must not keep the old ones: this runs
     // again over records that already exist, so an edit that removed every line
     // has to remove them here too.
@@ -77,6 +87,48 @@ export default async function handler(req, res) {
         out[t] = qr.totalCount ?? 0;
       }
       return res.status(200).json({ db, counts: out });
+    }
+
+    // Recompute the stored line of business from the lines already mirrored.
+    // Touches QuickBooks not at all — it reads one hash and patches the other —
+    // so a change to the classification rules costs a fraction of a re-sync.
+    // Resumable on its own HSCAN cursor.
+    if (req.query?.lob) {
+      const startedAt = Date.now();
+      let cursor = String(req.query.cursor ?? '0');
+      let seen = 0, set = 0, cleared = 0;
+      do {
+        const [next, flat] = await redis.hscan(linesKey(db), cursor, { count: 400 });
+        const keys = [];
+        const linesByKey = new Map();
+        for (let i = 0; i < flat.length; i += 2) {
+          const key = String(flat[i]);
+          keys.push(key);
+          linesByKey.set(key, typeof flat[i + 1] === 'string' ? JSON.parse(flat[i + 1]) : flat[i + 1]);
+        }
+        // ONE HMGET PER PAGE, not one HGET per record. Per-record round trips
+        // would be 34,452 Redis commands for a job that needs 87 — and the
+        // command quota is a hard monthly cap whose exhaustion stops anyone
+        // logging in (see the cron budget note in CLAUDE.md).
+        const raws = keys.length ? await redis.hmget(recsKey(db), ...keys) : {};
+        const rowOf = k => {
+          const v = Array.isArray(raws) ? raws[keys.indexOf(k)] : raws?.[k];
+          return typeof v === 'string' ? JSON.parse(v) : v;
+        };
+        const patch = {};
+        for (const key of keys) {
+          const row = rowOf(key);
+          if (!row) continue;
+          const lob = lineOfBusiness(linesByKey.get(key) || []);
+          seen++;
+          if (lob === (row.lob || null)) continue;
+          if (lob) { row.lob = lob; set++; } else { delete row.lob; cleared++; }
+          patch[key] = JSON.stringify(row);
+        }
+        if (Object.keys(patch).length) await redis.hset(recsKey(db), patch);
+        cursor = String(next);
+      } while (cursor !== '0' && Date.now() - startedAt < 240000);
+      return res.status(200).json({ db, lob: true, seen, set, cleared, cursor, done: cursor === '0' });
     }
 
     const started = Date.now();

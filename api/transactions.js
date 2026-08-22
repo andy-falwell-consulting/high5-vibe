@@ -11,6 +11,7 @@
 // them and the detail falls back to them.
 import { Redis } from '@upstash/redis';
 import { getGoogleSession } from './_googleSession.js';
+import { compactSource, fullSource } from './_txnSource.js';
 
 const redis = Redis.fromEnv();
 const SYNC_KEY = process.env.QBO_SYNC_KEY;
@@ -41,6 +42,16 @@ const slim = r => {
 // The detail keeps the evidence — it is what answers "why does it say that?".
 const withoutLines = r => { const out = { ...r }; delete out.lines; return out; };
 
+// ORIGIN IS DERIVED HERE, not stored. Every input it needs is already on the
+// row, so it costs no bytes in Redis — and a rule corrected tomorrow takes
+// effect on the next page load instead of after re-reading all of QuickBooks.
+// Line of business is the opposite case and IS stored; see _txnSource.js for why.
+//
+// The list gets two short codes (`{o,l}`, about 20 bytes) because two chips and
+// two filters is all it draws. The reference, the label and the reason it
+// matched are detail-pane facts, and sending them to 34,452 rows nobody has
+// clicked would repeat the mistake v1.0.506 just fixed.
+
 export default async function handler(req, res) {
   if (!(await authorized(req))) return res.status(401).json({ error: 'unauthorized' });
   const db = req.query?.db || 'High5_Core4';
@@ -57,13 +68,16 @@ export default async function handler(req, res) {
       // The lines hash wins; a legacy row's inline copy is the fallback until
       // the re-sync reaches it.
       const lines = (l && parse(l)) || row.lines || [];
-      return res.status(200).json({ ...withoutLines(row), lines });
+      return res.status(200).json({ ...withoutLines(row), lines, source: fullSource(row) });
     }
 
     const cursor = String(req.query?.cursor ?? '0');
     const [next, flat] = await redis.hscan(recsKey(db), cursor, { count: 5000 });
     const records = [];
-    for (let i = 1; i < flat.length; i += 2) records.push(slim(parse(flat[i])));
+    for (let i = 1; i < flat.length; i += 2) {
+      const row = parse(flat[i]);
+      records.push({ ...slim(row), src: compactSource(row) });
+    }
     return res.status(200).json({ cursor: String(next), records });
   } catch (e) {
     return res.status(502).json({ error: String(e?.message || e) });
