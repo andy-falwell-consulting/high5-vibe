@@ -6,15 +6,25 @@
 //
 // GET/POST /api/txn-sync?db=High5_Core4            run a sync slice
 // GET      /api/txn-sync?db=High5_Core4&count=1    just COUNT(*) per type
+// POST     /api/txn-sync?db=High5_Core4&reset=1    start the backfill again
+//
+// TWO HASHES SINCE v1.0.505. The row and its line items are stored separately
+// (see api/_txnNormalize.js): the ledger list reads every row and needs none of
+// the lines, and shipping them was 62% of a 21 MB read on every load.
+//
+// `reset=1` is how the split and the newly-captured source fields reach records
+// that were mirrored under the old shape — it puts every type back into
+// backfill so the next runs rewrite all 34,452. Reads stay correct throughout,
+// because api/transactions.js understands both shapes.
 import { Redis } from '@upstash/redis';
 import { getGoogleSession } from './_googleSession.js';
 import { qboQuery } from './_qbo.js';
+import { normalizeRow, normalizeLines, TYPES } from './_txnNormalize.js';
 
 export const config = { maxDuration: 300 };
 
 const redis = Redis.fromEnv();
 const SYNC_KEY = process.env.QBO_SYNC_KEY;
-const TYPES = ['Invoice', 'Estimate', 'CreditMemo', 'SalesReceipt'];
 const PAGE = 300;
 
 async function authorized(req) {
@@ -25,8 +35,8 @@ async function authorized(req) {
 }
 
 const recsKey = db => `txn:${db}:recs`;
+const linesKey = db => `txn:${db}:lines`;
 const metaKey = db => `txn:${db}:meta`;
-const today = () => new Date().toISOString().slice(0, 10);
 
 async function getMeta(db) {
   const m = (await redis.get(metaKey(db))) || {};
@@ -34,38 +44,24 @@ async function getMeta(db) {
   return m;
 }
 
-function normalize(type, e) {
-  const lines = (e.Line || [])
-    .filter(l => l.DetailType === 'SalesItemLineDetail')
-    .map(l => ({
-      desc: l.Description || l.SalesItemLineDetail?.ItemRef?.name || '',
-      qty: l.SalesItemLineDetail?.Qty ?? null,
-      amount: Number(l.Amount || 0),
-      item: l.SalesItemLineDetail?.ItemRef?.name || '',
-    }));
-  const total = Number(e.TotalAmt || 0);
-  const balance = e.Balance != null ? Number(e.Balance) : 0;
-  let status;
-  if (type === 'Invoice') status = balance <= 0 ? 'Paid' : (e.DueDate && e.DueDate < today() ? 'Overdue' : 'Open');
-  else if (type === 'Estimate') status = e.TxnStatus || 'Pending';
-  else if (type === 'CreditMemo') status = balance > 0 ? 'Unapplied' : 'Applied';
-  else status = 'Paid'; // SalesReceipt
-  return {
-    type, id: String(e.Id), docNumber: e.DocNumber || '',
-    customerId: e.CustomerRef?.value || '', customerName: e.CustomerRef?.name || '',
-    date: e.TxnDate || '', dueDate: e.DueDate || '',
-    total, balance, status,
-    currency: e.CurrencyRef?.value || 'USD',
-    updated: e.MetaData?.LastUpdatedTime || '',
-    lines,
-  };
-}
-
 async function storeBatch(db, type, rows) {
   if (!rows.length) return;
-  const entries = {};
-  for (const e of rows) entries[`${type}:${e.Id}`] = JSON.stringify(normalize(type, e));
-  await redis.hset(recsKey(db), entries);
+  const recs = {};
+  const lines = {};
+  const empty = [];
+  for (const e of rows) {
+    const key = `${type}:${e.Id}`;
+    recs[key] = JSON.stringify(normalizeRow(type, e));
+    const li = normalizeLines(e);
+    // A transaction whose lines have gone must not keep the old ones: this runs
+    // again over records that already exist, so an edit that removed every line
+    // has to remove them here too.
+    if (li.length) lines[key] = JSON.stringify(li);
+    else empty.push(key);
+  }
+  await redis.hset(recsKey(db), recs);
+  if (Object.keys(lines).length) await redis.hset(linesKey(db), lines);
+  if (empty.length) await redis.hdel(linesKey(db), ...empty);
 }
 
 export default async function handler(req, res) {
@@ -85,7 +81,19 @@ export default async function handler(req, res) {
 
     const started = Date.now();
     const meta = await getMeta(db);
+
     const only = req.query?.type && TYPES.includes(req.query.type) ? [req.query.type] : TYPES;
+
+    // Rewrite existing records under the current shape. Deliberately explicit —
+    // it re-reads every record of the chosen types from QuickBooks over the
+    // following runs, so a stray request must not be able to start it.
+    //
+    // Honours `type`, so the change can be proved on one type before the other
+    // three follow: CreditMemo is 1,443 records against Invoice's 18,440.
+    if (req.query?.reset) {
+      for (const t of only) meta[t] = { phase: 'backfill', cursor: 1, hwm: '', count: 0 };
+      await redis.set(metaKey(db), meta);
+    }
 
     for (const type of only) {
       const m = meta[type];
@@ -114,8 +122,8 @@ export default async function handler(req, res) {
     meta.lastSync = Date.now();
     await redis.set(metaKey(db), meta);
     const summary = Object.fromEntries(TYPES.map(t => [t, { phase: meta[t].phase, count: meta[t].count }]));
-    const total = await redis.hlen(recsKey(db));
-    return res.status(200).json({ db, done: TYPES.every(t => meta[t].phase !== 'backfill'), stored: total, types: summary });
+    const [total, storedLines] = await Promise.all([redis.hlen(recsKey(db)), redis.hlen(linesKey(db))]);
+    return res.status(200).json({ db, done: TYPES.every(t => meta[t].phase !== 'backfill'), stored: total, storedLines, types: summary });
   } catch (e) {
     return res.status(502).json({ error: String(e?.message || e) });
   }

@@ -237,14 +237,76 @@ is a story.
    `why` and the private note, on the detail panel; both as filter chips in the
    sidebar. *(~a day.)*
 
-## 10. What it costs
+## 10. What it costs — measured, 2026-08-21
 
-A full re-sync of 34,452 records against QuickBooks and Redis. The backfill is
-already resumable and time-bounded per run, so it runs itself down over several
-slices — but it is real traffic against a **hard monthly Redis cap** whose
-exhaustion takes out `/api/google-auth` and stops anyone logging in (see the
-cron budget note in `CLAUDE.md`). Worth running deliberately, off the cron, and
-watching.
+### The ledger as it stands
+
+| | bytes/record | whole ledger |
+|---|---:|---:|
+| stored in Redis (full, with line items) | 643 | **21.1 MB** |
+| what the browser actually receives (slim) | 247 | 8.1 MB |
+
+`/api/transactions` reads with `HSCAN`, which returns the **whole** stored value,
+and only then drops `lines` in `slim()`. So Redis ships 21.1 MB and the server
+throws away 13 MB of it before anyone sees a row. That is true today, before any
+of this work.
+
+`loadAll()` runs once per app session — the module stays mounted once visited,
+so switching tabs does not re-read. One full read per session that opens the
+page.
+
+### What Phase 1 adds
+
+Keeping `LinkedTxn`, `PrivateNote` and the P.O. number costs **+77 bytes per
+record** (sampled 22 invoices) — the ledger goes 21.1 MB → **23.6 MB, +12%**.
+
+> **Counter-intuitive, and it changes the design:** the RAW evidence is 77 bytes,
+> while the derived `source` object as specified in §7 is **158 bytes** — twice
+> as much, because of verbose keys and human-readable labels. Storing the
+> evidence is both cheaper and re-classifiable without another re-sync. Derive
+> the label in the API layer, or store the derived form with short codes; do not
+> store both.
+
+| | one-off | per page open |
+|---|---:|---:|
+| re-sync writes | ~24 MB | — |
+| Redis egress, today | — | 21.1 MB |
+| Redis egress, after Phase 1 | — | 23.6 MB |
+| **the delta** | ~24 MB once | **+2.5 MB** |
+
+Against a **100 GB monthly cap**, at various usage levels:
+
+| Transactions opens / month | today | after Phase 1 | added |
+|---:|---:|---:|---:|
+| 100 | 2.1 GB | 2.4 GB | +0.25 GB |
+| 500 | 10.6 GB | 11.8 GB | +1.2 GB |
+| 1,000 | 21.1 GB | 23.6 GB | +2.5 GB |
+
+The one-off re-sync is noise. The ongoing cost is **~2.5 MB per page open**, or
+roughly a quarter of one percent of the cap per hundred opens.
+
+### The thing actually worth fixing
+
+Phase 1 is a 12% increase on a number that is already 62% waste. Splitting the
+mirror into two hashes — `txn:{db}:recs` holding the slim row, `txn:{db}:lines`
+holding the line items, fetched by `HGET` only when a detail pane opens — takes
+a page open from **23.6 MB to about 11.2 MB**.
+
+That is a 53% cut, and it repays Phase 1's increase roughly five times over. If
+the cap is the concern, the answer is not to skip Phase 1; it is to do the split
+alongside it and come out at **half** today's usage.
+
+### Caveats
+
+- Means are from samples (22 invoices, 14 sales receipts, 12 estimates, 8 credit
+  memos), not a full scan. Treat ±10%.
+- Figures are Redis→server egress. If Upstash bills ingress too, the re-sync
+  write is ~24 MB on that side as well; still noise.
+- If the Upstash connection compresses on the wire, every figure here is
+  pessimistic. Unverified.
+- **Transactions is not prewarmed** — unlike the modules behind the 90 GB
+  incident, it loads only when somebody opens it, so it was never part of that
+  problem and is not on the startup path now.
 
 ## 11. The open questions, answered
 
