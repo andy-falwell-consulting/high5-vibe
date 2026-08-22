@@ -4,6 +4,7 @@ import { getVibeValueLists, seedValueLists, setValueList, compareValueLists } fr
 import { getTemplates, saveTemplate, TEMPLATE_VERSIONS, templateAttachments, sendTestEmail } from '../api/workshopEmail';
 import { getAgentConfig, saveAgentConfig } from '../api/agentConfig';
 import { getDriftReport, runReconcile, BUCKET_LABEL, linkRecord, isLinkable, needsJudgement, compareValues } from '../api/productDrift';
+import { getOrderReport, runOrderReconcile, ORDER_BUCKET_LABEL, ORDER_BUCKET_WHY, splitRecent } from '../api/shopifyOrders';
 import { updateVibeRecord } from '../api/vibeRecords';
 import { getCurrentEnv } from '../config/fmpEnvironments';
 import { pushToShopify, pushToQBO } from '../api/integrations';
@@ -20,6 +21,7 @@ const TABS = [
   { id: 'wsemail', label: 'Workshop e-mails' },
   { id: 'agent', label: 'Assistant' },
   { id: 'drift', label: 'Product drift' },
+  { id: 'orders', label: 'Store orders' },
 ];
 
 const ago = iso => {
@@ -195,6 +197,156 @@ function SkuCounter() {
           first SKU it hands out will be {info.floor}.
         </p>
       )}
+    </section>
+  );
+}
+
+// Shopify orders against the QuickBooks ledger.
+//
+// THIS YEAR LEADS, and the backlog is a footnote. 96% of the unexplained value
+// is 2021-22, and a headline of "$80,798 unexplained" that never moves is a
+// headline nobody reads twice. What matters is whether anything NEW has gone
+// unbilled, so that is the number at the top.
+//
+// The wording is careful on purpose: an order can be invoiced perfectly well
+// under a different customer, a different amount and a different date, with
+// nothing linking the two — that is exactly what #5822 turned out to be. So
+// these are UNEXPLAINED, not unbilled, and the tab says so rather than
+// implying an accusation the data cannot support.
+function StoreOrdersTab() {
+  const [data, setData] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [open, setOpen] = useState(null);
+
+  const load = useCallback(async () => {
+    try { setData(await getOrderReport()); setError(null); }
+    catch (e) { setError(e.message); }
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try { const d = await getOrderReport(); if (alive) { setData(d); setError(null); } }
+      catch (e) { if (alive) setError(e.message); }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  async function runNow() {
+    setBusy(true); setError(null);
+    try { await runOrderReconcile(); await load(); }
+    catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+
+  const last = data?.last;
+  const { recent, backlog, cut } = splitRecent(last?.byYear);
+  const money = n => `$${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  return (
+    <section className="admin-section">
+      <h2 className="admin-section-title">Store orders</h2>
+      <p className="admin-note">
+        Every Shopify order since the QuickBooks link went live, checked against the
+        ledger. An order with no document is only reported when nothing explains it —
+        cancelled orders, zero-value comps and anything tagged
+        <strong> “invoiced through QB” </strong> are accounted for and left out.
+      </p>
+      {error && <p className="admin-error">{error}</p>}
+
+      {!data ? <p>Loading…</p> : !last ? (
+        <p className="admin-note admin-missing">
+          No run recorded yet — press Run now. It pages every order in the store, so
+          give it a minute or two.
+        </p>
+      ) : !last.rows ? (
+        /* A result stored before this tab existed has counts but no detail. Left
+           alone it renders a confident row of zeros — which on THIS report reads
+           as "nothing is wrong" and is the worst thing it could say. */
+        <p className="admin-note admin-missing">
+          The last run ({ago(last.at)}) predates this view and carries no detail —
+          it found <strong>{last.exceptions ?? '?'}</strong> exceptions but did not
+          record which. Run it again to see them.
+        </p>
+      ) : (
+        <>
+          <div className="admin-drift-head">
+            <div className={`admin-drift-total${recent.count > 0 ? ' bad' : ''}`}>
+              <span>{recent.count}</span><label>unexplained since {cut}</label>
+            </div>
+            <div className="admin-drift-when">
+              {money(recent.value)} · {last.orders.toLocaleString()} orders checked · {ago(last.at)}
+            </div>
+          </div>
+
+          {backlog.count > 0 && (
+            <p className="admin-note">
+              A further <strong>{backlog.count}</strong> before {cut}, worth {money(backlog.value)} —
+              almost all of it 2021–22, from before the workflow settled. Worth a sweep one
+              day; not worth watching.
+            </p>
+          )}
+
+          <table className="h5-table admin-drift-table">
+            <thead><tr><th>What</th><th className="h5-table__num">Count</th><th /></tr></thead>
+            <tbody>
+              {['missing_paid', 'missing_unpaid', 'duplicated'].map(k => {
+                const rows = last.rows?.[k] || [];
+                const n = rows.length;
+                const isOpen = open === k;
+                return (
+                  <Fragment key={k}>
+                    <tr className={`admin-drift-row${n ? ' clickable' : ''}${isOpen ? ' open' : ''}`}
+                      onClick={() => n && setOpen(isOpen ? null : k)}>
+                      <td>
+                        {n > 0 && <span className="admin-drift-caret">{isOpen ? '▾' : '▸'}</span>}
+                        {ORDER_BUCKET_LABEL[k]}
+                      </td>
+                      <td className="h5-table__num">{n}</td>
+                      <td className="h5-table__num admin-drift-hint">{n > 0 ? (isOpen ? 'hide' : 'show') : ''}</td>
+                    </tr>
+                    {isOpen && (
+                      <tr className="admin-drift-expanded">
+                        <td colSpan={3}>
+                          <p className="admin-note">{ORDER_BUCKET_WHY[k]}</p>
+                          <table className="h5-table">
+                            <thead><tr><th>Order</th><th>Date</th><th className="h5-table__num">Value</th><th>Customer</th><th>In QuickBooks</th></tr></thead>
+                            <tbody>
+                              {rows.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).map(r => (
+                                <tr key={r.order}>
+                                  <td>{r.order}</td>
+                                  <td>{r.date}</td>
+                                  <td className="h5-table__num">{money(r.total)}</td>
+                                  <td>{r.email || '—'}</td>
+                                  <td>{(r.qbo || []).join(' · ') || '—'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+
+          <p className="admin-note">
+            Accounted for: <strong>{last.summary.matched.toLocaleString()}</strong> matched
+            · {last.summary.invoiced_in_qb} tagged as invoiced directly
+            · {last.summary.cancelled} cancelled
+            · {last.summary.zero_value} zero-value.
+          </p>
+        </>
+      )}
+
+      <div className="admin-drift-actions">
+        <button className="h5-btn h5-btn--secondary h5-btn--sm" onClick={runNow} disabled={busy}>
+          {busy ? 'Checking every order…' : 'Run now'}
+        </button>
+      </div>
     </section>
   );
 }
@@ -1641,6 +1793,7 @@ export default function Admin() {
       {tab === 'wsemail' && <WorkshopEmailTab />}
       {tab === 'agent' && <AgentTab />}
       {tab === 'drift' && <DriftTab />}
+      {tab === 'orders' && <StoreOrdersTab />}
     </main>
   );
 }
