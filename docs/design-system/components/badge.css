@@ -20,6 +20,13 @@
 .h5-badge--khaki   { background: var(--cat-khaki-bg);   color: var(--cat-khaki-fg); }
 .h5-badge--green   { background: var(--cat-green-bg);   color: var(--cat-green-fg); }
 
+/* Outline — a badge for a SECONDARY fact, next to a filled one carrying the
+   primary. On a ledger row the kind of work is what a person scans by and takes
+   a category fill; where it came from sits beside it and must not compete. Uses
+   --fg-secondary on the page background, which the token layer already holds at
+   5.02:1. */
+.h5-badge--outline { background: transparent; color: var(--fg-secondary); border: 1px solid var(--border); }
+
 /* A filled mark with no text on it — a legend swatch or status dot. Uses -solid,
    which is contrast-tested at 3:1 against the card per WCAG 1.4.11. */
 .h5-dot { display: inline-block; width: 8px; height: 8px; border-radius: var(--radius-circle); background: var(--cat-neutral-solid); }

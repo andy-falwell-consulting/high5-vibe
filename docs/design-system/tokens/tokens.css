@@ -142,6 +142,8 @@
   --space-2xl: 24px;
   --space-3xl: 32px;
   --space-4xl: 48px;
+  /* size */
+  --row-h: 76px;
   /* radius */
   --radius-xs: 4px;
   --radius-sm: 6px;

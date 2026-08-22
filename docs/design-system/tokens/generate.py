@@ -195,6 +195,22 @@ SCALES = collections.OrderedDict(
             ),
         ),
         (
+            # A record row in a sidebar list. ONE NUMBER, because it was an
+            # accident: every list is content-driven and the global 29px
+            # line-height made two lines of text land at 75-77px, so the
+            # modules agreed without anyone deciding. Transactions was the
+            # exception, forcing height:54px — 20px LESS than its own content
+            # needs — which is why that list read as cramped rather than dense.
+            # Named here so the agreement is a decision instead of an emergent
+            # property, and so the virtualized list has something to read.
+            "size",
+            collections.OrderedDict(
+                [
+                    ("row-h", "76px"),
+                ]
+            ),
+        ),
+        (
             "radius",
             collections.OrderedDict(
                 [
