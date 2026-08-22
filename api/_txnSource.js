@@ -32,6 +32,7 @@ export const ORIGIN_LABELS = {
   amazon: 'Amazon',
   paypal: 'PayPal',
   bloomerang: 'Bloomerang donation',
+  self: 'Where the work started',
   unknown: 'Unknown',
 };
 
@@ -83,9 +84,18 @@ export function classifyOrigin(row = {}) {
   const m = DOC_REF.exec(note);
   if (m) return { kind: 'estimate', ref: `D-${m[1]}`, label: `From estimate D-${m[1]}`, why: 'note', confidence: 'likely' };
 
-  // 7. Nothing. Said plainly rather than guessed: roughly 40% of the back
-  //    catalogue has no origin recorded anywhere, and inventing one would be
-  //    worse than a blank.
+  // 7. An estimate is not FROM anywhere — it is where a piece of work starts.
+  //    Answering "unknown" for all 8,970 of them would be wrong rather than
+  //    merely unhelpful: it implies a source exists and was not found. This
+  //    does not manufacture knowledge, it stops mislabelling the absence of a
+  //    question as the absence of an answer.
+  if (row.type === 'Estimate') {
+    return { kind: 'self', label: ORIGIN_LABELS.self, why: 'type', confidence: 'certain' };
+  }
+
+  // 8. Nothing. Said plainly rather than guessed: most of the back catalogue
+  //    has no origin recorded anywhere — measured at 1% known before 2018
+  //    against 65% from 2023 — and inventing one would be worse than a blank.
   return { kind: 'unknown', label: 'Unknown', why: 'none', confidence: 'unknown' };
 }
 
