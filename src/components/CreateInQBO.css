@@ -49,3 +49,12 @@
 .ciq-btn:hover:not(:disabled) { background: var(--success-fg); }
 .ciq-btn:disabled { opacity: 0.5; cursor: default; }
 .ciq-btn.ghost { background: var(--surface-sunken); color: var(--fg); }
+
+/* The internal memo as QuickBooks stored it, echoed back after a create so the
+   Vibe stamp is verifiable at the moment it happens. */
+.ciq-note {
+  margin-top: var(--space-xs);
+  font-size: var(--text-micro); color: var(--fg-secondary);
+  font-family: var(--font-mono);
+  word-break: break-word;
+}
