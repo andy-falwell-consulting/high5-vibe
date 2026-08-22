@@ -39,6 +39,11 @@ const WHY = {
 const parseDate = v => { if (!v) return 0; const [y, m, d] = String(v).split('-'); return new Date(`${y}-${m}-${d}T00:00:00`).getTime() || 0; };
 const fmtDate = v => { const t = parseDate(v); return t ? new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'; };
 
+// Store orders already carry a "#" in their document number, so the display
+// prefix produced "##7263". Invisible until the Source filter put 5,454 of them
+// on screen together.
+const docLabel = v => { const d = String(v || ''); return d ? (d.startsWith('#') ? d : `#${d}`) : '—'; };
+
 function statusColor(s) {
   const t = String(s || '').toLowerCase();
   if (t === 'paid') return UI.success;
@@ -207,7 +212,7 @@ export default function Transactions({ onRecordSelect } = {}) {
                           row and squeezing it to "Prosper Valle…" to make room
                           costs more than it gives. */}
                       <div className="txn-row-top">
-                        <span className="txn-num">#{r.docNumber || '—'}</span>
+                        <span className="txn-num">{docLabel(r.docNumber)}</span>
                         {/* An estimate's origin is itself, which is not worth a
                             chip on every one of 8,970 rows — the type chip
                             already says it. */}
@@ -248,7 +253,7 @@ export default function Transactions({ onRecordSelect } = {}) {
                 <span className="txn-type-lg" style={{ background: (TYPE_META[d.type]?.color || '#888') + '22', color: TYPE_META[d.type]?.color }}>
                   {TYPE_META[d.type]?.label || d.type}
                 </span>
-                <h1>#{d.docNumber || '—'}</h1>
+                <h1>{docLabel(d.docNumber)}</h1>
                 <div className="txn-detail-sub">
                   <span className="txn-detail-cust">{d.customerName || '—'}</span>
                   <span className="txn-detail-qbo">QBO ID {d.id}</span>
