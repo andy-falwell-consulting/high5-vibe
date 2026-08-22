@@ -260,6 +260,15 @@ function StoreOrdersTab() {
           No run recorded yet — press Run now. It pages every order in the store, so
           give it a minute or two.
         </p>
+      ) : !last.rows ? (
+        /* A result stored before this tab existed has counts but no detail. Left
+           alone it renders a confident row of zeros — which on THIS report reads
+           as "nothing is wrong" and is the worst thing it could say. */
+        <p className="admin-note admin-missing">
+          The last run ({ago(last.at)}) predates this view and carries no detail —
+          it found <strong>{last.exceptions ?? '?'}</strong> exceptions but did not
+          record which. Run it again to see them.
+        </p>
       ) : (
         <>
           <div className="admin-drift-head">
