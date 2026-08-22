@@ -1,9 +1,20 @@
 // Create (or delete) a QBO Estimate. env-aware — writes to sandbox or production.
 //   GET  ?env=sandbox&peek=1        → a few customers + items (to pick test refs)
-//   POST { env, customerId, lines:[{itemId,qty,unitPrice,amount,description}], txnDate, memo, docNumber }
+//   POST { env, customerId, lines:[{itemId,qty,unitPrice,amount,description}],
+//          txnDate, memo, docNumber, vibeRef, privateNote }
+//
+// `vibeRef` is the Vibe estimate's own `_kpt__Estimate_ID`. It is stamped into
+// the QBO record's PrivateNote so the estimate — and every invoice QuickBooks
+// later links to it — can be traced back here. Without it the connection exists
+// in one direction only: Vibe records the QBO id it was handed, and QBO records
+// nothing, so anything that loses the Vibe record loses the link.
+//
+// See docs/transaction-source-scope.md; the format lives in _vibeStamp.js so
+// the classifier that reads these later cannot drift from what is written here.
 //   POST { env, action:'delete', id, syncToken }
 import { getGoogleSession } from './_googleSession.js';
 import { qboRequest, qboQuery } from './_qbo.js';
+import { noteWithStamp } from './_vibeStamp.js';
 
 const SYNC_KEY = process.env.QBO_SYNC_KEY;
 async function authorized(req) {
@@ -38,7 +49,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, deleted: data.Estimate?.Id || id });
     }
 
-    const { customerId, lines = [], txnDate, memo, docNumber } = req.body || {};
+    const { customerId, lines = [], txnDate, memo, docNumber, vibeRef, privateNote } = req.body || {};
     if (!customerId || !lines.length) return res.status(400).json({ error: 'customerId and at least one line required' });
 
     const Line = lines.map(l => ({
@@ -51,16 +62,24 @@ export default async function handler(req, res) {
         ...(l.unitPrice != null ? { UnitPrice: Number(l.unitPrice) } : {}),
       },
     }));
+    // An unusable ref is dropped rather than written badly — see _vibeStamp.js.
+    const note = noteWithStamp('estimate', vibeRef, privateNote);
+
     const payload = {
       CustomerRef: { value: String(customerId) },
       Line,
       ...(txnDate ? { TxnDate: txnDate } : {}),
+      // CustomerMemo prints on the estimate the customer receives — an internal
+      // id must never go here. The stamp goes on PrivateNote, the internal memo.
       ...(memo ? { CustomerMemo: { value: memo } } : {}),
       ...(docNumber ? { DocNumber: String(docNumber) } : {}),
+      ...(note ? { PrivateNote: note } : {}),
     };
     const data = await qboRequest('/estimate', 'POST', payload, env);
     const e = data.Estimate || {};
-    return res.status(200).json({ ok: true, env, id: e.Id, docNumber: e.DocNumber, total: e.TotalAmt, syncToken: e.SyncToken, customer: e.CustomerRef?.name });
+    // privateNote comes back so a caller can see whether the stamp landed,
+    // rather than assuming it from a 200.
+    return res.status(200).json({ ok: true, env, id: e.Id, docNumber: e.DocNumber, total: e.TotalAmt, syncToken: e.SyncToken, customer: e.CustomerRef?.name, privateNote: e.PrivateNote || '' });
   } catch (err) {
     return res.status(502).json({ ok: false, error: String(err?.message || err).slice(0, 600) });
   }

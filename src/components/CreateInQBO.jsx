@@ -4,8 +4,12 @@ import { updateVibeRecord } from '../api/vibeRecords';
 import './CreateInQBO.css';
 
 // Shared "Create in QBO" panel. Any module builds a `draft` and drops this in.
-//   draft = { customerName, txnDate, memo, docNumber,
+//   draft = { customerName, txnDate, memo, docNumber, vibeRef, privateNote,
 //             lines: [{ productName, description, qty, unitPrice, amount }] }
+// `vibeRef` is the host record's own id. It is stamped into the QBO record's
+// internal memo so the QBO side can be traced back here — without it the link
+// only exists in Vibe's copy, and is lost with it. `memo` is the CUSTOMER-facing
+// message and must not carry ids. See api/_vibeStamp.js.
 //   type: 'estimate' (invoice later) · env: 'production' | 'sandbox'
 //   onCreated(qboId, result) — host writes the id back to its own field.
 // Picking a QBO item for an unlinked line writes _kat__Item_ID_QuickBooks onto
@@ -137,6 +141,7 @@ export default function CreateInQBO({ type = 'estimate', env = 'production', dra
         .map(l => updateVibeRecord(PROD_LAYOUT, l.productRecordId, { _kat__Item_ID_QuickBooks: String(l.itemId) }).catch(() => {})));
       const body = {
         env, type, customerId: customer.id, txnDate: draft.txnDate, memo: draft.memo, docNumber: draft.docNumber,
+        vibeRef: draft.vibeRef, privateNote: draft.privateNote,
         lines: lines.map(l => ({ itemId: l.itemId, qty: l.qty, unitPrice: l.unitPrice, amount: l.amount, description: l.description || l.productName })),
       };
       const data = await fetch('/api/qbo-estimate-create', {
@@ -169,6 +174,9 @@ export default function CreateInQBO({ type = 'estimate', env = 'production', dra
               : result ? (
                 <div className="ciq-body ciq-center">
                   <div className="ciq-done">✓ Created QBO {typeLabel} <b>#{result.docNumber}</b> (id {result.id}) — {money(result.total)}</div>
+                  {/* Shown so the stamp is verifiable at the moment it happens,
+                      rather than assumed from a success message. */}
+                  {result.privateNote && <div className="ciq-note">Internal memo: {result.privateNote}</div>}
                   <button className="ciq-btn" onClick={() => setOpen(false)}>Done</button>
                 </div>
               ) : (

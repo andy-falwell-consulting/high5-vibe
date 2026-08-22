@@ -539,6 +539,11 @@ export default function Estimates({ navTarget, onClearNav, onRecordSelect } = {}
                     customerName: f.zz__Display_Contact__ct,
                     txnDate: toIsoDate(f.Date),
                     memo: f.Memo || undefined,
+                    // Stamped into the QBO record's INTERNAL memo, so a QBO
+                    // estimate — and every invoice QuickBooks later links to it
+                    // — can be traced back to this record. `qbo_estimate_id`
+                    // below only records the link on Vibe's side.
+                    vibeRef: f._kpt__Estimate_ID || undefined,
                     lines: lineItems
                       .filter(li => li['estmt_ESTLI::Item_Name'] || li['estmt_ESTLI::Description'])
                       .map(li => ({
