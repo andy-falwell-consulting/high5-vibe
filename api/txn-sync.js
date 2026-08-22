@@ -99,14 +99,27 @@ export default async function handler(req, res) {
       let seen = 0, set = 0, cleared = 0;
       do {
         const [next, flat] = await redis.hscan(linesKey(db), cursor, { count: 400 });
-        const patch = {};
+        const keys = [];
+        const linesByKey = new Map();
         for (let i = 0; i < flat.length; i += 2) {
           const key = String(flat[i]);
-          const lines = typeof flat[i + 1] === 'string' ? JSON.parse(flat[i + 1]) : flat[i + 1];
-          const raw = await redis.hget(recsKey(db), key);
-          if (!raw) continue;
-          const row = typeof raw === 'string' ? JSON.parse(raw) : raw;
-          const lob = lineOfBusiness(lines || []);
+          keys.push(key);
+          linesByKey.set(key, typeof flat[i + 1] === 'string' ? JSON.parse(flat[i + 1]) : flat[i + 1]);
+        }
+        // ONE HMGET PER PAGE, not one HGET per record. Per-record round trips
+        // would be 34,452 Redis commands for a job that needs 87 — and the
+        // command quota is a hard monthly cap whose exhaustion stops anyone
+        // logging in (see the cron budget note in CLAUDE.md).
+        const raws = keys.length ? await redis.hmget(recsKey(db), ...keys) : {};
+        const rowOf = k => {
+          const v = Array.isArray(raws) ? raws[keys.indexOf(k)] : raws?.[k];
+          return typeof v === 'string' ? JSON.parse(v) : v;
+        };
+        const patch = {};
+        for (const key of keys) {
+          const row = rowOf(key);
+          if (!row) continue;
+          const lob = lineOfBusiness(linesByKey.get(key) || []);
           seen++;
           if (lob === (row.lob || null)) continue;
           if (lob) { row.lob = lob; set++; } else { delete row.lob; cleared++; }
