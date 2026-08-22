@@ -6,11 +6,67 @@
 .txn-resize { width: 4px; flex-shrink: 0; cursor: col-resize; background: var(--border); transition: background var(--duration-fast) var(--ease-standard); }
 .txn-resize:hover { background: var(--brand); }
 
-/* Three filters now, not one — it wraps rather than squeezing the selects to
-   nothing on a narrow panel. */
-.txn-statusbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 12px; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--fg-secondary); }
-.txn-statusbar select { min-width: 0; max-width: 150px; }
-.txn-statusbar select { flex: 1; background: var(--surface-sunken); border: 1px solid var(--border); border-radius: 6px; color: var(--fg); padding: 5px 8px; font-family: inherit; font-size: 13px; }
+/* ── Filters ─────────────────────────────────────────────────────────────
+   ONE ROW. Four facets used to take 118px above the list — a wrapped three-line
+   chip row for Type and a wrapped bar of three labelled selects for the rest —
+   which on a 34,453-row ledger is chrome where records should be. Everything
+   lives behind one button now, and only what is ACTIVE takes any space. */
+
+.txn-filters {
+  position: relative;
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-md);
+  border-bottom: 1px solid var(--border);
+}
+
+.txn-filter-btn {
+  flex-shrink: 0;
+  padding: 3px var(--space-sm);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--fg-secondary);
+  font-family: var(--font-sans); font-size: var(--text-caption); cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+.txn-filter-btn:hover { background: var(--surface-hover); color: var(--fg); }
+.txn-filter-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+/* A filtered list must never look like the whole list. */
+.txn-filter-btn.has-active { background: var(--fg); color: var(--fg-inverse); border-color: var(--fg); }
+
+/* An active facet, and the way to remove it — the same gesture in one place,
+   rather than hunting for which select to set back to "All". */
+.txn-pill {
+  display: inline-flex; align-items: center; gap: var(--space-xs);
+  padding: 2px var(--space-sm);
+  border: 1px solid var(--border); border-radius: var(--radius-pill);
+  background: var(--surface-sunken); color: var(--fg);
+  font-family: var(--font-sans); font-size: var(--text-micro); cursor: pointer;
+  white-space: nowrap;
+}
+.txn-pill:hover { border-color: var(--border-interactive); }
+.txn-pill:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.txn-pill-x { color: var(--fg-secondary); }
+
+.txn-filter-menu {
+  position: absolute; top: calc(100% + var(--space-xs)); left: var(--space-md);
+  z-index: var(--z-dropdown); min-width: 230px;
+  display: flex; flex-direction: column; gap: var(--space-sm);
+  padding: var(--space-md);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
+}
+.txn-filter-field { display: flex; align-items: center; gap: var(--space-sm); font-size: var(--text-caption); color: var(--fg-secondary); }
+.txn-filter-field > span { width: 54px; flex-shrink: 0; }
+.txn-filter-field select {
+  flex: 1; min-width: 0;
+  background: var(--surface-sunken); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--fg); padding: 4px var(--space-sm);
+  font-family: inherit; font-size: var(--text-caption);
+}
+.txn-filter-clear {
+  align-self: flex-end; margin-top: var(--space-xs);
+  background: none; border: none; padding: 0;
+  color: var(--link); font-family: inherit; font-size: var(--text-caption); cursor: pointer; text-decoration: underline;
+}
 
 .txn-loading { padding: 8px; display: flex; flex-direction: column; gap: 8px; }
 .txn-skeleton { height: 44px; border-radius: 8px; background: linear-gradient(90deg,var(--surface-hover),var(--surface-sunken),var(--surface-hover)); background-size: 200% 100%; animation: txn-sh 1.3s infinite; }

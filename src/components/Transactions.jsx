@@ -97,9 +97,23 @@ export default function Transactions({ onRecordSelect } = {}) {
   const [error, setError] = useState(null);
   const [selected, setSelected] = useState(null);
   const [detail, setDetail] = useState(null);
+  // FOUR FACETS, ONE CONTROL. Type used to be a row of chips and the other three
+  // a row of labelled selects — two visual languages for the same job, 118px of
+  // chrome, and the chips wrapped to three lines at the default width. They are
+  // all just facets; they now live together behind one button.
+  const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [originFilter, setOriginFilter] = useState('all');
   const [lineFilter, setLineFilter] = useState('all');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const filtersRef = useRef(null);
+
+  useEffect(() => {
+    if (!filtersOpen) return;
+    const onDown = e => { if (filtersRef.current && !filtersRef.current.contains(e.target)) setFiltersOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [filtersOpen]);
   const [pdfBusy, setPdfBusy] = useState(false);
 
   useEffect(() => {
@@ -118,15 +132,15 @@ export default function Transactions({ onRecordSelect } = {}) {
     fields: r => r,
     name: r => r.customerName || '',
     searchKeys: ['docNumber', 'customerName', 'type'],
-    chips: [
-      { id: 'all', label: 'All' },
-      ...TYPE_ORDER.map(t => ({ id: t, label: TYPE_META[t].label + 's', color: TYPE_META[t].color, match: f => f.type === t })),
-    ],
+    // No chips: type is a facet like the other three and lives in the filter
+    // popover with them. ListToolbar renders nothing when this is empty.
+    chips: [],
     // One predicate for all three dropdowns — useListControls takes a single
     // extraFilter, and combining them here keeps the count in the toolbar honest.
-    extraFilter: (statusFilter === 'all' && originFilter === 'all' && lineFilter === 'all')
+    extraFilter: (typeFilter === 'all' && statusFilter === 'all' && originFilter === 'all' && lineFilter === 'all')
       ? undefined
-      : (f => (statusFilter === 'all' || f.status === statusFilter)
+      : (f => (typeFilter === 'all' || f.type === typeFilter)
+           && (statusFilter === 'all' || f.status === statusFilter)
            && (originFilter === 'all' || (f.src?.o || 'unknown') === originFilter)
            && (lineFilter === 'all' || (f.src?.l || '') === lineFilter)),
     sorts: [
@@ -138,6 +152,19 @@ export default function Transactions({ onRecordSelect } = {}) {
     defaultSort: 'date',
     defaultOrder: 'desc',
   });
+
+  // What is actually filtering, as pills. `self` is deliberately absent from the
+  // Source options above: an estimate being its own origin is the same question
+  // as Type = Estimates, and offering both invites someone to combine them into
+  // a contradiction.
+  const activeFilters = useMemo(() => {
+    const out = [];
+    if (typeFilter !== 'all') out.push({ key: 'type', label: `${TYPE_META[typeFilter]?.label || typeFilter}s`, clear: () => setTypeFilter('all') });
+    if (statusFilter !== 'all') out.push({ key: 'status', label: statusFilter, clear: () => setStatusFilter('all') });
+    if (originFilter !== 'all') out.push({ key: 'origin', label: originLabel(originFilter), clear: () => setOriginFilter('all') });
+    if (lineFilter !== 'all') out.push({ key: 'line', label: lineLabel(lineFilter), clear: () => setLineFilter('all') });
+    return out;
+  }, [typeFilter, statusFilter, originFilter, lineFilter]);
 
   // Virtualized list — render only the rows in view (the ledger can be 30k+ rows;
   // rendering them all bloats the DOM and slows the whole app).
@@ -193,22 +220,61 @@ export default function Transactions({ onRecordSelect } = {}) {
     <div className="txn-container">
       <aside className="txn-sidebar" style={{ width }}>
         <ListToolbar c={controls} />
-        <div className="txn-statusbar">
-          <label>Status</label>
-          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-            <option value="all">All</option>
-            {statuses.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <label>Source</label>
-          <select value={originFilter} onChange={e => setOriginFilter(e.target.value)}>
-            <option value="all">All</option>
-            {ORIGIN_ORDER.filter(k => ORIGIN_META[k]).map(k => <option key={k} value={k}>{originLabel(k)}</option>)}
-          </select>
-          <label>Work</label>
-          <select value={lineFilter} onChange={e => setLineFilter(e.target.value)}>
-            <option value="all">All</option>
-            {LINE_ORDER.filter(k => LINE_META[k]).map(k => <option key={k} value={k}>{lineLabel(k)}</option>)}
-          </select>
+        {/* ONE ROW, and only as tall as it needs to be. What is active shows as
+            a removable pill; what is not shows nothing at all. */}
+        <div className="txn-filters" ref={filtersRef}>
+          <button
+            className={`txn-filter-btn${activeFilters.length ? ' has-active' : ''}`}
+            onClick={() => setFiltersOpen(o => !o)}
+            aria-expanded={filtersOpen}
+          >⚑ Filter{activeFilters.length ? ` (${activeFilters.length})` : ''}</button>
+
+          {activeFilters.map(f => (
+            <button key={f.key} className="txn-pill" onClick={f.clear} title={`Remove — ${f.label}`}>
+              {f.label}<span className="txn-pill-x">✕</span>
+            </button>
+          ))}
+
+          {filtersOpen && (
+            <div className="txn-filter-menu">
+              {/* Selects rather than rows of chips: four facets come to thirty
+                  options, and a chip grid would make the popover taller than the
+                  chrome this change exists to remove. */}
+              <label className="txn-filter-field">
+                <span>Type</span>
+                <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
+                  <option value="all">All types</option>
+                  {TYPE_ORDER.map(t => <option key={t} value={t}>{TYPE_META[t].label}s</option>)}
+                </select>
+              </label>
+              <label className="txn-filter-field">
+                <span>Status</span>
+                <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+                  <option value="all">Any status</option>
+                  {statuses.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </label>
+              <label className="txn-filter-field">
+                <span>Source</span>
+                <select value={originFilter} onChange={e => setOriginFilter(e.target.value)}>
+                  <option value="all">Any source</option>
+                  {ORIGIN_ORDER.filter(k => ORIGIN_META[k] && k !== 'self').map(k => <option key={k} value={k}>{originLabel(k)}</option>)}
+                </select>
+              </label>
+              <label className="txn-filter-field">
+                <span>Work</span>
+                <select value={lineFilter} onChange={e => setLineFilter(e.target.value)}>
+                  <option value="all">Any work</option>
+                  {LINE_ORDER.filter(k => LINE_META[k]).map(k => <option key={k} value={k}>{lineLabel(k)}</option>)}
+                </select>
+              </label>
+              {activeFilters.length > 0 && (
+                <button className="txn-filter-clear" onClick={() => { setTypeFilter('all'); setStatusFilter('all'); setOriginFilter('all'); setLineFilter('all'); }}>
+                  Clear all
+                </button>
+              )}
+            </div>
+          )}
         </div>
         {loading && records.length === 0 ? (
           <div className="txn-loading">{Array.from({ length: 12 }, (_, i) => <div key={i} className="txn-skeleton" />)}</div>
