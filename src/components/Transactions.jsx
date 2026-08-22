@@ -42,6 +42,13 @@ const money = v => `$${Number(v || 0).toLocaleString('en-US', { minimumFractionD
 // A label nobody can interrogate is a label nobody should trust — around half
 // the ledger has no recorded source at all, so the ones that DO claim something
 // have to be able to show their working.
+// The system's badge, with the category variant for this line of business.
+// `neutral` is the badge's own default, so it takes no modifier.
+const badgeClass = code => {
+  const tone = lineTone(code);
+  return tone === 'neutral' ? 'h5-badge' : `h5-badge h5-badge--${tone}`;
+};
+
 const WHY = {
   stamp: 'Vibe stamped its own reference on this record when it created it.',
   link: "QuickBooks' own link between this transaction and the estimate.",
@@ -233,10 +240,10 @@ export default function Transactions({ onRecordSelect } = {}) {
                             chip on every one of 8,970 rows — the type chip
                             already says it. */}
                         {r.src?.o && r.src.o !== 'self' && (
-                          <span className={`txn-src-chip o-${r.src.o}`} title={originLabel(r.src.o)}>{originShort(r.src.o)}</span>
+                          <span className="h5-badge h5-badge--outline" title={originLabel(r.src.o)}>{originShort(r.src.o)}</span>
                         )}
                         {r.src?.l && (
-                          <span className={`txn-src-chip tone-${lineTone(r.src.l)}`} title={lineLabel(r.src.l)}>{lineShort(r.src.l)}</span>
+                          <span className={badgeClass(r.src.l)} title={lineLabel(r.src.l)}>{lineShort(r.src.l)}</span>
                         )}
                         <span className="txn-amt">{money(r.total)}</span>
                       </div>
@@ -298,7 +305,7 @@ export default function Transactions({ onRecordSelect } = {}) {
                   <div className="txn-source-row">
                     <span className="txn-source-l">Came from</span>
                     <span className="txn-source-v">
-                      <span className={`txn-src-chip o-${d.source.origin.kind}`}>{originShort(d.source.origin.kind) || 'Estimate'}</span>
+                      <span className="h5-badge h5-badge--outline">{originShort(d.source.origin.kind) || 'Estimate'}</span>
                       {d.source.origin.label}
                       {d.source.origin.ref && <span className="txn-source-ref">{d.source.origin.ref}</span>}
                       {/* Said out loud rather than shown as a colour: an
@@ -310,7 +317,7 @@ export default function Transactions({ onRecordSelect } = {}) {
                     <span className="txn-source-l">Kind of work</span>
                     <span className="txn-source-v">
                       {d.source.line
-                        ? <><span className={`txn-src-chip tone-${lineTone(d.source.line)}`}>{lineShort(d.source.line)}</span>{lineLabel(d.source.line)}</>
+                        ? <><span className={badgeClass(d.source.line)}>{lineShort(d.source.line)}</span>{lineLabel(d.source.line)}</>
                         : <span className="dim">Not classified \u2014 the line items name no account.</span>}
                     </span>
                   </div>

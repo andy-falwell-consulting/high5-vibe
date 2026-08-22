@@ -27,9 +27,16 @@
 .txn-row.active { background: var(--surface-hover); box-shadow: inset 3px 0 0 var(--brand); }
 .txn-type { flex-shrink: 0; width: 34px; text-align: center; font-size: 11px; font-weight: 700; padding: 3px 0; border-radius: 5px; letter-spacing: 0.03em; }
 .txn-row-main { flex: 1; min-width: 0; }
-.txn-row-top, .txn-row-sub { display: flex; justify-content: space-between; gap: 8px; }
-.txn-num { font-weight: 600; font-size: 14px; }
-.txn-amt { font-variant-numeric: tabular-nums; font-size: 14px; }
+/* align-items MATTERS HERE. Without it flex stretches every child to the full
+   line height, and a badge with a pill radius becomes a circle — invisible at
+   the old 54px row, grotesque at 76px. */
+.txn-row-top, .txn-row-sub { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+/* Amazon order numbers are "#111-4370408-6141041" — twenty characters that
+   wrapped onto a second line and shoved the row apart. The number yields before
+   the badges or the amount do. */
+.txn-num { font-weight: 600; font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.txn-row-top .h5-badge, .txn-row-sub .h5-badge { flex-shrink: 0; }
+.txn-amt { font-variant-numeric: tabular-nums; font-size: 14px; flex-shrink: 0; margin-left: auto; }
 .txn-row-sub { margin-top: 2px; font-size: 12px; color: var(--fg-secondary); }
 .txn-cust { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .txn-date { flex-shrink: 0; }
@@ -62,62 +69,12 @@
 .txn-lines .num { text-align: right; font-variant-numeric: tabular-nums; }
 .dim { color: var(--fg-secondary); }
 
-/* ── Source: where a transaction came from, and what it was for ──────────
-   Two axes, so two chips. Colours come from the category tokens, which exclude
-   red by design — nothing here competes with the brand accent or with the
-   status dot already on the row. */
-
-.txn-src-chip {
-  flex-shrink: 0;
-  padding: 1px 6px;
-  border-radius: var(--radius-pill);
-  font-size: 10px;
-  font-weight: var(--weight-semibold);
-  line-height: 1.5;
-  white-space: nowrap;
-  background: var(--cat-neutral-bg);
-  color: var(--cat-neutral-fg);
-}
-
-.txn-src-chip.tone-blue    { background: var(--cat-blue-bg);    color: var(--cat-blue-fg); }
-.txn-src-chip.tone-green   { background: var(--cat-green-bg);   color: var(--cat-green-fg); }
-.txn-src-chip.tone-purple  { background: var(--cat-purple-bg);  color: var(--cat-purple-fg); }
-.txn-src-chip.tone-khaki   { background: var(--cat-khaki-bg);   color: var(--cat-khaki-fg); }
-.txn-src-chip.tone-gold    { background: var(--cat-gold-bg);    color: var(--cat-gold-fg); }
-.txn-src-chip.tone-mustard { background: var(--cat-mustard-bg); color: var(--cat-mustard-fg); }
-.txn-src-chip.tone-neutral { background: var(--cat-neutral-bg); color: var(--cat-neutral-fg); }
-
-/* Origin chips are deliberately quieter than the work chips: the kind of work
-   is what a person scans a ledger by, and it is known for 97% of it. */
-.txn-src-chip.o-shopify,
-.txn-src-chip.o-amazon,
-.txn-src-chip.o-paypal,
-.txn-src-chip.o-bloomerang,
-.txn-src-chip.o-estimate,
-.txn-src-chip.o-self,
-.txn-src-chip.o-vibe {
-  background: transparent;
-  color: var(--fg-secondary);
-  border: 1px solid var(--border);
-}
-
-/* NOT HIDDEN. 16,815 transactions genuinely have no recorded source, and an
-   honest blank is the point — but it is drawn faintly, because "we do not know"
-   should not shout as loudly as "this came from D-3041". */
-.txn-src-chip.o-unknown {
-  background: transparent;
-  color: var(--fg-secondary);
-  border: 1px dashed var(--border);
-  opacity: 0.7;
-}
-
-/* The amount is pushed right and never shrinks; the chips sit between it and
-   the document number. On a narrow panel the chips are what give way, not the
-   money or the customer name. */
-.txn-row-top .txn-amt { margin-left: auto; flex-shrink: 0; }
-.txn-row-top .txn-src-chip { overflow: hidden; text-overflow: ellipsis; }
-.txn-cust { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.txn-date { flex-shrink: 0; }
+/* ── Source ──────────────────────────────────────────────────────────────
+   The badges are the design system's .h5-badge, with its category variants for
+   the line of business and --outline for the quieter origin. This file used to
+   carry its own .txn-src-chip reimplementing all of that, which is how it ended
+   up with a pill radius and no align-items — the system's badge is inline-flex
+   and centres itself, so it cannot stretch. */
 
 .txn-source-body { padding: 10px 14px; display: flex; flex-direction: column; gap: var(--space-sm); }
 .txn-source-row { display: flex; gap: var(--space-md); align-items: baseline; }
