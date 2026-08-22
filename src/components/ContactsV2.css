@@ -111,7 +111,7 @@
 .c2-list::-webkit-scrollbar-track { background: transparent; }
 .c2-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-.c2-row {
+.c2-row { min-height: var(--row-h); box-sizing: border-box;
   display: flex; align-items: center; gap: var(--space-sm);
   padding: var(--space-sm) var(--space-lg); cursor: pointer;
   border-left: 2px solid transparent;

@@ -3,7 +3,22 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { BRAND, UI } from '../config/brandColors'
 import ListToolbar, { useListControls } from './ListControls';
 
-const ROW_H = 54; // fixed row height (px) — must match .txn-row in CSS for virtualization
+// The row height, READ FROM THE STYLESHEET rather than repeated here.
+//
+// Virtualization's whole contract is that this number equals the CSS height: it
+// positions every row absolutely at `index * ROW_H`. Two copies of one number in
+// two languages is the drift that breaks it SILENTLY — rows overlap or leave
+// gaps, nothing throws, and the cause is a stylesheet nobody thought to look at.
+// So --row-h is the single source and this reads it.
+let _rowH = 0;
+function rowHeight() {
+  if (_rowH) return _rowH;
+  const v = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--row-h'), 10);
+  // The fallback matters: if the token ever goes missing, a wrong-but-sane
+  // height scrolls oddly, where NaN renders an empty list and looks like data loss.
+  _rowH = Number.isFinite(v) && v > 0 ? v : 76;
+  return _rowH;
+}
 import './Transactions.css';
 import { useRecordPanel } from '../hooks/useRecordPanel';
 import { LINE_META, ORIGIN_META, lineLabel, lineShort, lineTone, originLabel, originShort, LINE_ORDER, ORIGIN_ORDER } from '../config/txnSource';
@@ -66,6 +81,7 @@ async function loadAll() {
 }
 
 export default function Transactions({ onRecordSelect } = {}) {
+  const ROW_H = rowHeight();
   // Widest default of any module: a row carries a type chip, a document
   // number, an amount, a customer and a date, and 340px could not hold them.
   const { width, onPointerDown: startPanelResize } = useRecordPanel('transactions', 400);

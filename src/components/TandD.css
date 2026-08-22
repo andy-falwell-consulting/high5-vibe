@@ -30,7 +30,7 @@
 .tnd-list::-webkit-scrollbar-track { background: transparent; }
 .tnd-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-.tnd-list-item {
+.tnd-list-item { min-height: var(--row-h); box-sizing: border-box;
   display: flex; align-items: center; gap: 10px;
   padding: 9px 16px; cursor: pointer;
   transition: background 0.1s;

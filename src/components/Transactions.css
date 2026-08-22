@@ -20,7 +20,9 @@
 
 .txn-scroll { flex: 1; overflow-y: auto; position: relative; }
 .txn-virtual { position: relative; width: 100%; }
-.txn-row { position: absolute; left: 0; right: 0; height: 54px; box-sizing: border-box; display: flex; align-items: center; gap: 10px; padding: 8px 12px; cursor: pointer; border-bottom: 1px solid var(--border); }
+/* height, not min-height: the list is virtualized, so every row must be
+   exactly --row-h or the absolute positioning drifts. */
+.txn-row { position: absolute; left: 0; right: 0; height: var(--row-h); box-sizing: border-box; display: flex; align-items: center; gap: 10px; padding: 8px 12px; cursor: pointer; border-bottom: 1px solid var(--border); }
 .txn-row:hover { background: var(--surface-hover); }
 .txn-row.active { background: var(--surface-hover); box-shadow: inset 3px 0 0 var(--brand); }
 .txn-type { flex-shrink: 0; width: 34px; text-align: center; font-size: 11px; font-weight: 700; padding: 3px 0; border-radius: 5px; letter-spacing: 0.03em; }

@@ -21,7 +21,7 @@
 .est-skeleton { height: 52px; background: var(--surface-sunken); border-radius: 6px; animation: est-pulse 1.4s ease-in-out infinite; }
 @keyframes est-pulse { 0%, 100% { opacity: 0.5 } 50% { opacity: 1 } }
 
-.est-list-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.1s; }
+.est-list-item { min-height: var(--row-h); box-sizing: border-box; display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.1s; }
 .est-list-item:hover { background: var(--surface-hover); }
 .est-list-item.active { background: var(--surface-sunken); }
 .est-item-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }

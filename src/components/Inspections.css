@@ -107,7 +107,7 @@
 .insp-list::-webkit-scrollbar-track { background: transparent; }
 .insp-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-.insp-list-item {
+.insp-list-item { min-height: var(--row-h); box-sizing: border-box;
   display: flex; align-items: center; gap: var(--space-sm);
   padding: var(--space-sm) var(--space-lg); cursor: pointer;
   border-left: 2px solid transparent;

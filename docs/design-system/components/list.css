@@ -6,6 +6,10 @@
 
 .h5-list-item {
   display: flex; align-items: center; gap: var(--space-md);
+  /* One row height across every list in the app. It was already ~76px
+     everywhere except Transactions, but by accident — two lines of text under
+     the global 29px line-height — rather than by decision. See --row-h. */
+  min-height: var(--row-h); box-sizing: border-box;
   padding: var(--space-sm) var(--space-lg);
   border-left: 3px solid transparent; cursor: pointer;
   transition: background var(--duration-fast) var(--ease-standard);

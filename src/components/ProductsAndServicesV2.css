@@ -120,7 +120,7 @@
 .v2-list::-webkit-scrollbar-track { background: transparent; }
 .v2-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-.v2-list-item {
+.v2-list-item { min-height: var(--row-h); box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 10px;
